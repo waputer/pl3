@@ -1,0 +1,103 @@
+/**
+ * File view structure.
+ *   @file; The interval file.
+ *   @idx, off, len: The current index, offset, and length.
+ */
+tydef[export] st:io:view {
+	st:io:file file;
+	u64 idx, off, len;
+};
+
+
+/**
+ * Create a view of a file. The resulting file will only allow you to read
+ * within the constrained view.
+ *   @file: The file.
+ *   @off: The initial offset.
+ *   @len: The maximum read length.
+ *   &returns: The file.
+ */
+def[export] st:io:file(st:io:file file, u64 off, u64 len) io:view = {
+	def st:io:file_iface iface = { &io:view_read, &io:view_write, &io:view_ctrl, &io:view_delete };
+
+	return st:io:file{ io:view_new(file, off, len), &iface };
+};
+
+
+/**
+ * Create a view.
+ *   @file: The file.
+ *   @off: The offset.
+ *   @len: The length.
+ */
+def[export] pt:st:io:view(st:io:file file, u64 off, u64 len) io:view_new = {
+	return mem:make(st:io:view{file, 0, off, len});
+};
+
+/**
+ * Delete a file view without closing the internal file.
+ *   @view: The view.
+ */
+def[export] e:str[void](pt:st:io:view view) io:view_delete = {
+	mem:free(view);
+};
+
+/**
+ * Read from a view, limiting only to the range inside the view..
+ *   @view: The view.
+ *   @dst: The destination buffer.
+ *   @sz: The size.
+ */
+def[export] e:str[u32](pt:st:io:view view, pt:void dst, u32 sz) io:view_read = {
+	var i32 t;
+	var u32 rd;
+	var st:io:seek seek = { i64{view->off + view->idx}, io:seek:set };
+
+	if(u64{sz} > (view->len - view->idx))
+		sz = u32{view->len - view->idx};
+
+	e:get(io:seek_set(view->file, i64{view->off + view->idx}));
+	rd = e:get(io:read(view->file, dst, sz));
+	view->idx += u64{rd};
+	
+	return rd;
+};
+
+def[export] e:str[u32](pt:st:io:view view, cpt:void src, u32 sz) io:view_write = {
+	fatal("stub"); //TODO
+};
+
+def[export] e:str[i32](pt:st:io:view view, u32 id, pt:void arg) io:view_ctrl = {
+	switch(id) {
+	case io:ctrl:seek: {
+		var st:io:seek seek = *pt:st:io:seek{arg};
+
+		switch(seek.mode) {
+		case io:seek:set: break;
+		case io:seek:cur: seek.off += i64{view->idx}; break;
+		case io:seek:end: seek.off += i64{view->len}; break;
+		}
+
+		if(seek.off < 0)
+			view->idx = 0;
+		else if(seek.off > i64{view->len})
+			view->idx = view->len;
+		else
+			view->idx = u64{seek.off};
+
+		return 0;
+	} break;
+
+	case io:ctrl:tell:
+		*pt:u64{arg} = view->idx;
+
+		return 0;
+
+	case io:ctrl:eof:
+		*pt:bool{arg} = (view->idx >= view->len);
+
+		return 0;
+	}
+
+	return io:ctrl(view->file, id, arg);
+};

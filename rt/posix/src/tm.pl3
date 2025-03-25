@@ -1,0 +1,32 @@
+
+/**
+ * Retrieve the system time in microseconds.
+ *   &returns: The time in microseconds.
+ */
+def[export] i64() os:usec = {
+	var st:timeval tv;
+
+	gettimeofday(&tv, null);
+
+	return 1000000 * tv.sec + tv.usec;
+};
+
+
+/**
+ * Sleep for a number of microseconds.
+ *   @usec: The number of microseconds.
+ */
+def[export] void(u64 usec) os:usleep = {
+	var st:timespec ts;
+
+	ts.nano = 1000 * (usec % 1000000);
+	ts.sec = usec / 1000000;
+
+	for(;;) {
+		if(nanosleep(&ts, &ts) == 0)
+			return;
+
+		if(geterr() != EINTR)
+			return;
+	}
+};

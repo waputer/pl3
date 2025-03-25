@@ -1,0 +1,643 @@
+/**
+ * I/O processing function.
+ *   @msg: The message identifier.
+ *   @param: The parameters.
+ *   @arg: The callback argument.
+ */
+tydef[export] ty:io:func = e:str[void](u64 msg, pt:void param, pt:void arg);
+
+/**
+ * Message values.
+ */
+def[export] u64 io:msg:close = 0x0000000000002882, /// Close
+                io:msg:read  = 0x000000000000E32F, /// Read
+                io:msg:write = 0x0000000000007B84; /// Write
+
+/**
+ * Event values.
+ */
+def[export] u32 io:evt:rd   = 0x00000001, /// Read
+                io:evt:wr   = 0x00000002, /// Write
+                io:evt:err  = 0x00000004, /// Error
+		io:evt:rdy  = 0x00000008, /// Ready or initialized
+		io:evt:term = 0x00000010, /// Terminated or closed
+		io:evt:idle = 0x00000020, /// Idle
+		io:evt:wake = 0x00000040; /// Timer wakeup
+
+/**
+ * Table entry.
+ */
+tydef st:entry {
+	i32 desc;         /// Descriptor number
+	st:avl:node node; /// Tree node
+
+	pt:st:io:user user; /// User descriptor internals
+};
+
+/**
+ * User descriptor structure.
+ */
+tydef[export] st:io:user { };
+tydef[export] ty:io:user = pt:st:io:user;
+tydef st:io:user {
+	u32 nrefs; /// Number of references
+
+	st:avl:node node; /// Tree node
+
+	pt:char err; /// Error string
+
+	i64 wake;        /// Wakeup time
+	pt:st:poll poll; /// Array of polls
+	u32 cnt;         /// Number of polls
+
+	u32 mask;           /// Active event mask
+	pt:ty:io:func func; /// Processing function
+	pt:void arg;        /// Function argument
+};
+
+
+/**
+ * Polling structure.
+ */
+tydef st:poll {
+	i32 desc;           /// Descriptor
+	u32 req;            /// Requested events
+	pt:ty:io:desc func; /// Callback function
+	pt:void arg;        /// Callback argument
+};
+
+/**
+ * State declarations
+ */
+// TODO thread-safe
+var bool st_init = false; /// Initialized flag
+var i32 st_cur = 0;       /// Current descriptor
+var st:avl:root st_root;  /// Descriptor root
+
+
+/**
+ * Allocate a new user descriptor.
+ *   &returns: The descriptor.
+ */
+def[export] i32() io:alloc = {
+	return entry_alloc(user_new())->desc;
+};
+
+/**
+ * Create an I/O descriptor with custom processing.
+ *   @func: The processing function.
+ *   @arg: The callback argument.
+ */
+def[export] i32(pt:ty:io:func func, pt:void arg) io:make = {
+	var pt:st:io:user user;
+
+	user = user_new();
+	user->func = func;
+	user->arg = arg;
+
+	return entry_alloc(user)->desc;
+};
+
+/**
+ * Create a new copy of a user descriptor. Generally call `io:dup` to support
+ * kernel descriptors.
+ *   @desc: The input descriptor.
+ *   &returns: The copy, or negative if the input descriptor is invalid.
+ */
+def[export] i32(i32 desc) io:copy = {
+	var pt:st:io:user user;
+
+	user = user_get(desc);
+	if(user == null)	
+		return -1;
+
+	return entry_alloc(user)->desc;
+};
+
+/**
+ * Free a user descriptor.
+ *   @desc: The descriptor.
+ */
+def[export] void(i32 desc) io:free = {
+	var pt:st:avl:node node;
+
+	if(!st_init)
+		return;
+
+	node = avl:root_rem(&st_root, &desc);
+	if(node != null)
+		entry_free(getparent(node, st:entry, node));
+};
+
+
+/**
+ * Get the mask for a descriptor.
+ *   @desc: The descriptor.
+ *   &returns: The mask.
+ */
+def[export] u32(i32 desc) io:mask = {
+	var pt:st:io:user user = user_get(desc);
+
+	return (user != null) ? user->mask : 0;
+};
+
+/**
+ * Change the mask for a descriptor.
+ *   @desc: The descriptor.
+ *   @msk: The mask.
+ */
+def[export] void(i32 desc, u32 msk) io:remask = {
+	var pt:st:io:user user = user_get(desc);
+
+	if(user != null)
+		user->mask = msk;
+};
+
+
+/**
+ * Determine if a descriptor is a kernel descriptor.
+ *   @desc: The descriptor.
+ *   &returns: True if a kernal descriptor
+ */
+def[export] bool(i32 desc) io:is_kern = {
+	return (desc >= 0x0) && (desc < 0x40000000);
+};
+def[export] bool(i32 desc) io:desc_kern = {
+	return (desc >= 0x0) && (desc < 0x40000000);
+};
+
+/**
+ * Determine if a descriptor is a user descriptor.
+ *   @desc: The descriptor.
+ *   &returns: True if a user descriptor
+ */
+def[export] bool(i32 desc) io:is_user = {
+	return desc >= 0x40000000;
+};
+def[export] bool(i32 desc) io:desc_user = {
+	return desc >= 0x40000000;
+};
+
+
+/**
+ * Send a message to a user descriptor.
+ *   @desc: The descriptor.
+ *   @msg: The message identifier.
+ *   @param: The parameter.
+ */
+def[export] e:str[void](i32 desc, u64 msg, pt:void param) io:msg = {
+	var pt:st:io:user user;
+
+	user = user_get(desc);
+	if(user == null)	
+		e:fmt("Not a valid descriptor.");
+	
+	if(user->func == null)
+		e:fmt("Unsupported I/O message.");
+	
+	return user->func->(msg, param, user->arg);
+};
+
+
+// TODO move into io:event
+tydef st:event {
+	i32 desc;
+	i64 val;
+};
+
+/**
+ * Create an event descriptor.
+ *   @init: The initial value, usually zero.
+ *   &returns: The descriptor.
+ */
+def[export] i32(i64 init) io:event = {
+	def e:str[void](u64 msg, pt:void param, pt:st:event event) proc = {
+		switch(msg) {
+		case io:msg:write: {
+			var i64 add;
+			var pt:st:io:write write = param;
+
+			write->tot = write->sz;
+
+			switch(write->sz) {
+			case 1: add = i64{mem:ld_i8(write->src, 0)}; break;
+			case 2: add = i64{mem:ld_i16(write->src, 0)}; break;
+			case 4: add = i64{mem:ld_i32(write->src, 0)}; break;
+			case 8: add = i64{mem:ld_i64(write->src, 0)}; break;
+			default: write->tot = 0; break;
+			}
+
+			event->val += add;
+			print("ADD %u\n", event->val);
+			if(event->val > 0)
+				io:wake(event->desc, 0);
+			else
+				io:wake(event->desc, -1);
+			io:remask(event->desc, io:evt:wr | ((event->val > 0) ? io:evt:rd : 0));
+		} break;
+
+		case io:msg:read: {
+			var pt:st:io:read read = param;
+
+			if(event->val > 0) {
+				event->val--;
+				read->tot = read->sz;
+
+				switch(read->sz) {
+				case 1: mem:st_i8(read->dst, 0, 1); break;
+				case 2: mem:st_i16(read->dst, 0, 1); break;
+				case 4: mem:st_i32(read->dst, 0, 1); break;
+				case 8: mem:st_i64(read->dst, 0, 1); break;
+				default: read->tot = 0; break;
+				}
+			}
+			else
+				read->tot = 0;
+		} break;
+
+		case io:msg:close:
+			mem:free(event);
+			break;
+		}
+	};
+
+	var pt:st:event event;
+
+	event = mem:new(st:event);
+	event->desc = io:make(&proc, event);
+	event->val = init;
+	io:remask(event->desc, io:evt:wr | ((init > 0) ? io:evt:rd : 0));
+
+	return event->desc;
+};
+
+
+/**
+ * Descriptor event callback function.
+ *   @desc: The child descriptor.
+ *   @got: The received events.
+ *   @arg: The callback argument.
+ *   &returns: The propogated events that may be different that `got`.
+ */
+tydef[export] ty:io:desc = e:str[u32](i32 desc, u32 got, pt:void arg);
+
+/**
+ * Link to a child descriptor.
+ *   @desc: The parent descriptor.
+ *   @link: The linked child descriptor.
+ *   @req: The requested events.
+ *   @func: The callback function.
+ *   @arg: The callback argument.
+ */
+def[export] void(i32 desc, i32 link, u32 req, pt:ty:io:desc func, pt:void arg) io:link = {
+	var pt:st:io:user user;
+
+	user = user_get(desc);
+	if(user == null)
+		return;
+	
+	user->poll = mem:realloc(user->poll, (user->cnt + 1) * sizeof(st:poll));
+	user->poll[user->cnt++] = st:poll{ link, req, func, arg };
+};
+
+/**
+ * Modify a descriptor link.
+ *   @desc: The parent descriptor.
+ *   @link: The linked descriptor.
+ *   @req: The requested events.
+ */
+def[export] void(i32 desc, i32 link, u32 req) io:desc_mod = {
+	var u32 i;
+	var pt:st:io:user user;
+
+	user = user_get(desc);
+	if(user == null)
+		return;
+
+	for(i = 0; i < user->cnt; i++) {
+		if(user->poll[i].desc == link)
+			user->poll[i].req = req;
+	}
+};
+
+/**
+ * Modify a link to a child descriptor.
+ *   @desc: The parent descriptor.
+ *   @link: The linked child descriptor.
+ *   @req: The requested events.
+ *   @func: The callback function.
+ *   @arg: The callback argument.
+ */
+def[export] void(i32 desc, i32 link, u32 req, pt:ty:io:desc func, pt:void arg) io:desc_relink = {
+	var u32 i;
+	var pt:st:io:user user;
+
+	user = user_get(desc);
+	if(user == null)
+		return;
+
+	for(i = 0; i < user->cnt; i++) {
+		if(user->poll[i].desc == link)
+			user->poll[i] = st:poll{ link, req, func, arg };
+	}
+};
+
+/**
+ * Unlink descriptorxs.
+ *   @desc: The parent user descriptor.
+ *   @link: The general descriptor to unlink.
+ */
+def[export] void(i32 desc, i32 link) io:unlink = {
+	var u32 i, k;
+	var pt:st:io:user user;
+
+	user = user_get(desc);
+	if(user == null)
+		return;
+
+	k = 0;
+	for(i = 0; i < user->cnt; i++) {
+		if(user->poll[i].desc != link)
+			user->poll[k++] = user->poll[i];
+	}
+
+	user->cnt = k;
+	user->poll = mem:realloc(user->poll, k * sizeof(st:poll));
+};
+
+/**
+ * Notify that a child descriptor was woken up.
+ *   @desc: The parent descriptor.
+ *   @child: The child descriptor.
+ *   @got: The gotten events.
+ *   &returns: The event mask.
+ */
+def[export] e:str[u32](i32 desc, i32 child, u32 got) io:desc_evt = {
+	var u32 i;
+	var pt:st:io:user user;
+
+	user = user_get(desc);
+	if(user == null)
+		return 0;
+	
+	for(i = 0; i < user->cnt; i++) {
+		if(user->poll[i].desc == child)
+			return user->poll[i].func->(child, got, user->poll[i].arg);
+	}
+
+	return 0;
+};
+
+
+tydef[export] st:io:link {
+	u32 off;            /// Offset to parent
+	pt:ty:io:desc func; /// Callback function
+	pt:void arg;        /// Callback argument
+};
+
+/**
+ * Processing callback structure.
+ */
+tydef[export] st:io:proc {
+	pt:ty:io:desc func; /// Callback function
+	pt:void arg;        /// Callback argument
+};
+
+/**
+ * Compute the total number of descriptors from a user descriptor.
+ *   @desc: The user desriptor.
+ *   &returns: The total number for polling.
+ */
+def[export] u32(i32 desc) io:desc_cnt = {
+	var u32 i, n;
+	var pt:st:io:user inst;
+
+	inst = user_get(desc);
+	if(inst == null)
+		return 0;
+
+	n = inst->cnt;
+	for(i = 0; i < inst->cnt; i++)
+		n += io:desc_user(inst->poll[i].desc) ? io:desc_cnt(inst->poll[i].desc) : 0;
+	
+	return n;
+};
+
+/**
+ * Retrieve polling information from a user descriptor.
+ *   @desc: The user descriptor.
+ *   @poll: Out. Optional. The polling information.
+ *   @proc: Out. Optional. The processing information.
+ *   @cnt: The number of polling slots.
+ *   @wake: Out. Optional. The wakeup time.
+ *   &returns: The total number of descriptors
+ */
+def[export] u32(i32 desc, pt:st:io:poll poll, pt:st:io:proc proc, u32 cnt, pt:i64 wake) io2:desc_poll = {
+	var u32 i;
+	var pt:st:io:user inst;
+
+	inst = user_get(desc);
+	if(inst == null)
+		return 0;
+
+	if(poll != null) {
+		for(i = 0; (i < inst->cnt) && (cnt-- > 0); i++) {
+			if(poll != null)
+				*poll++ = st:io:poll{ inst->poll[i].desc, inst->poll[i].req, 0 };
+
+			if(proc != null)
+				*proc++ = st:io:proc{ inst->poll[i].func, inst->poll[i].arg };
+		}
+	}
+
+	if((wake != null) && (inst->wake >= 0)) {
+		if(*wake > inst->wake)
+			*wake = inst->wake;
+	}
+
+	return inst->cnt;
+};
+def[export] u32(i32 desc, pt:st:io1:poll poll, pt:st:io:proc proc, u32 cnt, pt:i64 wake) io:desc_poll = {
+	var u32 i;
+	var pt:st:io:user inst;
+
+	inst = user_get(desc);
+	if(inst == null)
+		return 0;
+
+	if(poll != null) {
+		for(i = 0; (i < inst->cnt) && (cnt-- > 0); i++) {
+			if(poll != null)
+				*poll++ = st:io1:poll{ inst->poll[i].desc, u16{inst->poll[i].req}, 0 };
+
+			if(proc != null)
+				*proc++ = st:io:proc{ inst->poll[i].func, inst->poll[i].arg };
+		}
+	}
+
+	if((wake != null) && (inst->wake >= 0)) {
+		if(*wake > inst->wake)
+			*wake = inst->wake;
+	}
+
+	return inst->cnt;
+};
+
+
+/**
+ * Set the wakeup time for a descriptor.
+ *   @desc: The descriptor.
+ *   @wake: The wakeup time, negative to unset.
+ */
+def[export] void(i32 desc, i64 wake) io:wake = {
+	var pt:st:io:user inst;
+
+	inst = user_get(desc);
+	if(inst == null)
+		return;
+
+	inst->wake = wake;
+};
+
+/**
+ * Set the wait time for a descriptor.
+ *   @desc: The descriptor.
+ *   @usec: The wait time in microseconds, negative to unset.
+ */
+def[export] void(i32 desc, i64 usec) io:wait = {
+	io:wake(desc, (usec >= 0) ? (tm:usec() + usec) : -1);
+};
+
+/**
+ * Determine if the descriptor has expired/woken up.
+ *   @desc: The descriptor.
+ *   &returns: True if expired.
+ */
+def[export] bool(i32 desc) io:expired = {
+	var pt:st:io:user user;
+
+	user = user_get(desc);
+	if(user == null)
+		return false;
+
+	if((user->wake < 0) || (user->wake > tm:usec()))
+		return false;
+
+	user->wake = -1;
+	return true;
+};
+
+
+/**
+ * Create a user descriptor.
+ *   &returns: The instance.
+ */
+def pt:st:io:user() user_new = {
+	var pt:st:io:user user;
+
+	user = mem:new(st:io:user);
+	user->nrefs = 0;
+	user->err = null;
+	user->wake = -1;
+	user->poll = mem:alloc(0);
+	user->cnt = 0;
+	user->mask = 0;
+	user->func = null;
+	user->arg = null;
+
+	return user;
+};
+
+/**
+ * Delete a user descriptor.
+ *   @user: The user descriptor.
+ */
+def void(pt:st:io:user user) user_delete = {
+	if(user->func != null)
+		user->func->(io:msg:close, null, user->arg);
+
+	mem:free(user->poll);
+	mem:free(user);
+};
+
+/**
+ * Add a reference to a user descriptor.
+ *   @user: The user descriptor.
+ */
+def void(pt:st:io:user user) user_ref = {
+	user->nrefs++;
+};
+
+/**
+ * Remove a reference from a user descriptor.
+ *   @user: The user descriptor.
+ */
+def void(pt:st:io:user user) user_unref = {
+	if(user->nrefs-- <= 1)
+		user_delete(user);
+};
+
+/**
+ * Get an instance from a descriptor.
+ *   @desc: The descriptor.
+ *   &returns: The instance if found, null otherwise.
+ */
+def pt:st:io:user(i32 desc) user_get = {
+	var pt:st:entry entry;
+
+	entry = entry_get(desc);
+	return (entry != null) ? entry->user : null;
+};
+
+
+/**
+ * Allocate an entry.
+ *   @user: The user.
+ */
+def pt:st:entry(pt:st:io:user user) entry_alloc = {
+	var i32 desc;
+	var pt:st:entry entry;
+
+	if(!st_init) {
+		st_root = avl:root_new(&avl:cmp_i32);
+		st_init = true;
+	}
+
+	// TODO better allocation (random?)
+	do
+		desc = (st_cur++ % 0x40000000) + 0x40000000;
+	while(avl:root_get(&st_root, &desc) != null);
+
+	entry = mem:new(st:entry);
+	entry->desc = desc;
+	entry->node = avl:node(&entry->desc);
+	user_ref(entry->user = user);
+	avl:root_add(&st_root, &entry->node);
+
+	return entry;
+};
+
+/**
+ * Free an entry.
+ *   @entry: The entry.
+ */
+def void(pt:st:entry entry) entry_free = {
+	user_unref(entry->user);
+	mem:free(entry);
+};
+
+
+/**
+ * Get an entry.
+ *   @desc: The descriptor.
+ *   &returns: The entry if found, null otherwise.
+ */
+def pt:st:entry(i32 desc) entry_get = {
+	var pt:st:avl:node node;
+
+	if(!st_init)
+		return null;
+
+	node = avl:root_get(&st_root, &desc);
+	return (node != null) ? getparent(node, st:entry, node) : null;
+};

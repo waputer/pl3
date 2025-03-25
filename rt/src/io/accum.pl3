@@ -1,0 +1,101 @@
+/**
+ * Accumulator structure.
+ *   @buf: The internal memory store.
+ *   @dst: The destination pointer.
+ *   @sz: The size pointer.
+ */
+tydef[export] st:io:accum {
+	st:mem:buf buf;
+	pt:pt:void dst;
+	pt:u32 sz;
+};
+
+
+/**
+ * Create a memory accumulator file. The output pointers are only written when
+ * the file is closed.
+ *   @dst: Out. The destination pointer.
+ *   @sz: Out. The size pointer.
+ *   @init: The initial size.
+ *   &returns: The file.
+ */
+def[export] st:io:file(pt:pt:void dst, pt:u32 sz, u32 init) io:accum = {
+	def st:io:file_iface iface = { &io:accum_read, &io:accum_write, &io:accum_ctrl, &io:accum_close };
+
+	return st:io:file{ io:accum_new(dst, sz, init), &iface };
+};
+
+
+/**
+ * Create an accumulator.
+ *   @dst: The pointer that stores the buffer.
+ *   @sz: Optional. The pointer that stores the length.
+ *   @init: The initial size of the buffer.
+ *   &returns: The accumulator.
+ */
+def[export] pt:st:io:accum(pt:pt:void dst, pt:u32 sz, u32 init) io:accum_new = {
+	return mem:make(st:io:accum{ mem:buf_new(init), dst, sz });
+};
+
+/**
+ * Delete an accumulator and all its internal data.
+ *   @accum: The accumulator.
+ */
+def[export] void(pt:st:io:accum accum) io:accum_delete = {
+	mem:buf_delete(accum->buf);
+	mem:free(accum);
+};
+
+/**
+ * Finish with an accumulator, assigning the buffer and size values.
+ *   @accum: The accumulator.
+ */
+def[export] void(pt:st:io:accum accum) io:accum_done = {
+	*accum->dst = mem:buf_done(&accum->buf, accum->sz);
+	mem:free(accum);
+};
+
+
+/**
+ * Read on an accumulator. There is never any data and always returns zero.
+ *   @accum: The accumulator.
+ *   @dst: The destination buffer.
+ *   @sz: The size.
+ *   &returns: Always zero since nothing is read.
+ */
+def[export] e:str[u32](pt:st:io:accum accum, pt:void dst, u32 sz) io:accum_read = {
+	e:fmt("Read not supported.");
+};
+
+/**
+ * Write on an accumulator. The full size is always written (or the system
+ * runs out of memory).
+ *   @accum: The accumulator.
+ *   @src: The source buffer.
+ *   @sz: The size.
+ *   &returns: Always the value `sz`.
+ */
+def[export] e:str[u32](pt:st:io:accum accum, cpt:void buf, u32 sz) io:accum_write = {
+	mem:buf_write(&accum->buf, buf, sz);
+
+	return sz;
+};
+
+/**
+ * Handle a control message. No messages are supported for accumulators.
+ *   @accum: The accumulator.
+ *   @id: The identifier.
+ *   @arg: The argument.
+ *   &returns: Always '-1'.
+ */
+def[export] e:str[i32](pt:st:io:accum accum, u32 id, pt:void arg) io:accum_ctrl = {
+	return -1;
+};
+
+/**
+ * Close an accumulator.
+ *   @accum: Consumed. The accumulator.
+ */
+def[export] e:str[void](pt:st:io:accum accum) io:accum_close = {
+	io:accum_done(accum);
+};

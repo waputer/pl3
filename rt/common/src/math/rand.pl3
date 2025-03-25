@@ -1,0 +1,63 @@
+/**
+ * Random number generator.
+ *   @w, x, y, z: The state.
+ */
+tydef[export] st:m:rand {
+	u32 w, x, y, z;
+};
+
+
+/*
+ * default random number generator
+ */
+var[export] st:m:rand m:rand = { 0xF113D0AF, 0xA58BADEF, 0xE205A5A6, 0x4A648FBD };
+
+
+/**
+ * Create a random number generator with a seed..
+ *   @seed: The seed.
+ *   &returns: The random number generator.
+ */
+def[export] st:m:rand(u32 seed) m:rand_new = {
+	return st:m:rand{ seed * 0xF113D0AF, 0xA58BADEF, 0xE205A5A6, seed * 0x4A648FBD };
+};
+
+/**
+ * Create a random number generator using the current time in microseconds.
+ *   &returns: The random number generator.
+ */
+def[export] st:m:rand() m:rand_usec = {
+	var u64 usec = u64{tm:usec()};
+
+	return m:rand_new(u32{usec} ^ u32{usec >> 32});
+};
+
+
+/**
+ * Compute a random 32-bit unsigned integer.
+ *   @rand: The number generator.
+ *   &returns: The next number.
+ */
+def[export] u32(pt:st:m:rand rand) m:rand_u32 = {
+	  var u32 t;
+
+	  if(rand == null)
+		  rand = &m:rand;
+
+	  t = rand->x ^ (rand->x << 11);
+	  rand->x = rand->y;
+	  rand->y = rand->z;
+	  rand->z = rand->w;
+	  rand->w = rand->w ^ (rand->w >> 19) ^ (t ^ (t >> 8));
+
+	  return rand->w;
+};
+
+/**
+ * Compute a random 32-bit float between zero and one (not including one).
+ *   @rand: The number generator.
+ *   &returns: The next number.
+ */
+def[export] fp32(pt:st:m:rand rand) m:rand_fp32 = {
+	return fp32{(m:rand_u32(rand) & 0x00FFFFFF)} / fp32{0x00FFFFFF};
+};

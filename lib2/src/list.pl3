@@ -1,0 +1,149 @@
+/**
+ * Initializer list structure.
+ *   @init: The list of initializers.
+ *   @dots: Dots to indicate an incomplete list.
+ *   @meta: The metadata.
+ */
+tydef[export] st:pl3:list {
+	pt:st:pl3:init init;
+	bool dots;
+
+	st:pl3:meta meta;
+};
+
+/**
+ * Initializer list.
+ *   @init: Consumed. The list of initializers.
+ *   @dots: Dots to indicate an incomplete list.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The initializier list.
+ */
+def[export] pt:st:pl3:list(pt:st:pl3:init init, bool dots, st:pl3:meta meta) pl3:list_new = {
+	return mem:make(st:pl3:list{ init, dots, meta });
+};
+
+/**
+ * Delete an initializer list.
+ *   @list: The initializer list.
+ */
+def[export] void(pt:st:pl3:list list) pl3:list_delete = {
+	pl3:init_clear(list->init);
+	pl3:meta_delete(list->meta);
+	mem:free(list);
+};
+
+/**
+ * Retrieve the length for an initializer list.
+ *   @list: The initializer list.
+ *   &returns: The length.
+ */
+def[export] u32(pt:st:pl3:list list) pl3:list_len = {
+	var u32 n = 0;
+	var pt:st:pl3:init init;
+
+	for(init = list->init; init != null; init = init->next)
+		n++;
+	
+	return n;
+};
+
+/**
+ * Retrieve the expression if the initializer list is a valid cast.
+ *   @list: The list.
+ *   &returns; The expression if a valid cast, null otherwise.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:list list) pl3:list_cast = {
+	if(list->init == null)
+		return null;
+	else if(list->init->next != null)
+		return null;
+	else if(list->init->tag != ev:pl3:init:expr)
+		return null;
+
+	return list->init->data.expr;
+};
+
+
+/**
+ * Initializer list element.
+ *   @tag: The tag.
+ *   @data: The data.
+ *   @meta: The metadata.
+ *   @idx: The index.
+ *   @id: The field identifier.
+ *   @type: The type.
+ *   @next: The next element.
+ */
+tydef[export] en:pl3:init { expr, nest };
+tydef[export] un:pl3:init { pt:st:pl3:expr expr; pt:st:pl3:list list; };
+tydef[export] st:pl3:init {
+	en:pl3:init tag;
+	un:pl3:init data;
+	st:pl3:meta meta;
+
+	i32 idx;
+	pt:char id;
+	st:pl3:type type;
+	
+	pt:st:pl3:init next;
+};
+
+/**
+ * Create an initializer.
+ *   @tag: The tag.
+ *   @data: Consumed. The data.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The initializer.
+ */
+def[export] pt:st:pl3:init(en:pl3:init tag, pt:char id, un:pl3:init data, st:pl3:meta meta) pl3:init_new = {
+	return mem:make(st:pl3:init{ tag, data, meta, -1, id, pl3:type_unk, null });
+};
+
+/**
+ * Create an expression initializer.
+ *   @expr: Consumed. The expression.
+ *   @id: Consumed. Optional. The identifier.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The initializer.
+ */
+def[export] pt:st:pl3:init(pt:st:pl3:expr expr, pt:char id, st:pl3:meta meta) pl3:init_expr = {
+	return pl3:init_new(ev:pl3:init:expr, id, un:pl3:init{ .expr = expr }, meta);
+};
+
+/**
+ * Create an nested initializer.
+ *   @list: Consumed. The child initializer list.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The initializer.
+ */
+def[export] pt:st:pl3:init(pt:st:pl3:list list, pt:char id, st:pl3:meta meta) pl3:init_nest = {
+	return pl3:init_new(ev:pl3:init:nest, id, un:pl3:init{ .list = list }, meta);
+};
+
+/**
+ * Delete an initializer.
+ *   @init: The initializer.
+ */
+def[export] void(pt:st:pl3:init init) pl3:init_delete = {
+	switch(init->tag) {
+	case ev:pl3:init:nest: pl3:list_delete(init->data.list); break;
+	case ev:pl3:init:expr: pl3:expr_delete(init->data.expr); break;
+	}
+
+	pl3:meta_delete(init->meta);
+	mem:erase(init->id);
+	mem:free(init);
+};
+
+/**
+ * Clear a list of initializers.
+ *   @init: The initializer.
+ */
+def[export] void(pt:st:pl3:init init) pl3:init_clear = {
+	var pt:st:pl3:init tmp;
+
+	while(init != null) {
+		init = (tmp = init)->next;
+		pl3:init_delete(tmp);
+	}
+};
