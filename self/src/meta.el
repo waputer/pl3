@@ -1,0 +1,155 @@
+/**
+ * Metadata structure.
+ *   @loc: The location.
+ */
+tydef[export] st:pl3:meta {
+	pt:st:pl3:loc loc;
+};
+
+/**
+ * Create a metadata node.
+ *   @loc: Consumed. The location.
+ *   &returns: The metadata node.
+ */
+def[export] st:pl3:meta(pt:st:pl3:loc loc) pl3:meta_new = {
+	return st:pl3:meta{ loc };
+};
+
+/**
+ * Create a blank metadata node.
+ *   &returns: The metadata node.
+ */
+def[export] st:pl3:meta() pl3:meta_blank = {
+	return pl3:meta_new(null);
+};
+
+/**
+ * Copy a metdata node.
+ *   @meta: The input metadata node.
+ *   &returns: The metadata node copy.
+ */
+def[export] st:pl3:meta(st:pl3:meta meta) pl3:meta_copy = {
+	return pl3:meta_new((meta.loc != null) ? pl3:loc_copy(meta.loc) : null);
+};
+
+/**
+ * Delete a metadata node.
+ *   @meta: The metadata node.
+ */
+def[export] void(st:pl3:meta meta) pl3:meta_delete = {
+	if(meta.loc != null)
+		pl3:loc_delete(meta.loc);
+};
+
+
+/**
+ * Create a callback for printing the metadata location.
+ *   @meta: The metadata node.
+ *   &returns: The callback.
+ */
+def[export] st:io:call(cpt:st:pl3:meta meta) pl3:meta_call = {
+	if(meta->loc != null)
+		return pl3:loc_call(meta->loc);
+	else
+		return io:call_str("-");
+};
+
+
+/**
+ * Location structure.
+ *   @file: The file string.
+ *   @lin, col: The line and column.
+ */
+tydef[export] st:pl3:loc {
+	pt:st:pl3:str file;
+	u32 lin, col;
+};
+
+/**
+ * Create a location.
+ *   @file: Consumed. The file string.
+ *   @lin: The line.
+ *   @col: The column.
+ *   &returns: The location.
+ */
+def[export] pt:st:pl3:loc(pt:st:pl3:str file, u32 lin, u32 col) pl3:loc_new = {
+	return mem:make(st:pl3:loc{ file, lin, col });
+};
+
+/**
+ * Copy a location.
+ *   @loc: The location.
+ *   &returns: The copy.
+ */
+def[export] pt:st:pl3:loc(cpt:st:pl3:loc loc) pl3:loc_copy = {
+	return pl3:loc_new(pl3:str_copy(loc->file), loc->lin, loc->col);
+};
+
+/**
+ * Delete a location.
+ *   @loc: The location.
+ */
+def[export] void(pt:st:pl3:loc loc) pl3:loc_delete = {
+	pl3:str_delete(loc->file);
+	mem:free(loc);
+};
+
+
+/**
+ * Create a callback for printing the location.
+ *   @loc: The location.
+ *   &returns: The callback.
+ */
+def[export] st:io:call(cpt:st:pl3:loc loc) pl3:loc_call = {
+	def e:str[void](st:io:file file, pt:st:pl3:loc loc) func = { //FIXME here too, cpt
+		io:fmt(file, "%s:%u:%u", loc->file->buf, loc->lin + 1, loc->col + 1);
+	};
+
+	return st:io:call{ &func, pt:void{loc} }; //FIXME: pt:void cast rules, uhg
+};
+
+
+/**
+ * String structure.
+ *   @buf: The buffer.
+ *   @refcnt: The reference count.
+ */
+tydef[export] st:pl3:str {
+	pt:char buf;
+	u32 refcnt;
+};
+
+/**
+ * Create a string.
+ *   @buf: Consumed. The character buffer.
+ *   &returns: The string.
+ */
+def[export] pt:st:pl3:str(pt:char buf) pl3:str_new = {
+	return mem:make(st:pl3:str{ buf, 1 });
+};
+
+/**
+ * Copy a string by increment the reference count.
+ *   @str: The string.
+ *   &returns: The copy.
+ */
+def[export] pt:st:pl3:str(pt:st:pl3:str str) pl3:str_copy = {
+	assert(str->refcnt > 0);
+
+	str->refcnt++;
+
+	return str;
+};
+
+/**
+ * Delete a string.
+ *   @str: The string.
+ */
+def[export] void(pt:st:pl3:str str) pl3:str_delete = {
+	if(str->refcnt <= 1) {
+		mem:free(str->buf);
+		mem:free(str);
+	}
+	else
+		str->refcnt--;
+};

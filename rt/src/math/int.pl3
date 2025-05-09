@@ -1,0 +1,849 @@
+/**
+ * Big integer structure.
+ *   @tmp, neg: The temporary and negative flag.
+ *   @arr: The array of data.
+ *   @len: The array length.
+ */
+tydef[export] st:m:int {
+	bool neg;
+	u16 refs;
+	pt:u32 arr;
+	u32 len;
+};
+
+/**
+ * Create a big integer.
+ *   @neg: The negative flag.
+ *   @arr: Consumed. The data array.
+ *   @len: The array length.
+ *   &returns: The integer.
+ */
+def[export] pt:st:m:int(bool neg, pt:u32 arr, u32 len) m:int_new = {
+	return mem:make(st:m:int{ neg, 1, arr, len });
+};
+
+/**
+ * Copy an integer.
+ *   @int: The original integer.
+ *   &returns: The new integer.
+ */
+def[export] pt:st:m:int(cpt:st:m:int int) m:int_copy = {
+	return m:int_new(int->neg, mem:dup(int->arr, int->len * sizeof(u32)), int->len);
+};
+
+/**
+ * Capture a fresh copy of an integer. If this is the last reference, do
+ * nothing. Otherwise, create a brand new copy.
+ *   @int: The input integer.
+ *   &returns: The fresh integer.
+ */
+def[export] pt:st:m:int(pt:st:m:int int) m:int_take = {
+	if(int->refs <= 1)
+		return int;
+	else
+		return m:int_copy(int);
+};
+
+/**
+ * Delete a big integer.
+ *   @int: The big integer.
+ */
+def[export] void(pt:st:m:int int) m:int_delete = {
+	mem:free(int->arr);
+	mem:free(int);
+};
+
+
+/**
+ * Add a reference to an integer.
+ *   @int: The big integer.
+ *   &returns: The integer.
+ */
+def[export] pt:st:m:int(pt:st:m:int int) m:int_ref = {
+	if(int->refs != m:u16_max)
+		int->refs++;
+
+	return int;
+};
+
+/**
+ * Remove a reference from an integer.
+ *   @int: The integer.
+ */
+def[export] void(pt:st:m:int int) m:int_unref = {
+	if(int->refs == m:u16_max)
+		return;
+	
+	if(int->refs-- > 1)
+		return;
+
+	m:int_delete(int);
+};
+
+/**
+ * Set the integer to be permanent.
+ *   @int: The integer.
+ *   &returns: The integer.
+ */
+def[export] pt:st:m:int(pt:st:m:int int) m:int_perm = {
+	int->refs = m:u16_max;
+	return int;
+};
+
+/**
+ * Set the integer to be a temporary (aka a weak reference).
+ *   @int: The integer.
+ *   &returns: The integer.
+ */
+def[export] pt:st:m:int(pt:st:m:int int) m:int_tmp = {
+	int->refs = 1;
+	return int;
+};
+
+
+/**
+ * Create a big integer with a value of zero.
+ *   &returns: The integer with value zero.
+ */
+def[export] pt:st:m:int() m:int_zero = {
+	return m:int_new(false, mem:alloc(0), 0);
+};
+
+/**
+ * Create a big integer with a value of one.
+ *   &returns: The integer with value one.
+ */
+def[export] pt:st:m:int() m:int_one = {
+	return m:int_new(false, mem:make(u32{1}), 1);
+};
+
+/**
+ * Create a big integer from the 32-bit unsigned integer.
+ *   @v: The initial value.
+ *   &returns: The integer.
+ */
+def[export] pt:st:m:int(u32 v) m:int_u32 = {
+	return m:int_new(false, mem:make(u32{v}), 1);
+};
+
+
+/**
+ * Normalize the integer by removing leading zeros and negative zero.
+ *   @int: The integer.
+ *   &returns: The integer.
+ */
+def[export] void(pt:st:m:int int) m:int_norm = {
+	var u32 i;
+
+	for(i = int->len - 1; i != m:u32_max; i--) {
+		if(int->arr[i] != 0)
+			break;
+	}
+
+	i++;
+	if(i != int->len)
+		int_resize(int, i);
+
+	if(int->len == 0)
+		int->neg = false;
+};
+
+
+
+/**
+ * Perform a left-shift by an unsigned 32-bit integer.
+ *   @lhs: The left-hand side as a big integer.
+ *   @rhs: The right-hand side as a 32-bit integer.
+ *   &Returns: The shifted value.
+ */
+def[export] pt:st:m:int(pt:st:m:int int, u32 shift) m:int_shl_u32 = {
+	var u32 i, k, c, rem, off;
+	var pt:st:m:int res;
+
+	rem = shift % 32;
+	off = shift / 32;
+
+	c = 0;
+	res = m:int_zero();
+	int_resize(res, int->len + off);
+
+	for(i = 0; i < int->len; i++) {
+		k = i + off;
+		c = int->arr[i] >> (32 - rem);
+		res->arr[k] = c | (int->arr[i] << rem);
+	}
+
+	if(c > 0) {
+		int_resize(res, int->len + off + 1);
+		res->arr[int->len + off] = c;
+	}
+
+	m:int_unref(int);
+
+	return res;
+};
+
+/**
+ * Perform a right-shift by an unsigned 32-bit integer.
+ *   @lhs: The left-hand side as a big integer.
+ *   @rhs: The right-hand side as a 32-bit integer.
+ *   &returns: The result.
+ */
+def[export] pt:st:m:int(pt:st:m:int int, u32 shift) m:int_shr_u32 = {
+	var u32 i, k, c, rem, off;
+	var pt:st:m:int res;
+
+	rem = shift % 32;
+	off = shift / 32;
+
+	c = 0;
+	res = m:int_zero();
+	int_resize(res, int->len + off);
+
+	for(i = int->len; (i >= off) && (i != m:u32_max); i--) {
+		k = i - off;
+		c = int->arr[i] << (32 - rem);
+		res->arr[k] = c | (int->arr[i] >> rem);
+	}
+
+	m:int_norm(res);
+	m:int_unref(int);
+
+	return res;
+};
+
+
+/**
+ * Parse a big integer from a string.
+ *   @str: The string.
+ *   @base: The base. Set to `0` to autodetect.
+ *   &returns: The integer.
+ */
+def[export] e:str[pt:st:m:int](cpt:char str, u8 base) m:int_parse = {
+	var u32 dig;
+	var pt:st:m:int int;
+	var cpt:char orig = str;
+	var bool neg = false;
+
+	if(str[0] == '-') {
+		str++;
+		neg = true;
+	}
+
+	if(base == 0) {
+		if(str[0] == '0') {
+			if(str[1] == 'x') {
+				base = 16;
+				str += 2;
+			}
+			else if(str[1] == 'b') {
+				base = 2;
+				str += 2;
+			}
+			else {
+				base = 8;
+				str += 1;
+			}
+		}
+		else
+			base = 10;
+	}
+
+	int = m:int_zero();
+	onerr m:int_delete(int);
+
+	while(*str != '\0') {
+		if((*str >= 'A') && (*str <= 'Z'))
+			dig = u32{*str} - 'A' + 10;
+		else if((*str >= 'a') && (*str <= 'z'))
+			dig = u32{*str} - 'a' + 10;
+		else if((*str >= '0') && (*str <= '9'))
+			dig = u32{*str} - '0';
+		else
+			e:fmt("Invalid number '%s'.", orig);
+
+		if(dig >= u32{base})
+			e:fmt("Invalid number '%s'.", orig);
+
+		m:int_mul_u32(int, u32{base});
+		m:int_add_u32(int, dig);
+		str++;
+	}
+
+	int->neg = neg;
+
+	return int;
+};
+
+def[export] i8(pt:st:m:int lhs, pt:st:m:int rhs) m:int_cmp = {
+	var u32 i;
+
+	if(lhs->neg && !rhs->neg)
+		return -1;
+	else if(!lhs->neg && rhs->neg)
+		return 1;
+
+	m:int_norm(lhs);
+	m:int_norm(rhs);
+
+	if(lhs->neg)
+		mem:swap(&lhs, &rhs, sizeof(pt:st:m:int));
+
+	if(lhs->len > rhs->len)
+		return 1;
+	else if(lhs->len < rhs->len)
+		return -1;
+
+	for(i = lhs->len - 1; i != m:u32_max; i--) {
+		if(lhs->arr[i] > rhs->arr[i])
+			return 1;
+		else if(lhs->arr[i] < rhs->arr[i])
+			return -1;
+	}
+
+	return 0;
+};
+
+
+/**
+ * Add a big integer to an unsigned 32-bit integer.
+ *   @lhs: The left-hand side as a big integer.
+ *   @rhs: The right-hand side as a 32-bit integer.
+ *   &returns: The result.
+ */
+def[export] pt:st:m:int(pt:st:m:int lhs, u32 rhs) m:int_add_u32 = {
+	var u32 i, c = rhs;
+
+	lhs = m:int_take(lhs);
+
+	if(lhs->neg) {
+		fatal("stub");
+	}
+	else {
+		for(i = 0; i < lhs->len; i++)
+			bi:uadd32(&c, &lhs->arr[i], lhs->arr[i], c);
+
+		if(c > 0)
+			int_append(lhs, c);
+	}
+
+	return lhs;
+};
+
+/**
+ * Subtract a big integer from a 32-bit unsigned integer.
+ *   @lhs: The left-hand side as a big integer.
+ *   @rhs: The right-hand side as a 32-bit integer.
+ *   &returns: The result.
+ */
+def[export] pt:st:m:int(pt:st:m:int lhs, u32 rhs) m:int_sub_u32 = {
+	var u32 i, c = rhs;
+
+	lhs = m:int_take(lhs);
+
+	if(lhs->neg) {
+		for(i = 0; i < lhs->len; i++)
+			bi:uadd32(&c, &lhs->arr[i], lhs->arr[i], c);
+
+		if(c > 0)
+			int_append(lhs, c);
+	}
+	else {
+		for(i = 0; i < lhs->len; i++)
+			bi:usub32(&c, &lhs->arr[i], lhs->arr[i], c);
+
+		if(c > 0) {
+			c = 1;
+
+			for(i = 0; i < lhs->len; i++)
+				bi:uadd32(&c, &lhs->arr[i], lhs->arr[i] ^ m:u32_max, c);
+
+			lhs->neg = true;
+		}
+	}
+
+	return lhs;
+};
+
+/**
+ * Multiply a big integer with a 32-bit unsigned integer.
+ *   @lhs: The left-hand side as a big integer.
+ *   @rhs: The right-hand side as a 32-bit integer.
+ *   &returns: The result.
+ */
+def void(pt:st:m:int lhs, u32 val) m:int_mul_u32 = {
+	var u32 i, t, c = 0;
+
+	lhs = m:int_take(lhs);
+
+	for(i = 0; (i < lhs->len) || (c != 0); i++) {
+		if(i >= lhs->len)
+			int_resize(lhs, i + 1);
+		
+		bi:umul32(&t, &lhs->arr[i], lhs->arr[i], val);
+		bi:uadd32(&c, &lhs->arr[i], lhs->arr[i], c);
+		c += t;
+	}
+};
+
+def[export] void(pt:st:m:int lhs, u32 rhs, pt:pt:st:m:int quot, pt:u32 rem) m:int_divrem_u32 = {
+	var u32 i;
+	var pt:st:m:int q, r;
+
+	q = m:int_zero();
+	r = m:int_zero();
+	int_resize(r, 1);
+
+	for(i = 32 * lhs->len - 1; i != m:u32_max; i--) {
+		r = m:int_shl_u32(r, 1);
+		
+		if(m:int_get_bit(lhs, i) > 0)
+			m:int_bit_set(r, 0);
+
+		if(m:int_gte_u32(m:int_ref(r), rhs)) {
+			r = m:int_sub_u32(r, rhs);
+			m:int_bit_set(q, i);
+		}
+	}
+
+	if(rem != null)
+		*rem = m:int_get_u32(r);
+
+	m:int_delete(r);
+	m:int_unref(lhs);
+
+	if(quot != null)
+		*quot = q;
+	else
+		m:int_delete(q);
+};
+
+def[export] pt:st:m:int(pt:st:m:int lhs, u32 rhs) m:int_div_u32 = {
+	var u32 i;
+	var pt:st:m:int q, r;
+
+	q = m:int_zero();
+	r = m:int_zero();
+	int_resize(r, 1);
+
+	for(i = 32 * lhs->len - 1; i != m:u32_max; i--) {
+		r = m:int_shl_u32(r, 1);
+		
+		if(m:int_get_bit(lhs, i) > 0)
+			m:int_bit_set(r, 0);
+
+		if(m:int_gte_u32(m:int_ref(r), rhs)) {
+			r = m:int_sub_u32(r, rhs);
+			m:int_bit_set(q, i);
+		}
+	}
+
+	m:int_delete(r);
+	m:int_unref(lhs);
+
+	return q;
+};
+
+
+def[export] void(pt:st:m:int int, u32 idx) m:int_bit_set = {
+	var u32 off, rem;
+
+	off = idx / 32;
+	rem = idx % 32;
+
+	if(int->len < (off + 1))
+		int_resize(int, off + 1);
+	
+	int->arr[off] |= (u32{1} << rem);
+};
+
+
+/**
+ * Compare a big integer with a 32-bit unsigned integer.
+ *   @lhs: The left-hand side as a big integer.
+ *   @rhs: The right-hand side as a 32-bit unsigned intreger.
+ *   &returns: Their order as an integer.
+ */
+def[export] i8(pt:st:m:int lhs, u32 rhs) m:int_cmp_u32 = {
+	var i8 cmp;
+
+	m:int_norm(lhs);
+
+	if(lhs->neg)
+		cmp = -1;
+	else if((lhs->len == 0) && (rhs > 0))
+		cmp = -1;
+	else if((lhs->len == 1) && (lhs->arr[0] < rhs))
+		cmp = -1;
+	else if((lhs->len == 1) && (lhs->arr[0] == rhs))
+		cmp = 0;
+	else
+		cmp = 1;
+
+	m:int_unref(lhs);
+
+	return cmp;
+};
+
+def[export] u32(i32 v) m:abs_i32 = {
+	return u32{(v >= 0) ? v : -v};
+};
+
+def[export] i8(pt:st:m:int lhs, i32 rhs) m:int_cmp_i32 = {
+	var i8 cmp;
+
+	m:int_norm(lhs);
+
+	if(lhs->len == 0) {
+		if(rhs > 0)
+			cmp = -1;
+		else if(rhs < 0)
+			cmp = 1;
+		else
+			cmp = 0;
+	}
+	else if(lhs->len == 1) {
+		var u32 abs = m:abs_i32(rhs);
+
+		if(lhs->neg && (rhs >= 0))
+			cmp = -1;
+		else if(!lhs->neg && (rhs < 0))
+			cmp = 1;
+		else if(lhs->arr[0] < abs)
+			cmp = (lhs->neg ? 1 : -1);
+		else if(lhs->arr[0] > abs)
+			cmp = (lhs->neg ? -1 : 1);
+		else
+			cmp = 0;
+	}
+	else
+		cmp = (lhs->neg ? -1 : 1);
+
+	m:int_unref(lhs);
+
+	return cmp;
+};
+
+/**
+ * Check if a big integer is equal to an unsigned 32-bit integer.
+ *   @lhs: The left-hand side as a big integer.
+ *   @rhs: The right-hand side as a unsigned 32-bit intreger.
+ *   &returns: True if `lhs == rhs`, false otherwise.
+ */
+def[export] bool(pt:st:m:int lhs, u32 rhs) m:int_eq_u32 = {
+	return m:int_cmp_u32(lhs, rhs) == 0;
+};
+
+/**
+ * Check if a big integer is equal to a signed 32-bit integer.
+ *   @lhs: The left-hand side as a big integer.
+ *   @rhs: The right-hand side as a signed 32-bit intreger.
+ *   &returns: True if `lhs == rhs`, false otherwise.
+ */
+def[export] bool(pt:st:m:int lhs, i32 rhs) m:int_eq_i32 = {
+	return m:int_cmp_i32(lhs, rhs) == 0;
+};
+
+/**
+ * Check if a big integer is greater than an unsigned 32-bit integer.
+ *   @lhs: The left-hand side as a big integer.
+ *   @rhs: The right-hand side as an unsigned 32-bit intreger.
+ *   &returns: True if `lhs > rhs`, false otherwise.
+ */
+def[export] bool(pt:st:m:int lhs, u32 rhs) m:int_gt_u32 = {
+	return m:int_cmp_u32(lhs, rhs) > 0;
+};
+
+/**
+ * Check if a big integer is greater than a signed 32-bit integer.
+ *   @lhs: The left-hand side as a big integer.
+ *   @rhs: The right-hand side as a signed 32-bit intreger.
+ *   &returns: True if `lhs > rhs`, false otherwise.
+ */
+def[export] bool(pt:st:m:int lhs, i32 rhs) m:int_gt_i32 = {
+	return m:int_cmp_i32(lhs, rhs) > 0;
+};
+
+/**
+ * Check if a big integer is greater than or equal to an unsigned 32-bit
+ * integer.
+ *   @lhs: The left-hand side as a big integer.
+ *   @rhs: The right-hand side as an unsigned 32-bit intreger.
+ *   &returns: True if `lhs >= rhs`, false otherwise.
+ */
+def[export] bool(pt:st:m:int lhs, u32 rhs) m:int_gte_u32 = {
+	return m:int_cmp_u32(lhs, rhs) >= 0;
+};
+
+/**
+ * Check if a big integer is greater than or equal to a signed 32-bit integer.
+ *   @lhs: The left-hand side as a big integer.
+ *   @rhs: The right-hand side as a signed 32-bit intreger.
+ *   &returns: True if `lhs >= rhs`, false otherwise.
+ */
+def[export] bool(pt:st:m:int lhs, i32 rhs) m:int_gte_i32 = {
+	return m:int_cmp_i32(lhs, rhs) >= 0;
+};
+
+
+/**
+ * Test all big integer functionaltiy.
+ *   &returns: The number of failures.
+ */
+def[export] u32() m:int:test = {
+	var u32 errs = 0;
+
+	// FIXME: something better than e:req
+	e:req(m:int:test_0());
+	e:req(m:int:test_1());
+
+	return errs;
+};
+
+/**
+ * Test basic parsing and comparison functionality.
+ */
+def[export] e:str[void]() m:int:test_0 = {
+	if(!m:int_eq_u32(m:int_u32(123), 123))
+		e:fmt("Failed 'm:int-test-1-a'.\n");
+
+	if(!m:int_eq_u32(m:int_u32(0x12), 18))
+		e:fmt("Failed 'm:int-test-1-b'.\n");
+
+	if(!m:int_gt_u32(m:int_u32(19), 18))
+		e:fmt("Failed 'm:int-test-1-c'.\n");
+
+	if(m:int_gt_u32(m:int_u32(19), 19))
+		e:fmt("Failed 'm:int-test-1-d'.\n");
+
+	if(m:int_gt_u32(m:int_u32(19), 20))
+		e:fmt("Failed 'm:int-test-1-e'.\n");
+
+	if(m:int_gt_i32(e:get(m:int_parse("-1", 0)), 0))
+		e:fmt("Failed 'm:int-test-1-f'.\n");
+
+	if(m:int_gt_i32(e:get(m:int_parse("-1", 0)), -1))
+		e:fmt("Failed 'm:int-test-1-g'.\n");
+
+	if(!m:int_gt_i32(e:get(m:int_parse("-1", 0)), -2))
+		e:fmt("Failed 'm:int-test-1-h'.\n");
+};
+
+/**
+ * Test logical and arithmetic functions with 32-bit integers.
+ */
+def[export] e:str[void]() m:int:test_1 = {
+	if(!m:int_eq_u32(m:int_add_u32(m:int_u32(12), 34), 46))
+		e:fmt("Failed 'm:int-test-1-a'.\n");
+
+	if(!m:int_eq_u32(m:int_sub_u32(m:int_u32(22), 4), 18))
+		e:fmt("Failed 'm:int-test-1-b'.\n");
+
+	if(!m:int_eq_i32(m:int_sub_u32(m:int_u32(22), 28), -6))
+		e:fmt("Failed 'm:int-test-1-c'.\n");
+
+	if(!m:int_eq_i32(m:int_shl_u32(m:int_u32(1), 1), 2))
+		e:fmt("Failed 'm:int-test-1-d'.\n");
+
+	if(!m:int_eq_i32(m:int_div_u32(m:int_u32(5), 2), 2))
+		e:fmt("Failed 'm:int-test-1-e'.\n");
+
+	if(!m:int_eq_i32(m:int_div_u32(m:int_u32(22813092), 378), 60352))
+		e:fmt("Failed 'm:int-test-1-f'.\n");
+};
+
+def[export] u32(pt:st:m:int int, u32 idx) m:int_get_bit = {
+	var u32 off, rem;
+
+	off = idx / 32;
+	rem = idx % 32;
+
+	if(int->len < off)
+		return 0;
+	
+	return (int->arr[off] >> rem) & 0x1;
+};
+
+
+def[export] void(pt:u32 hi, pt:u32 lo, u32 a, u32 b) bi:uadd32 = {
+	var u64 res = u64{a} + u64{b};
+
+	*lo = u32{res};
+	*hi = u32{res >> 32};
+};
+
+def[export] void(pt:u32 hi, pt:u32 lo, u32 a, u32 b) bi:usub32 = {
+	var u64 res = u64{a} - u64{b};
+
+	*lo = u32{res};
+	*hi = u32{res >> 32};
+};
+
+def[export] void(pt:u32 hi, pt:u32 lo, u32 a, u32 b) bi:umul32 = {
+	var u64 res = u64{a} * u64{b};
+
+	*lo = u32{res};
+	*hi = u32{res >> 32};
+};
+
+
+/**
+ * Resize a big integer.
+ *   @int: The bit integer.
+ *   @len: The new length.
+ */
+def void(pt:st:m:int int, u32 len) int_resize = {
+	int->arr = mem:realloc(int->arr, len * sizeof(u32));
+
+	if(len > int->len)
+		mem:zero(int->arr + int->len, (len - int->len) * sizeof(u32));
+	
+	int->len = len;
+};
+
+def void(pt:st:m:int int, u32 val) int_append = {
+	int->arr = mem:realloc(int->arr, (int->len + 1) * sizeof(u32));
+	int->arr[int->len] = val;
+	int->len++;
+};
+
+/**
+ * Perform an inplace addition at an offset.
+ *   @int: The integer.
+ *   @val: The value to add.
+ *   @off: The offset.
+ */
+def void(pt:st:m:int int, u32 val, u32 off) int_add = {
+	var u32 i, c = val;
+
+	for(i = off; c != 0; i++) {
+		if(i >= int->len)
+			int_resize(int, i + 1);
+
+		bi:uadd32(&c, &int->arr[i], int->arr[i], c);
+	}
+};
+
+
+/**
+ * Create a callback to print the integer as a hexidecimal.
+ *   @int: The big integer.
+ *   &returns: The callback.
+ */
+def[export] st:io:call(pt:st:m:int int) m:int_hex = {
+	def e:str[void](st:io:file file, pt:void arg) func = {
+		var i32 i, k;
+		var u8 dig;
+		var bool skip = true;
+		var pt:st:m:int int = arg;
+
+		for(i = i32{int->len - 1}; i >= 0; i--) {
+			for(k = 28; k >= 0; k -= 4) {
+				dig = u8{(int->arr[i] >> k) & 0xF};
+				if((dig == 0) && skip)
+					continue;
+
+				skip = false;
+				io:wr_ch(file, (dig >= 10) ? ('A' + dig - 10) : ('0' + dig));
+			}
+		}
+
+		if(skip)
+			io:wr_ch(file, '0');
+	};
+
+	return st:io:call{ &func, int };
+};
+
+/**
+ * Create a callback to print the integer as a decimal.
+ *   @int: The big integer.
+ *   &returns: The callback.
+ */
+def[export] st:io:call(pt:st:m:int int) m:int_dec = {
+	def e:str[void](st:io:file file, pt:void arg) func = {
+		var u32 i, dig;
+		var pt:char buf;
+		var pt:st:m:int int;
+
+		int = m:int_copy(arg);
+		i = 10 * int->len + 1;
+
+		buf = mem:alloc(i);
+		i--; // FIXME: predecrement
+		buf[i] = '\0';
+
+		while(!m:int_is_zero(int)) {
+			m:int_divrem_u32(int, 10, &int, &dig);
+			i--; // FIXME: predecrement
+			buf[i] = char{dig} + '0';
+		}
+
+		io:wr_str(file, buf + i);
+		mem:free(buf);
+		m:int_delete(int);
+	};
+
+	return st:io:call{ &func, int };
+};
+
+def[export] bool(cpt:st:m:int int) m:int_is_zero = {
+	return int->len == 0;
+};
+
+
+def[export] u8(cpt:st:m:int int) m:int_get_u8 = {
+	return u8{m:int_get_u32(int)};
+};
+
+def[export] i8(cpt:st:m:int int) m:int_get_i8 = {
+	return i8{m:int_get_u32(int)};
+};
+
+def[export] u16(cpt:st:m:int int) m:int_get_u16 = {
+	return u16{m:int_get_u32(int)};
+};
+
+def[export] i16(cpt:st:m:int int) m:int_get_i16 = {
+	return i16{m:int_get_u32(int)};
+};
+
+/**
+ * Get the value as an unigned 32-bit integer, truncating as needed.
+ *   @int: The integer.
+ *   &returns: The unigned 32-bit integer.
+ */
+def[export] u32(cpt:st:m:int int) m:int_get_u32 = {
+	if(int->len == 0)
+		return 0;
+	else
+		return int->neg ? -int->arr[0] : int->arr[0];
+};
+
+/**
+ * Get the value as a signed 32-bit integer, truncating as needed.
+ *   @int: The integer.
+ *   &returns: The signed 32-bit integer.
+ */
+def[export] i32(cpt:st:m:int int) m:int_get_i32 = {
+	return i32{m:int_get_u32(int)};
+};
+
+// FIXME: is this okay?
+def[export] u64(cpt:st:m:int int) m:int_get_u64 = {
+	if(int->len == 0)
+		return 0;
+	else if(int->len == 1)
+		return int->neg ? -u64{int->arr[0]} : u64{int->arr[0]};
+	else
+		return (int->neg ? -1 : 1) * u64{int->arr[0]} | (u64{int->arr[1]} << 32);
+};
+
+def[export] i64(cpt:st:m:int int) m:int_get_i64 = {
+	// FIXME is this okay?
+	return i64{m:int_get_u64(int)};
+};
+
+tydef[export] st:m:flt {
+	st:m:int exp, sig;
+};

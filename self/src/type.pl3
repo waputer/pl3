@@ -1,0 +1,1245 @@
+/**
+ * Named type structure.
+ *   @id: The identifier.
+ *   @decl: The declaration.
+ */
+tydef[export] st:pl3:name {
+	pt:char id;
+	pt:st:pl3:tydecl decl;
+};
+
+/**
+ * Create a named type.
+ *   @id: Consumed. The identifier.
+ *   @decl: Optional. The resolved declaration.
+ *   &returns: The named type.
+ */
+def[export] pt:st:pl3:name(pt:char id, pt:st:pl3:tydecl decl) pl3:name_new = {
+	return mem:make(st:pl3:name{ id, decl });
+};
+
+/**
+ * Copy a named type.
+ *   @name: The named type.
+ *   &returns: The copy.
+ */
+def[export] pt:st:pl3:name(cpt:st:pl3:name name) pl3:name_copy = {
+	return mem:make(st:pl3:name{ str:dup(name->id), name->decl });
+};
+
+/**
+ * Delete a named type.
+ *   @name: The named type.
+ */
+def[export] void(pt:st:pl3:name name) pl3:name_delete = {
+	mem:free(name->id);
+	mem:free(name);
+};
+
+
+/**
+ * Type structure.
+ *   @tag: The tag.
+ *   @data: The data.
+ */
+tydef[export] en:pl3:type { unk, "void", "bool", "u8", "i8", "u16", "i16", "u32", "i32", "u64", "i64", "fp32", "fp64", ptr, arr, name, alias, sig, err, args, annot };
+tydef[export] un:pl3:type { pt:st:pl3:ptr ptr; pt:st:pl3:arr arr; pt:st:pl3:name name; pt:st:pl3:agg agg; pt:st:pl3:sig sig; pt:st:pl3:err err; pt:st:pl3:annot annot; };
+tydef[export] st:pl3:type {
+	en:pl3:type tag;
+	un:pl3:type data;
+};
+
+
+/**
+ * Constants for all the basic types.
+ */
+def[export] st:pl3:type pl3:type_unk = { ev:pl3:type:unk },
+                        pl3:type_void = { ev:pl3:type:void },
+                        pl3:type_bool = { ev:pl3:type:bool },
+                        pl3:type_u8 = { ev:pl3:type:u8 },
+                        pl3:type_i8 = { ev:pl3:type:i8 },
+                        pl3:type_u16 = { ev:pl3:type:u16 },
+                        pl3:type_i16 = { ev:pl3:type:i16 },
+                        pl3:type_u32 = { ev:pl3:type:u32 },
+                        pl3:type_i32 = { ev:pl3:type:i32 },
+                        pl3:type_u64 = { ev:pl3:type:u64 },
+                        pl3:type_i64 = { ev:pl3:type:i64 },
+                        pl3:type_fp32 = { ev:pl3:type:fp32 },
+                        pl3:type_fp64 = { ev:pl3:type:fp64 },
+			pl3:type_args = { ev:pl3:type:args, };
+
+
+/**
+ * Create a type.
+ *   @tag: The tag.
+ *   @data: Consumed. The data.
+ *   &returns: The type.
+ */
+def[export] st:pl3:type(en:pl3:type tag, un:pl3:type data) pl3:type_new = {
+	return st:pl3:type{ tag, data };
+};
+
+/**
+ * Copy a type.
+ *   @type: The original type.
+ *   &Returns: The copied type.
+ */
+def[export] st:pl3:type(st:pl3:type type) pl3:type_copy = {
+	switch(type.tag) {
+	case ev:pl3:type:unk: return pl3:type_unk;
+	case ev:pl3:type:void: return pl3:type_void;
+	case ev:pl3:type:bool: return pl3:type_bool;
+	case ev:pl3:type:u8: return pl3:type_u8;
+	case ev:pl3:type:i8: return pl3:type_i8;
+	case ev:pl3:type:u16: return pl3:type_u16;
+	case ev:pl3:type:i16: return pl3:type_i16;
+	case ev:pl3:type:u32: return pl3:type_u32;
+	case ev:pl3:type:i32: return pl3:type_i32;
+	case ev:pl3:type:u64: return pl3:type_u64;
+	case ev:pl3:type:i64: return pl3:type_i64;
+	case ev:pl3:type:fp32: return pl3:type_fp32;
+	case ev:pl3:type:fp64: return pl3:type_fp64;
+	case ev:pl3:type:ptr: return pl3:type_ptr(pl3:ptr_copy(type.data.ptr));
+	case ev:pl3:type:arr: return pl3:type_arr(pl3:arr_copy(type.data.arr));
+	case ev:pl3:type:name: return pl3:type_name(pl3:name_copy(type.data.name));
+	case ev:pl3:type:sig: return pl3:type_sig(pl3:sig_copy(type.data.sig));
+	case ev:pl3:type:err: return pl3:type_err(pl3:err_copy(type.data.err));
+	case ev:pl3:type:annot: return pl3:type_annot(pl3:annot_copy(type.data.annot));
+	case ev:pl3:type:args: return pl3:type_args;
+	}
+
+	unreachable();
+};
+
+/**
+ * Delete a type.
+ *   @type: the type.
+ */
+def[export] void(st:pl3:type type) pl3:type_delete = {
+	switch(type.tag) {
+	case ev:pl3:type:ptr: pl3:ptr_delete(type.data.ptr); break;
+	case ev:pl3:type:arr: pl3:arr_delete(type.data.arr); break;
+	case ev:pl3:type:name: pl3:name_delete(type.data.name); break;
+	case ev:pl3:type:sig: pl3:sig_delete(type.data.sig); break;
+	case ev:pl3:type:err: pl3:err_delete(type.data.err); break;
+	case ev:pl3:type:annot: pl3:annot_delete(type.data.annot); break;
+	}
+};
+
+/**
+ * Replace a type.
+ *   @dst: The destination. The type will be deleted.
+ *   @src: Consumed. The replacement type.
+ */
+def[export] void(pt:st:pl3:type dst, st:pl3:type src) pl3:type_replace = {
+	pl3:type_delete(*dst);
+	*dst = src;
+};
+
+
+/**
+ * Create a pointer type.
+ *   @ptr: Consumed. The pointer.
+ *   &returns: The type.
+ */
+def[export] st:pl3:type(pt:st:pl3:ptr ptr) pl3:type_ptr = {
+	return pl3:type_new(ev:pl3:type:ptr, un:pl3:type{ .ptr = ptr });
+};
+
+/**
+ * Create an array type.
+ *   @arr: Consumed. The array.
+ *   &returns: The type.
+ */
+def[export] st:pl3:type(pt:st:pl3:arr arr) pl3:type_arr = {
+	return pl3:type_new(ev:pl3:type:arr, un:pl3:type{ .arr = arr });
+};
+
+/**
+ * Create a named type.
+ *   @name: Consumed. The name.
+ *   &returns: The type.
+ */
+def[export] st:pl3:type(pt:st:pl3:name name) pl3:type_name = {
+	return pl3:type_new(ev:pl3:type:name, un:pl3:type{ .name = name });
+};
+
+/**
+ * Create a signature type.
+ *   @sig: Consumed. The function signature.
+ *   &returns: The type.
+ */
+def[export] st:pl3:type(pt:st:pl3:sig sig) pl3:type_sig = {
+	return pl3:type_new(ev:pl3:type:sig, un:pl3:type{ .sig = sig });
+};
+
+/**
+ * Create an error type.
+ *   @err: Consumed. The error type.
+ *   &returns: The type.
+ */
+def[export] st:pl3:type(pt:st:pl3:err err) pl3:type_err = {
+	return pl3:type_new(ev:pl3:type:err, un:pl3:type{ .err = err });
+};
+
+/**
+ * Create an annotated type.
+ *   @annot: Consumed. The annotated type.
+ *   &returns: The type.
+ */
+def[export] st:pl3:type(pt:st:pl3:annot annot) pl3:type_annot = {
+	return pl3:type_new(ev:pl3:type:annot, un:pl3:type{ .annot = annot });
+};
+
+
+/**
+ * Create a mutable string type.
+ *   &returns: The type.
+ */
+def[export] st:pl3:type() pl3:type_str = {
+	return pl3:type_ptr(pl3:ptr_new(pl3:type_void, true));
+};
+
+/**
+ * Create a immutable string type.
+ *   &returns: The type.
+ */
+def[export] st:pl3:type() pl3:type_cstr = {
+	return pl3:type_ptr(pl3:ptr_new(pl3:type_void, false));
+};
+
+
+/**
+ * Determine if a type is unknown, following aliases.
+ *   @type: The type.
+ *   &returns: True if unknown.
+ */
+def[export] bool(st:pl3:type type) pl3:type_is_unk = {
+	return pl3:type_root(type).tag == ev:pl3:type:unk;
+};
+
+/**
+ * Determine if a type is void, following aliases.
+ *   @type: The type.
+ *   &returns: True if void.
+ */
+def[export] bool(st:pl3:type type) pl3:type_is_void = {
+	return pl3:type_root(type).tag == ev:pl3:type:void;
+};
+
+/**
+ * Determine if a type is boolean, following aliases.
+ *   @type: The type.
+ *   &returns: True if boolean.
+ */
+def[export] bool(st:pl3:type type) pl3:type_is_bool = {
+	return pl3:type_root(type).tag == ev:pl3:type:bool;
+};
+
+/**
+ * Determine if a type is any kind of pointer, following aliases.
+ *   @type: The type.
+ *   &returns: True if pointer.
+ */
+def[export] bool(st:pl3:type type) pl3:type_is_ptr = {
+	return pl3:type_root(type).tag == ev:pl3:type:ptr;
+};
+
+/**
+ * Determine if a type is any kind of array, following aliases.
+ *   @type: The type.
+ *   &returns: True if array.
+ */
+def[export] bool(st:pl3:type type) pl3:type_is_arr = {
+	return pl3:type_root(type).tag == ev:pl3:type:arr;
+};
+
+/**
+ * Determine if a type is any kind of structure, following aliases.
+ *   @type: The type.
+ *   &returns: True if structure.
+ */
+def[export] bool(st:pl3:type type) pl3:type_is_struct = {
+	type = pl3:type_root(type);
+	if(type.tag != ev:pl3:type:name)
+		return false;
+	
+	return type.data.name->decl->tag == ev:pl3:tydecl:struct;
+};
+
+/**
+ * Determine if a type is any kind of union, following aliases.
+ *   @type: The type.
+ *   &returns: True if union.
+ */
+def[export] bool(st:pl3:type type) pl3:type_is_union = {
+	type = pl3:type_root(type);
+	if(type.tag != ev:pl3:type:name)
+		return false;
+	
+	return type.data.name->decl->tag == ev:pl3:tydecl:union;
+};
+
+/**
+ * Determine if a type is any kind of function signature, following aliases.
+ *   @type: The type.
+ *   &returns: True if function signature.
+ */
+def[export] bool(st:pl3:type type) pl3:type_is_sig = {
+	return pl3:type_root(type).tag == ev:pl3:type:sig;
+};
+
+/**
+ * Determine if a time is signed, following aliases.
+ *   @type: The type.
+ *   &returns: True if signed.
+ */
+def[export] bool(st:pl3:type type) pl3:type_is_signed = {
+	switch(pl3:type_root(type).tag) {
+	case ev:pl3:type:unk: return false;
+	case ev:pl3:type:void: return false;
+	case ev:pl3:type:bool: return false;
+	case ev:pl3:type:u8: return false;
+	case ev:pl3:type:i8: return true;
+	case ev:pl3:type:u16: return false;
+	case ev:pl3:type:i16: return true;
+	case ev:pl3:type:u32: return false;
+	case ev:pl3:type:i32: return true;
+	case ev:pl3:type:u64: return false;
+	case ev:pl3:type:i64: return true;
+	case ev:pl3:type:fp32: return true;
+	case ev:pl3:type:fp64: return true;
+	case ev:pl3:type:ptr: return false;
+	case ev:pl3:type:arr: return false;
+	case ev:pl3:type:sig: return false;
+	case ev:pl3:type:err: return false;
+	}
+
+	unreachable();
+};
+
+/**
+ * Determine if a type is any kind of whole number.
+ *   @type: The type.
+ *   &returns: True if number.
+ */
+def[export] bool(st:pl3:type type) pl3:type_is_int = {
+	switch(pl3:type_root(type).tag) {
+	case ev:pl3:type:unk: return false;
+	case ev:pl3:type:void: return false;
+	case ev:pl3:type:bool: return true;
+	case ev:pl3:type:u8: return true;
+	case ev:pl3:type:i8: return true;
+	case ev:pl3:type:u16: return true;
+	case ev:pl3:type:i16: return true;
+	case ev:pl3:type:u32: return true;
+	case ev:pl3:type:i32: return true;
+	case ev:pl3:type:u64: return true;
+	case ev:pl3:type:i64: return true;
+	case ev:pl3:type:fp32: return false;
+	case ev:pl3:type:fp64: return false;
+	case ev:pl3:type:ptr: return false;
+	case ev:pl3:type:arr: return false;
+	case ev:pl3:type:sig: return false;
+	case ev:pl3:type:err: return false;
+	}
+
+	unreachable();
+};
+
+/**
+ * Determine if a type is any kind of float, following aliases.
+ *   @type: The type.
+ *   &returns: True if float.
+ */
+def[export] bool(st:pl3:type type) pl3:type_is_fp = {
+	switch(pl3:type_root(type).tag) {
+	case ev:pl3:type:fp32: return true;
+	case ev:pl3:type:fp64: return true;
+	default: return false;
+	}
+};
+
+/**
+ * Determine if a type is a compound (struct or union).
+ *   @type: The type.
+ *   &returns: True if compound.
+ */
+def[export] bool(st:pl3:type type) pl3:type_is_comp = {
+        return false;
+};
+
+
+/**
+ * Retrieve the pointer for a type.
+ *   @type: The type.
+ *   &returns: The pointer data if found, null otherwise.
+ */
+def[export] pt:st:pl3:ptr(st:pl3:type type) pl3:type_get_ptr = {
+	type = pl3:type_root(type);
+	if(type.tag != ev:pl3:type:ptr)
+		return null;
+	
+	return type.data.ptr;
+};
+
+/**
+ * Retrieve the array for a type.
+ *   @type: The type.
+ *   &returns: The array data if found, null otherwise.
+ */
+def[export] pt:st:pl3:arr(st:pl3:type type) pl3:type_get_arr = {
+	type = pl3:type_root(type);
+	if(type.tag != ev:pl3:type:arr)
+		return null;
+	
+	return type.data.arr;
+};
+
+/**
+ * Retrieve the signature for a type.
+ *   @type: The type.
+ *   &returns: The signature data if found, null otherwise.
+ */
+def[export] pt:st:pl3:sig(st:pl3:type type) pl3:type_get_sig = {
+	type = pl3:type_root(type);
+	if(type.tag != ev:pl3:type:sig)
+		return null;
+	
+	return type.data.sig;
+};
+
+/**
+ * Retrieve the error for a type.
+ *   @type: The type.
+ *   &returns: The error if found, null otherwise.
+ */
+def[export] pt:st:pl3:err(st:pl3:type type) pl3:type_get_err = {
+	type = pl3:type_root(type);
+	if(type.tag != ev:pl3:type:err)
+		return null;
+	
+	return type.data.err;
+};
+
+/**
+ * Retrieve the name from a type.
+ *   @type: The type.
+ *   @returns: The name if a found, null otherwise.
+ */
+def[export] pt:st:pl3:name(st:pl3:type type) pl3:type_get_name = {
+	type = pl3:type_root(type);
+	return (type.tag == ev:pl3:type:name) ? type.data.name : null;
+};
+
+/**
+ * Retrieve the structure from a type.
+ *   @type: The type.
+ *   @returns: The aggregate if a structure, null otherwise.
+ */
+def[export] pt:st:pl3:agg(st:pl3:type type) pl3:type_get_struct = {
+	type = pl3:type_root(type);
+	if(type.tag != ev:pl3:type:name)
+		return null;
+	
+	if(type.data.name->decl->tag != ev:pl3:tydecl:struct)
+		return null;
+	
+	return type.data.name->decl->data.agg;
+};
+
+/**
+ * Retrieve the union from a type.
+ *   @type: The type.
+ *   @returns: The aggregate if a union, null otherwise.
+ */
+def[export] pt:st:pl3:agg(st:pl3:type type) pl3:type_get_union = {
+	type = pl3:type_root(type);
+	if(type.tag != ev:pl3:type:name)
+		return null;
+	
+	if(type.data.name->decl->tag != ev:pl3:tydecl:union)
+		return null;
+	
+	return type.data.name->decl->data.agg;
+};
+
+/**
+ * Retrieve the aggregate from a type, either a structure or a union.
+ *   @type: The type.
+ *   @tag: Optional. The type declaration tag (either `struct` or `union`).
+ *   @returns: The aggregate if a structure or union, null otherwise.
+ */
+def[export] pt:st:pl3:agg(st:pl3:type type, pt:en:pl3:tydecl tag) pl3:type_get_agg = {
+	var pt:st:pl3:tydecl decl;
+
+	type = pl3:type_root(type);
+	if(type.tag != ev:pl3:type:name)
+		return null;
+
+	decl = type.data.name->decl;
+	if((decl->tag != ev:pl3:tydecl:struct) && (decl->tag != ev:pl3:tydecl:union))
+		return null;
+
+	if(tag != null)
+		*tag = decl->tag;
+	
+	return decl->data.agg;
+};
+
+
+/**
+ * Retrieve the size for a type.
+ *   @type: The type.
+ *   &returns: The size in bytes.
+ */
+def[export] u32(st:pl3:type type) pl3:type_size = {
+	var pt:st:pl3:agg agg;
+	var pt:st:pl3:arr arr;
+	var en:pl3:tydecl tag;
+
+	agg = pl3:type_get_agg(type, &tag);
+	if(agg != null) {
+		switch(tag) {
+		case ev:pl3:tydecl:struct: return pl3:agg_sum(agg);
+		case ev:pl3:tydecl:union: return pl3:agg_max(agg);
+		default: unreachable();
+		}
+	}
+	else if((arr = pl3:type_get_arr(type)) != null)
+		return arr->len * pl3:type_size(arr->type);
+	else {
+		switch(pl3:type_root(type).tag) {
+		case ev:pl3:type:unk: return 0;
+		case ev:pl3:type:void: return 0;
+		case ev:pl3:type:bool: return 1;
+		case ev:pl3:type:u8: return 1;
+		case ev:pl3:type:i8: return 1;
+		case ev:pl3:type:u16: return 2;
+		case ev:pl3:type:i16: return 2;
+		case ev:pl3:type:u32: return 4;
+		case ev:pl3:type:i32: return 4;
+		case ev:pl3:type:u64: return 8;
+		case ev:pl3:type:i64: return 8;
+		case ev:pl3:type:fp32: return 4;
+		case ev:pl3:type:fp64: return 8;
+		case ev:pl3:type:ptr: return 8; // FIXME
+		case ev:pl3:type:sig: return 0;
+		case ev:pl3:type:err: fatal("stub");
+		default: fatal("huh %u\n", pl3:type_root(type).tag); unreachable();
+		}
+	}
+};
+
+
+/**
+ * Create a callback for printing a type.
+ *   @type: The type pointer.
+ *   &returns: The callback.
+ */
+def[export] st:io:call(cpt:st:pl3:type type) pl3:type_call = {
+	def e:str[void](st:io:file file, cpt:st:pl3:type type) func = {
+		switch(type->tag) {
+		case ev:pl3:type:unk: e:get(io:fmt(file, "unk")); break;
+		case ev:pl3:type:void: e:get(io:fmt(file, "void")); break;
+		case ev:pl3:type:i8: e:get(io:fmt(file, "i8")); break;
+		case ev:pl3:type:u8: e:get(io:fmt(file, "u8")); break;
+		case ev:pl3:type:i16: e:get(io:fmt(file, "i16")); break;
+		case ev:pl3:type:u16: e:get(io:fmt(file, "u16")); break;
+		case ev:pl3:type:i32: e:get(io:fmt(file, "i32")); break;
+		case ev:pl3:type:u32: e:get(io:fmt(file, "u32")); break;
+		case ev:pl3:type:i64: e:get(io:fmt(file, "i64")); break;
+		case ev:pl3:type:u64: e:get(io:fmt(file, "u64")); break;
+		case ev:pl3:type:fp32: e:get(io:fmt(file, "fp32")); break;
+		case ev:pl3:type:fp64: e:get(io:fmt(file, "fp64")); break;
+
+		case ev:pl3:type:ptr: {
+			var cpt:st:pl3:ptr ptr = type->data.ptr;
+
+			e:get(io:fmt(file, "%s:%C", ptr->mut ? "pt" : "cpt", pl3:type_call(&ptr->type)));
+		} break;
+
+		case ev:pl3:type:arr: {
+			var cpt:st:pl3:arr arr = type->data.arr;
+
+			e:get(io:fmt(file, "ar[%u]:%C", arr->len, pl3:type_call(&arr->type)));
+		} break;
+
+		case ev:pl3:type:name: {
+			var cpt:st:pl3:name name = type->data.name;
+
+			e:get(io:fmt(file, "%s(%s)", name->id, (name->decl != null) ? "decl" : "-"));
+		} break;
+
+		case ev:pl3:type:err: {
+			var cpt:st:pl3:err err = type->data.err;
+			e:get(io:fmt(file, "err[%C,%C]", pl3:type_call(&err->suc), pl3:type_call(&err->fail)));
+		} break;
+
+		case ev:pl3:type:sig: {
+			var cpt:st:pl3:sig sig = type->data.sig;
+			var cpt:st:pl3:param param;
+
+			e:get(io:fmt(file, "%C(", pl3:type_call(&sig->ret)));
+
+			for(param = sig->param; param != null; param = param->next) {
+				e:get(io:fmt(file, "%C", pl3:type_call(&param->type)));
+
+				if(param->next != null)
+					e:get(io:fmt(file, ", "));
+			}
+
+			e:get(io:fmt(file, ")"));
+			//e:get(io:fmt(file, "err[%C,%C]", pl3:type_call(&err->suc), pl3:type_call(&err->fail)));
+		} break;
+
+		default: e:get(io:fmt(file, "invalid")); break;
+		}
+	};
+
+	return st:io:call{ &func, type };
+};
+
+
+/**
+ * Retrieve the root type by following all the aliases.
+ *   @type: The input type.
+ *   &returns: The root type.
+ */
+def[export] st:pl3:type(st:pl3:type type) pl3:type_root = {
+	var pt:st:pl3:name name;
+
+	for() {
+		if(type.tag != ev:pl3:type:name)
+			return type;
+
+		name = type.data.name;
+		if(name->decl == null)
+			return pl3:type_unk;
+			// FIXME check if this is the right thing to do
+			//fatal("Internal error. Unresolved named type.");
+
+		else if(name->decl->tag == ev:pl3:tydecl:enum)
+			return pl3:type_i32; // FIXME other widths
+		else if(name->decl->tag != ev:pl3:tydecl:alias)
+			return type;
+
+		type = name->decl->data.alias->type;
+	}
+};
+
+
+/**
+ * Function signature structure.
+ *   @ret: The return type.
+ *   @param: The parameter list.
+ *   @vlist: The variable argument list flag.
+ */
+tydef[export] st:pl3:sig {
+	st:pl3:type ret;
+	pt:st:pl3:param param;
+	bool vlist;
+};
+
+/**
+ * Argument structure.
+ *   @type: The type.
+ *   @id: The identifier.
+ *   @next: The next parameter.
+ */
+tydef[export] st:pl3:param {
+	st:pl3:type type;
+	pt:char id;
+
+	pt:st:pl3:param next;
+};
+
+/**
+ * Create a function signature.
+ *   @ret: Consumed. The return type.
+ *   @param: Consumed. The parameter list.
+ *   @vlist: Variable arugment list flag.
+ *   &returns: The signature.
+ */
+def[export] pt:st:pl3:sig(st:pl3:type ret, pt:st:pl3:param param, bool vlist) pl3:sig_new = {
+	return mem:make(st:pl3:sig{ ret, param, vlist });
+};
+
+/**
+ * Copy a function signature.
+ *   @sig: The function signature.
+ *   &returns: The copy.
+ */
+def[export] pt:st:pl3:sig(cpt:st:pl3:sig sig) pl3:sig_copy = {
+	return pl3:sig_new(pl3:type_copy(sig->ret), pl3:param_clone(sig->param), sig->vlist);
+};
+
+/**
+ * Delete a function signature.
+ *   @sig: The function signature.
+ */
+def[export] void(pt:st:pl3:sig sig) pl3:sig_delete = {
+	pl3:type_delete(sig->ret);
+	pl3:param_clear(sig->param);
+	mem:free(sig);
+};
+
+
+/**
+ * Create a parameter.
+ *   @type: Consumed. The type.
+ *   @id: Optional. Consumed. The identifier.
+ *   &returns: The parameter.
+ */
+def[export] pt:st:pl3:param(st:pl3:type type, pt:char id) pl3:param_new = {
+	return mem:make(st:pl3:param{ type, id, null });
+};
+
+/**
+ * Copy a parameter.
+ *   @param: The parameter.
+ *   &returns: The copy.
+ */
+def[export] pt:st:pl3:param(cpt:st:pl3:param param) pl3:param_copy = {
+	return pl3:param_new(pl3:type_copy(param->type), (param->id != null) ? str:dup(param->id) : null);
+};
+
+/**
+ * Copy a parameter list.
+ *   @param: The parameter list.
+ *   &returns; The copy.
+ */
+def[export] pt:st:pl3:param(cpt:st:pl3:param param) pl3:param_clone = {
+	var pt:st:pl3:param ret;
+	var pt:pt:st:pl3:param iret = &ret;
+
+	while(param != null) {
+		*iret = pl3:param_copy(param);
+		iret = &(*iret)->next;
+		param = param->next;
+	}
+
+	*iret = null;
+
+	return ret;
+};
+
+/**
+ * Delete a parameter.
+ *   @param: The parameter.
+ */
+def[export] void(pt:st:pl3:param param) pl3:param_delete = {
+	pl3:type_delete(param->type);
+	mem:erase(param->id);
+	mem:free(param);
+};
+
+/**
+ * Clear a list of parameters.
+ *   @param; The parameter list.
+ */
+def[export] void(pt:st:pl3:param param) pl3:param_clear = {
+	var pt:st:pl3:param tmp;
+	     
+	while(param != null) {
+		param = (tmp = param)->next;
+		pl3:param_delete(tmp);
+	}
+};
+
+
+/**
+ * Pointer structure.
+ *   @type: The base type.
+ *   @mut: THe mutability flag.
+ */
+tydef[export] st:pl3:ptr {
+	st:pl3:type type;
+	bool mut;
+};
+
+/**
+ * Create a pointer.
+ *   @type: Consumed. The base type.
+ *   @mut: The mutability flag.
+ *   &returns: THe pointer.
+ */
+def[export] pt:st:pl3:ptr(st:pl3:type type, bool mut) pl3:ptr_new = {
+	return mem:make(st:pl3:ptr{ type, mut });
+};
+
+/**
+ * Copy a pointer.
+ *   @ptr: The original pointer.
+ *   &returns: The copy.
+ */
+def[export] pt:st:pl3:ptr(cpt:st:pl3:ptr ptr) pl3:ptr_copy = {
+	return pl3:ptr_new(pl3:type_copy(ptr->type), ptr->mut);
+};
+
+/**
+ * Delete a pointer.
+ *   @ptr: The pointer.
+ */
+def[export] void(pt:st:pl3:ptr ptr) pl3:ptr_delete = {
+	pl3:type_delete(ptr->type);
+	mem:free(ptr);
+};
+
+
+/**
+ * Error type structure.
+ *   @suc, fail: The success and failure types.
+ */
+tydef[export] st:pl3:err {
+	st:pl3:type suc, fail;
+};
+
+/**
+ * Create an error type.
+ *   @suc: The success type.
+ *   @fail: The failure type.
+ *   &returns: The error type.
+ */
+def[export] pt:st:pl3:err(st:pl3:type suc, st:pl3:type fail) pl3:err_new = {
+	return mem:make(st:pl3:err{ suc, fail });
+};
+
+/**
+ * Copy an error type.
+ *   @err: The original error type.
+ *   &returns: The error type.
+ */
+def[export] pt:st:pl3:err(cpt:st:pl3:err err) pl3:err_copy = {
+	return pl3:err_new(pl3:type_copy(err->suc), pl3:type_copy(err->fail));
+};
+
+/**
+ * Delete a failure type.
+ *   @err: The error type.
+ */
+def[export] void(pt:st:pl3:err err) pl3:err_delete = {
+	pl3:type_delete(err->suc);
+	pl3:type_delete(err->fail);
+	mem:free(err);
+};
+
+
+/**
+ * Annotated type structure.
+ *   @str: The annotation string.
+ *   @type: The underlying type.
+ */
+tydef[export] st:pl3:annot {
+	pt:char str;
+	st:pl3:type type;
+};
+
+/**
+ * Create an annotated type.
+ *   @str: Consumed. The string annotation.
+ *   @type: Consumed. The type.
+ *   &returns: The annotated type.
+ */
+def[export] pt:st:pl3:annot(pt:char str, st:pl3:type type) pl3:annot_new = {
+	return mem:make(st:pl3:annot{ str, type });
+};
+
+/**
+ * Copy an annotated type.
+ *   @sig: The annotated type.
+ *   &returns: The copy.
+ */
+def[export] pt:st:pl3:annot(cpt:st:pl3:annot annot) pl3:annot_copy = {
+	return pl3:annot_new(str:dup(annot->str), pl3:type_copy(annot->type));
+};
+
+/**
+ * Delete an annotated type.
+ *   @annot: The annotated type.
+ */
+def[export] void(pt:st:pl3:annot annot) pl3:annot_delete = {
+	pl3:type_delete(annot->type);
+	mem:free(annot->str);
+	mem:free(annot);
+};
+
+
+/**
+ * Alias structure.
+ *   @type: The type.
+ */
+tydef[export] st:pl3:alias {
+	st:pl3:type type;
+};
+
+/**
+ * Create an alias.
+ *   @type: Consumed. The underlying type.
+ *   &returns: The alias.
+ */
+def[export] pt:st:pl3:alias(st:pl3:type type) pl3:alias_new = {
+	return mem:make(st:pl3:alias{ type } );
+};
+
+/**
+ * Delete an alias.
+ *   @alias: The alias.
+ */
+def[export] void(pt:st:pl3:alias alias) pl3:alias_delete = {
+	pl3:type_delete(alias->type);
+	mem:free(alias);
+};
+
+
+/**
+ * Aggregate structure.
+ *   @id: The identifier.
+ *   @memb: The member list.
+ */
+tydef[export] st:pl3:agg {
+	pt:char id;
+	pt:st:pl3:memb memb;
+};
+
+/**
+ * Member structure.
+ *   @refcnt: The reference count.
+ *   @type: The type.
+ *   @field: The field list.
+ *   @next: The next member.
+ */
+tydef[export] st:pl3:memb {
+	u32 refcnt;
+	st:pl3:type type;
+	pt:st:pl3:field field;
+	pt:st:pl3:memb next;
+};
+
+/**
+ * Field structure.
+ *   @id: The identifier.
+ *   @next: The next field.
+ */
+tydef[export] st:pl3:field {
+	pt:char id;
+	pt:st:pl3:field next;
+};
+
+
+/**
+ * Create an aggregate declaration.
+ *   @id: Consumed. The identifier.
+ *   @memb: Consumed. The member list.
+ *   &returns: The aggregate.
+ */
+def[export] pt:st:pl3:agg(pt:char id, pt:st:pl3:memb memb) pl3:agg_new = {
+	return mem:make(st:pl3:agg{ id, memb });
+};
+
+/**
+ * Delete an aggregate declaration.
+ *   @agg: The aggregate.
+ */
+def[export] void(pt:st:pl3:agg agg) pl3:agg_delete = {
+	pl3:memb_clear(agg->memb);
+	mem:free(agg->id);
+	mem:free(agg);
+};
+
+
+/**
+ * Count the fields in an aggregate.
+ *   @agg: The aggregate.
+ *   &returns: The number of fields.
+ */
+def[export] u32(pt:st:pl3:agg agg) pl3:agg_cnt = {
+	var u32 cnt = 0;
+	var pt:st:pl3:memb memb;
+	var pt:st:pl3:field field;
+
+	for(memb = agg->memb; memb != null; memb = memb->next) {
+		for(field = memb->field; field != null; field = field->next)
+			cnt++;
+	}
+
+	return cnt;
+};
+
+/**
+ * Retrieve a field using an index.
+ *   @agg: The aggregate.
+ *   @idx: The index.
+ *   @type: Optional. The field type if found.
+ *   &returns: The field.
+ */
+def[export] pt:st:pl3:field(pt:st:pl3:agg agg, u32 idx, pt:st:pl3:type type) pl3:agg_get = {
+	var pt:st:pl3:memb memb;
+	var pt:st:pl3:field field;
+
+	for(memb = agg->memb; memb != null; memb = memb->next) {
+		for(field = memb->field; field != null; field = field->next) {
+			if(idx == 0) {
+				if(type != null)
+					*type = memb->type;
+
+				return field;
+			}
+
+			idx--;
+		}
+	}
+
+	return null;
+};
+
+/**
+ * Find a field by name from an aggregate.
+ *   @agg: The aggregate.
+ *   @id: The identifier.
+ *   @type: Optional. The output type.
+ *   @idx: Optional. The index.
+ *   &returns: The field if found, null otherwise.
+ */
+def[export] pt:st:pl3:field(pt:st:pl3:agg agg, cpt:char id, pt:st:pl3:type type, pt:u32 idx) pl3:agg_find = {
+	var pt:st:pl3:memb memb;
+	var pt:st:pl3:field field;
+	var u32 i = 0;
+
+	for(memb = agg->memb; memb != null; memb = memb->next) {
+		for(field = memb->field; field != null; field = field->next) {
+			if(!str:equal(field->id, id)) {
+				i++; //FIXME
+				continue;
+			}
+
+			if(type != null)
+				*type = memb->type;
+
+			if(idx != null)
+				*idx = i;
+
+			return field;
+		}
+	}
+
+	return null;
+};
+
+/**
+ * Retrieve the index of a field from an aggregate.
+ *   @agg: The aggregate.
+ *   @id: The identifier.
+ *   &returns: The index if found, negative otherwise.
+ */
+def[export] i32(pt:st:pl3:agg agg, cpt:char id) pl3:agg_idx = {
+	var pt:st:pl3:memb memb;
+	var pt:st:pl3:field field;
+	var u32 idx = 0;
+
+	for(memb = agg->memb; memb != null; memb = memb->next) {
+		for(field = memb->field; field != null; field = field->next) {
+			if(str:equal(field->id, id))
+				return i32{idx};
+
+			idx++;
+		}
+	}
+
+	return -1;
+};
+
+/**
+ * Sum the entire size of the aggregate.
+ *   @agg: The aggregate.
+ *   &returns: The size.
+ */
+def[export] u32(pt:st:pl3:agg agg) pl3:agg_sum = {
+	var pt:st:pl3:memb memb;
+	var pt:st:pl3:field field;
+	var u32 sz = 0;
+
+	for(memb = agg->memb; memb != null; memb = memb->next) {
+		for(field = memb->field; field != null; field = field->next)
+			sz += pl3:type_size(memb->type);
+	}
+
+	return sz;
+};
+
+def[export] u32(pt:st:pl3:agg agg) pl3:agg_max = {
+	var pt:st:pl3:memb memb;
+	var pt:st:pl3:field field;
+	var u32 t, sz = 0;
+
+	for(memb = agg->memb; memb != null; memb = memb->next) {
+		for(field = memb->field; field != null; field = field->next) {
+			t = pl3:type_size(memb->type);
+			if(t > sz)
+				sz = t;
+		}
+	}
+
+	return sz;
+};
+
+/**
+ * Compute the offset of a field for the aggregate.
+ *   @agg: The aggregate.
+ *   @idx: The field inex.
+ *   &returns: The size.
+ */
+def[export] u32(pt:st:pl3:agg agg, u32 idx) pl3:agg_off = {
+	var pt:st:pl3:memb memb;
+	var pt:st:pl3:field field;
+	var u32 sz = 0;
+
+	for(memb = agg->memb; memb != null; memb = memb->next) {
+		for(field = memb->field; field != null; field = field->next) {
+			if(idx-- == 0)
+				return sz;
+
+			sz += pl3:type_size(memb->type);
+		}
+	}
+
+	return sz;
+};
+
+
+
+
+
+/**
+ * Create a member.
+ *   @type: Consumed. The type.
+ *   @field: Consumed. The field list.
+ *   &returns: The member.
+ */
+def[export] pt:st:pl3:memb(st:pl3:type type, pt:st:pl3:field field) pl3:memb_new = {
+	return mem:make(st:pl3:memb{ 1, type, field, null });
+};
+
+/**
+ * Delete a member.
+ *   @memb: The member.
+ */
+def[export] void(pt:st:pl3:memb memb) pl3:memb_delete = {
+	memb->refcnt--;
+	if(memb->refcnt > 0)
+		return;
+
+	pl3:field_clear(memb->field);
+	pl3:type_delete(memb->type);
+	mem:free(memb);
+};
+
+/**
+ * Copy a member.
+ *   @memb: The member.
+ *   &returns: The copy.
+ */
+def[export] pt:st:pl3:memb(cpt:st:pl3:memb memb) pl3:memb_copy = {
+	var pt:st:pl3:field iter, field = null;
+	var pt:pt:st:pl3:field ifield = &field;
+
+	for(iter = memb->field; iter != null; iter = iter->next) {
+		*ifield = pl3:field_copy(iter);
+		ifield = &(*ifield)->next;
+	}
+
+	return pl3:memb_new(pl3:type_copy(memb->type), field);
+};
+
+/**
+ * Delete an entire list of members.
+ *   @memb: The member list.
+ */
+def[export] void(pt:st:pl3:memb memb) pl3:memb_clear = {
+	var pt:st:pl3:memb tmp;
+
+	while(memb != null) {
+		memb = (tmp = memb)->next;
+		pl3:memb_delete(tmp);
+	}
+};
+
+
+/**
+ * Create a field.
+ *   @id: Consumed. The identifier.
+ *   &returns: The field.
+ */
+def[export] pt:st:pl3:field(pt:char id) pl3:field_new = {
+	return mem:make(st:pl3:field{ id, null });
+};
+
+/**
+ * Copy a field.
+ *   @field: The field.
+ *   &returns: The copy.
+ */
+def[export] pt:st:pl3:field(cpt:st:pl3:field field) pl3:field_copy = {
+	return pl3:field_new(str:dup(field->id));
+};
+
+/**
+ * Delete a field.
+ *   @field: The field.
+ */
+def[export] void(pt:st:pl3:field field) pl3:field_delete = {
+	mem:free(field->id);
+	mem:free(field);
+};
+
+/**
+ * Delete an entire list of fields.
+ *   @field: The field list.
+ */
+def[export] void(pt:st:pl3:field field) pl3:field_clear = {
+	var pt:st:pl3:field tmp;
+
+	while(field != null) {
+		field = (tmp = field)->next;
+		pl3:field_delete(tmp);
+	}
+};
+
+
+/**
+ * Array structure.
+ *   @len: The length.
+ *   @arr: The underlying type.
+ */
+tydef[export] st:pl3:arr {
+	u32 len;
+	st:pl3:type type;
+};
+
+/**
+ * Create an array type.
+ *   @len: The length.
+ *   @type: The underlying type.
+ *   &returns: The type.
+ */
+def[export] pt:st:pl3:arr(u32 len, st:pl3:type type) pl3:arr_new = {
+	return mem:make(st:pl3:arr{ len, type });
+};
+
+/**
+ * Copy an array type.
+ *   @arr: The array type.
+ *   &returns: The array type.
+ */
+def[export] pt:st:pl3:arr(cpt:st:pl3:arr arr) pl3:arr_copy = {
+	return pl3:arr_new(arr->len, pl3:type_copy(arr->type));
+};
+
+/**
+ * Delete an array type.
+ *   @arr: The array type.
+ */
+def[export] void(pt:st:pl3:arr arr) pl3:arr_delete = {
+	pl3:type_delete(arr->type);
+	mem:free(arr);
+};

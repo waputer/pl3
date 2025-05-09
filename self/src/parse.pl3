@@ -1,0 +1,2082 @@
+
+/**
+ * Parsing context structure.
+ *   @lex: The lexer.
+ *   @path: The path string.
+ */
+tydef st:ctx {
+	pt:st:lex:parse lex;
+	pt:st:pl3:str path;
+};
+
+
+/**
+ * Keywords list
+ */
+def ar[]:st:lex:map keywords = {
+	{ tok_def,    "def"       },
+	{ tok_var,    "var"       },
+	{ tok_tydef,  "tydef"     },
+	{ tok_void,   "void"      },
+	{ tok_char,   "char"      },
+	{ tok_bool,   "bool"      },
+	{ tok_u8,     "u8"        },
+	{ tok_i8,     "i8"        },
+	{ tok_u16,    "u16"       },
+	{ tok_i16,    "i16"       },
+	{ tok_u32,    "u32"       },
+	{ tok_i32,    "i32"       },
+	{ tok_u64,    "u64"       },
+	{ tok_i64,    "i64"       },
+	{ tok_fp32,   "fp32"      },
+	{ tok_fp64,   "fp64"      },
+	{ tok_return, "return"    },
+	{ tok_if,     "if"        },
+	{ tok_else,   "else"      },
+	{ tok_while,  "while"     },
+	{ tok_do,     "do"        },
+	{ tok_for,    "for"       },
+	{ tok_brk,    "break"     },
+	{ tok_cont,   "continue"  },
+	{ tok_sw,     "switch"    },
+	{ tok_cas,    "case"      },
+	{ tok_dflt,   "default"   },
+	{ tok_true,   "true"      },
+	{ tok_false,  "false"     },
+	{ tok_null,   "null"      },
+	{ tok_sizeof, "sizeof"    },
+	{ tok_offset, "offsetof"  },
+	{ tok_parent, "getparent" },
+	{ tok_arrlen, "arrlen"    },
+	{ tok_getref, "getref"    },
+	{ tok_ety,    "e:ty"      },
+	{ tok_estr,   "e:str"     },
+	{ tok_ei32,   "e:i32"     },
+	{ tok_eget,   "e:get"     },
+	{ tok_ereq,   "e:req"     },
+	{ tok_eret,   "e:ret"     },
+	{ tok_efmt,   "e:fmt"     },
+	{ tok_vty,    "ty:args"   },
+	{ tok_vinit,  "args:init" },
+	{ tok_vget,   "args:get"  },
+	{ tok_mnew,   "mem:new"   },
+	{ tok_mmake,  "mem:make"  },
+	{ tok_onerr,  "onerr"     },
+	{ 0xfecd,  "#END"     } // FIXME
+	//{ tok_bicall, "bi:syscall" }
+};
+
+/**
+ * Symbols list
+ */
+def ar[]:st:lex:map symbols = {
+	{ tok_dots,  "..." },
+	{ tok_fcall, "->(" },
+	{ tok_arrow, "->"  },
+	{ tok_inc,   "++"  },
+	{ tok_dec,   "--"  },
+	{ tok_eq,    "=="  },
+	{ tok_ne,    "!="  },
+	{ tok_gte,   ">="  },
+	{ tok_lte,   "<="  },
+	{ tok_addeq, "+="  },
+	{ tok_subeq, "-="  },
+	{ tok_muleq, "*="  },
+	{ tok_diveq, "/="  },
+	{ tok_remeq, "%="  },
+	{ tok_oreq,  "|="  },
+	{ tok_xoreq, "^="  },
+	{ tok_andeq, "&="  },
+	{ tok_and,   "&&"  },
+	{ tok_or,    "||"  },
+	{ tok_shr,   ">>"  },
+	{ tok_shreq, ">>=" },
+	{ tok_shl,   "<<"  },
+	{ tok_shleq, "<<=" },
+	{ '=',       "="   },
+	{ ',',       ","   },
+	{ ';',       ";"   },
+	{ ':',       ":"   },
+	{ '{',       "{"   },
+	{ '}',       "}"   },
+	{ '(',       "("   },
+	{ ')',       ")"   },
+	{ '[',       "["   },
+	{ ']',       "]"   },
+	{ '+',       "+"   },
+	{ '-',       "-"   },
+	{ '*',       "*"   },
+	{ '/',       "/"   },
+	{ '%',       "%"   },
+	{ '.',       "."   },
+	{ '>',       ">"   },
+	{ '<',       "<"   },
+	{ '|',       "|"   },
+	{ '&',       "&"   },
+	{ '^',       "^"   },
+	{ '~',       "~"   },
+	{ '!',       "!"   },
+	{ '?',       "?"   },
+};
+
+/**
+ * Prefix list
+ */
+def ar[]:st:lex:map prefixes = {
+	{ tok_pt,  "pt:"  },
+	{ tok_cpt, "cpt:" },
+	{ tok_ty,  "ty:"  },
+	{ tok_st,  "st:"  },
+	{ tok_un,  "un:"  },
+	{ tok_en,  "en:"  },
+	{ tok_ev,  "ev:"  },
+	{ tok_ar,  "ar:"  }
+};
+
+/**
+ * Token ID declarations
+ */
+def i32 tok_id     = 0x0100,
+        tok_num    = 0x0101,
+        tok_def    = 0x0200,
+        tok_var    = 0x0201,
+        tok_tydef  = 0x0202,
+        tok_void   = 0x0300,
+        tok_char   = 0x0301,
+        tok_bool   = 0x0302,
+        tok_u8     = 0x0303,
+        tok_i8     = 0x0304,
+        tok_u16    = 0x0305,
+        tok_i16    = 0x0306,
+        tok_u32    = 0x0307,
+        tok_i32    = 0x0308,
+        tok_u64    = 0x0309,
+        tok_i64    = 0x030a,
+        tok_fp32   = 0x030b,
+        tok_fp64   = 0x030c,
+        tok_return = 0x0400,
+        tok_if     = 0x0401,
+        tok_else   = 0x0402,
+        tok_while  = 0x0404, // TODO numbering
+        tok_do     = 0x0405,
+        tok_for    = 0x0406,
+        tok_cont   = 0x0407,
+        tok_brk    = 0x0408,
+        tok_sw     = 0x0409,
+        tok_cas    = 0x040a,
+        tok_dflt   = 0x040b,
+        tok_pt     = 0x0500,
+        tok_cpt    = 0x0501,
+        tok_ty     = 0x0502,
+        tok_st     = 0x0503,
+        tok_un     = 0x0504,
+        tok_en     = 0x0505,
+        tok_ev     = 0x0506,
+        tok_ar     = 0x0507,
+	tok_eq     = 0x0600,
+	tok_ne     = 0x0601,
+	tok_gte    = 0x0602,
+	tok_lte    = 0x0603,
+	tok_inc    = 0x0604,
+	tok_dec    = 0x0605,
+	tok_arrow  = 0x0606,
+	tok_fcall  = 0x0607,
+	tok_dots   = 0x0608,
+	tok_addeq  = 0x0609,
+	tok_subeq  = 0x060a,
+	tok_muleq  = 0x060b,
+	tok_diveq  = 0x060c,
+	tok_remeq  = 0x060d,
+	tok_oreq   = 0x060e,
+	tok_xoreq  = 0x060f,
+	tok_andeq  = 0x0610,
+	tok_and    = 0x0611,
+	tok_or     = 0x0612,
+	tok_shl    = 0x0613,
+	tok_shleq  = 0x0614,
+	tok_shr    = 0x0615,
+	tok_shreq  = 0x0616,
+	tok_true   = 0x0700,
+	tok_false  = 0x0701,
+	tok_null   = 0x0702,
+	tok_sizeof = 0x0800,
+	tok_offset = 0x0801,
+	tok_parent = 0x0802,
+	tok_arrlen = 0x0803,
+	tok_getref = 0x0804,
+	tok_quote1 = 0x0900,
+	tok_quote2 = 0x0901,
+	tok_ety    = 0x0a00,
+	tok_estr   = 0x0a01,
+	tok_ei32   = 0x0a02,
+	tok_eget   = 0x0a03,
+	tok_ereq   = 0x0a04,
+	tok_eret   = 0x0a05,
+	tok_efmt   = 0x0a06,
+	tok_onerr  = 0x0a07,
+	tok_vty    = 0x0b00,
+	tok_vinit  = 0x0b01,
+	tok_vget   = 0x0b02,
+	tok_mnew   = 0x0c00,
+	tok_mmake  = 0x0c01,
+	tok_bicall = 0x2000,
+	tok_eos    = 0xFFFF;
+
+/**
+ * Binary operation structure.
+ *   @tok: The token.
+ *   @tag: The tag.
+ *   @inc: The precedence increment flag.
+ */
+tydef st:bin {
+	i32 tok;
+	en:pl3:op2 tag;
+	bool inc;
+};
+
+/*
+ * Binary operator list
+ */
+def ar[]:st:bin binlist = {
+	// logical or
+	{ tok_or,  ev:pl3:op2:lor, true },
+	// logical and
+	{ tok_and, ev:pl3:op2:land, true },
+	// bitwise or
+	{ '|', ev:pl3:op2:or, true },
+	// bitwise xor
+	{ '^', ev:pl3:op2:xor, true },
+	// bitwise and
+	{ '&', ev:pl3:op2:and, true },
+	// less/greater than
+	{ '>',     ev:pl3:op2:gt,  false },
+	{ tok_gte, ev:pl3:op2:gte, false },
+	{ '<',     ev:pl3:op2:lt,  false },
+	{ tok_lte, ev:pl3:op2:lte, true  },
+	// equal/not equal
+	{ tok_eq, ev:pl3:op2:eq, false },
+	{ tok_ne, ev:pl3:op2:ne, true  },
+	// shift
+	{ tok_shl, ev:pl3:op2:shl, false },
+	{ tok_shr, ev:pl3:op2:shr, true  },
+	// add/sub
+	{ '+', ev:pl3:op2:add, false },
+	{ '-', ev:pl3:op2:sub, true  },
+	// mul/div/mod
+	{ '*', ev:pl3:op2:mul, false },
+	{ '/', ev:pl3:op2:div, false },
+	{ '%', ev:pl3:op2:rem, true  },
+	// end-of-list
+	{ -1/*TODO, en:pl3:expr{0}, true*/}
+};
+
+
+/**
+ * Parse a path, adding all top-level declarations to the code unit.
+ *   @path: The path.
+ *   @unit: The code unit.
+ */
+def[export] e:str[void](cpt:char path, pt:st:pl3:unit unit) pl3:parse = {
+	var st:ctx ctx;
+
+	ctx.lex = e:get(lex:open(path, 256, true));
+	onerr lex:close(ctx.lex);
+
+	ctx.path = pl3:str_new(str:dup(path));
+	onerr pl3:str_delete(ctx.path);
+
+	lex:rule_slashslash(ctx.lex, -1);
+	lex:rule_slashstar(ctx.lex, -2);
+	lex:rule_keywords(ctx.lex, &keywords[0], arrlen(keywords)); //FIXME *keywords
+	lex:rule_add(ctx.lex, &rule_prefix, null);
+	lex:rule_symbols(ctx.lex, &symbols[0], arrlen(symbols)); // FIXME *symbols
+	lex:rule_add(ctx.lex, &rule_ident, pt:void{tok_id});
+	lex:rule_num(ctx.lex, tok_num);
+	lex:rule_quote1(ctx.lex, tok_quote1);
+	lex:rule_quote2(ctx.lex, tok_quote2);
+	lex:rule_eos(ctx.lex, tok_eos);
+
+	e:get(ctx_top(&ctx, unit));
+
+	lex:close(ctx.lex);
+	pl3:str_delete(ctx.path);
+};
+
+/**
+ * Parse starting from the top.
+ *   @ctx: The context.
+ *   @unit: The code unit.
+ *   &returns: Error.
+ */
+def e:str[void](pt:st:ctx ctx, pt:st:pl3:unit unit) ctx_top = {
+	var pt:pt:st:pl3:stmt stmt = &unit->stmt;
+
+	while(*stmt != null)
+		stmt = &(*stmt)->next;
+
+	while(e:get(lex:tok_try(ctx->lex, tok_eos)) == null) {
+		if(e:get(lex:tok_try(ctx->lex, 0xfecd)) != null) break; // FIXME
+
+		*stmt = e:get(ctx_stmt(ctx));
+		stmt = &(*stmt)->next;
+	}
+};
+
+/**
+ * Parse a single statement.
+ *   @ctx: The context.
+ *   &returns: The statement.
+ */
+def e:str[pt:st:pl3:stmt](pt:st:ctx ctx) ctx_stmt = {
+	var st:pl3:meta meta;
+	var un:pl3:stmt data;
+
+	meta = e:get(ctx_meta(ctx));
+	onerr pl3:meta_delete(meta);
+
+	if((data.decl = e:get(ctx_decl(ctx))) != null)
+		return pl3:stmt_decl(data.decl, meta);
+	else if((data.tydecl = e:get(ctx_tydecl(ctx))) != null)
+		return pl3:stmt_tydecl(data.tydecl, meta);
+	else if(e:get(lex:tok_try(ctx->lex, '{')) != null) {
+		var pt:st:pl3:stmt stmt = null;
+		var pt:pt:st:pl3:stmt istmt = &stmt;
+
+		onerr pl3:stmt_clear(stmt);
+
+		while(e:get(lex:tok_try(ctx->lex, '}')) == null) {
+			*istmt = e:get(ctx_stmt(ctx));
+			istmt = &(*istmt)->next;
+		}
+
+		return pl3:stmt_block(pl3:block_new(stmt), meta);
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_return)) != null) {
+		if(e:get(lex:tok_try(ctx->lex, ';')) == null) {
+			data.expr = e:get(ctx_expr(ctx));
+			onerr pl3:expr_delete(data.expr);
+
+			if(e:get(lex:tok_try(ctx->lex, ';')) == null)
+				e:fmt("%C: Expected ';'.", lex:loc(ctx->lex));
+		}
+		else
+			data.expr = null;
+
+		return pl3:stmt_ret(data.expr, meta);
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_eret)) != null) {
+		var pt:st:pl3:stmt stmt;
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
+			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
+
+		stmt = pl3:stmt_eret(e:get(ctx_expr(ctx)), meta);
+		onerr pl3:stmt_delete(stmt);
+
+		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+			e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
+
+		if(e:get(lex:tok_try(ctx->lex, ';')) == null)
+			e:fmt("%C: Expected ';'.", lex:loc(ctx->lex));
+
+		return stmt;
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_efmt)) != null) {
+		// TODO this should really be more like a macro
+		var pt:st:pl3:expr expr;
+		var pt:st:pl3:arg arg = null;
+		var pt:pt:st:pl3:arg iter = &arg;
+		
+		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
+			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
+
+		onerr pl3:arg_clear(arg);
+
+		if(e:get(lex:tok_try(ctx->lex, ')')) == null) {
+			for() {
+				*iter = pl3:arg_new(e:get(ctx_expr(ctx)));
+				iter = &(*iter)->next;
+
+				if(e:get(lex:tok_try(ctx->lex, ')')) != null)
+					break;
+				else if(e:get(lex:tok_try(ctx->lex, ',')) == null)
+					e:fmt("%C: Expected ',' or ')'.", lex:loc(ctx->lex));
+			}
+		}
+
+		if(e:get(lex:tok_try(ctx->lex, ';')) == null)
+			e:fmt("%C: Expected ';'.", lex:loc(ctx->lex));
+
+		expr = pl3:expr_ident(pl3:ident_new(str:dup("str:fmt")), pl3:meta_copy(meta));
+		expr = pl3:expr_call(pl3:call_new(false, expr, arg), pl3:meta_copy(meta));
+
+		return pl3:stmt_eret(expr, meta);
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_if)) != null) {
+		var pt:st:pl3:expr eval;
+		var pt:st:pl3:stmt ontrue, onfalse;
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
+			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
+
+		eval = e:get(ctx_expr(ctx));
+		onerr pl3:expr_delete(eval);
+
+		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+			e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
+
+		ontrue = e:get(ctx_stmt(ctx));
+		onerr pl3:stmt_delete(ontrue);
+
+		if(e:get(lex:tok_try(ctx->lex, tok_else)) != null)
+			onfalse = e:get(ctx_stmt(ctx));
+		else
+			onfalse = null;
+
+		return pl3:stmt_cond(pl3:cond_new(eval, ontrue, onfalse), meta);
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_while)) != null) {
+		var pt:st:pl3:expr eval;
+		var pt:st:pl3:stmt body;
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
+			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
+
+		eval = e:get(ctx_expr(ctx));
+		onerr pl3:expr_delete(eval);
+
+		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+			e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
+
+		body = e:get(ctx_stmt(ctx));
+
+		return pl3:stmt_loop(pl3:loop_new(null, eval, null, body, false), meta);
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_do)) != null) {
+		var pt:st:pl3:expr eval;
+		var pt:st:pl3:stmt body;
+
+		body = e:get(ctx_stmt(ctx));
+		onerr pl3:stmt_delete(body);
+
+		if(e:get(lex:tok_try(ctx->lex, tok_while)) == null)
+			e:fmt("%C: Expected 'while'.", lex:loc(ctx->lex));
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
+			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
+
+		eval = e:get(ctx_expr(ctx));
+		onerr pl3:expr_delete(eval);
+
+		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+			e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
+
+		if(e:get(lex:tok_try(ctx->lex, ';')) == null)
+			e:fmt("%C: Expected ';'.", lex:loc(ctx->lex));
+
+		return pl3:stmt_loop(pl3:loop_new(null, eval, null, body, true), meta);
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_for)) != null) {
+		var pt:st:pl3:expr init, eval, inc;
+		var pt:st:pl3:stmt body;
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
+			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
+
+		init = eval = inc = null;
+		onerr { pl3:expr_erase(init); pl3:expr_erase(eval); pl3:expr_erase(inc); }
+
+		if(e:get(lex:tok_try(ctx->lex, ')')) != null) {
+			init = eval = inc = null;
+		}
+		else {
+			if(e:get(lex:tok_try(ctx->lex, ';')) == null) {
+				init = e:get(ctx_expr(ctx));
+				if(e:get(lex:tok_try(ctx->lex, ';')) == null)
+					e:fmt("%C: Expected ';'.", lex:loc(ctx->lex));
+			}
+
+			if(e:get(lex:tok_try(ctx->lex, ';')) == null) {
+				eval = e:get(ctx_expr(ctx));
+				if(e:get(lex:tok_try(ctx->lex, ';')) == null)
+					e:fmt("%C: Expected ';'.", lex:loc(ctx->lex));
+			}
+
+			if(e:get(lex:tok_try(ctx->lex, ')')) == null) {
+				inc = e:get(ctx_expr(ctx));
+				if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+					e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
+			}
+		}
+
+		body = e:get(ctx_stmt(ctx));
+
+		return pl3:stmt_loop(pl3:loop_new(init, eval, inc, body, false), meta);
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_sw)) != null) {
+		var pt:st:pl3:expr expr;
+		var pt:st:pl3:stmt stmt;
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
+			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
+
+		expr = e:get(ctx_expr(ctx));
+		onerr pl3:expr_delete(expr);
+
+		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+			e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
+
+		stmt = e:get(ctx_stmt(ctx));
+		onerr pl3:stmt_delete(stmt);
+
+		return pl3:stmt_sw(pl3:sw_new(expr, stmt), meta);
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_cas)) != null) {
+		var pt:st:pl3:expr expr;
+
+		expr = e:get(ctx_expr(ctx));
+		onerr pl3:expr_delete(expr);
+
+		if(e:get(lex:tok_try(ctx->lex, ':')) == null)
+			e:fmt("%C: Expected ':'.", lex:loc(ctx->lex));
+
+		return pl3:stmt_cas(pl3:cas_new(expr), meta);
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_dflt)) != null) {
+		if(e:get(lex:tok_try(ctx->lex, ':')) == null)
+			e:fmt("%C: Expected ':'.", lex:loc(ctx->lex));
+
+		return pl3:stmt_dflt(meta);
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_brk)) != null) {
+		var u32 depth = 1;
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) != null) {
+			fatal("stub");
+		}
+		else if(e:get(lex:tok_try(ctx->lex, ';')) == null)
+			e:fmt("%C: Expected '(' or ':'.", lex:loc(ctx->lex));
+
+		return pl3:stmt_brk(depth, meta);
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_cont)) != null) {
+		var u32 depth = 1;
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) != null) {
+			fatal("stub");
+		}
+		else if(e:get(lex:tok_try(ctx->lex, ';')) == null)
+			e:fmt("%C: Expected '(' or ':'.", lex:loc(ctx->lex));
+
+		return pl3:stmt_cont(depth, meta);
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_onerr)) != null) {
+		var pt:st:pl3:stmt stmt;
+
+		stmt = e:get(ctx_stmt(ctx));
+		return pl3:stmt_onerr(stmt, meta);
+	}
+	//else if((data.expr = e:get(ctx_expr(ctx))) != null) {
+	else {
+		data.expr = e:get(ctx_expr(ctx));
+		onerr pl3:expr_delete(data.expr);
+
+		if(e:get(lex:tok_try(ctx->lex, ';')) == null)
+			e:fmt("%C: Expected ';'.", lex:loc(ctx->lex));
+
+		return pl3:stmt_expr(data.expr, meta);
+	}
+
+	e:fmt("%C: Expected statement.", lex:loc(ctx->lex));
+};
+
+/**
+ * Parse a block.
+ *   @ctx: The block.
+ *   &returns: The block.
+ */
+def e:str[st:pl3:block](pt:st:ctx ctx) ctx_block = {
+	var pt:st:pl3:stmt stmt = null;
+	var pt:pt:st:pl3:stmt istmt = &stmt;
+
+	onerr pl3:stmt_clear(stmt);
+
+	if(e:get(lex:tok_try(ctx->lex, '{')) == null)
+		e:fmt("%C: Expected '{',", lex:loc(ctx->lex));
+
+	while(e:get(lex:tok_try(ctx->lex, '}')) == null) {
+		*istmt = e:get(ctx_stmt(ctx));
+		istmt = &(*istmt)->next;
+	}
+
+	return pl3:block_new(stmt);
+};
+
+/**
+ * Parse a declaration including the ending semicolon.
+ *   @ctx: The context.
+ *   &returns: The declaration.
+ */
+def e:str[pt:st:pl3:decl](pt:st:ctx ctx) ctx_decl = {
+	var bool mut;
+	var st:pl3:type type;
+	var st:pl3:meta meta;
+	var pt:st:pl3:attr attr;
+	var pt:st:pl3:bind bind;
+	var pt:pt:st:pl3:bind ibind;
+
+	if(e:get(lex:tok_try(ctx->lex, tok_def)) != null)
+		mut = false;
+	else if(e:get(lex:tok_try(ctx->lex, tok_var)) != null)
+		mut = true;
+	else
+		return null;
+
+	meta = e:get(ctx_meta(ctx));
+	onerr pl3:meta_delete(meta);
+
+	attr = e:get(ctx_attr(ctx));
+	onerr pl3:attr_clear(attr);
+
+	type = e:get(ctx_type(ctx));
+	onerr pl3:type_delete(type);
+
+	bind = null;
+	ibind = &bind;
+	onerr pl3:bind_clear(bind);
+
+	for() {
+		*ibind = e:get(ctx_bind(ctx, type));
+		ibind = &(*ibind)->next;
+
+		if(e:get(lex:tok_try(ctx->lex, ';')) != null)
+			break;
+		else if(e:get(lex:tok_try(ctx->lex, ',')) == null)
+			e:fmt("%C: Expected ',' or ';'.", lex:loc(ctx->lex));
+	}
+
+	return pl3:decl_new(mut, attr, type, meta, bind);
+};
+
+/**
+ * Parse an attribute list.
+ *   @ctx: The context.
+ *   &returns; The attribute list.
+ */
+def e:str[pt:st:pl3:attr](pt:st:ctx ctx) ctx_attr = {
+	var pt:st:pl3:attr attr = null;
+	var pt:pt:st:pl3:attr iattr = &attr;
+
+	onerr pl3:attr_clear(attr);
+
+	if(e:get(lex:tok_try(ctx->lex, '[')) == null)
+		return null;
+
+	if(e:get(lex:tok_try(ctx->lex, ']')) != null)
+		return null;
+
+	for() {
+		var pt:char id;
+		var pt:st:lex:token tok;
+
+		if((tok = e:get(lex:tok_try(ctx->lex, tok_id))) != null)
+			id = tok->str;
+		else
+			e:fmt("%C: Expected attribute.",  lex:loc(ctx->lex));
+
+		*iattr = pl3:attr_new(str:dup(id));
+		iattr = &(*iattr)->next;
+
+		if(e:get(lex:tok_try(ctx->lex, ']')) != null)
+			return attr;
+		else if(e:get(lex:tok_try(ctx->lex, ',')) == null)
+			e:fmt("%C: Expected ',' or ']'.",  lex:loc(ctx->lex));
+	}
+};
+
+/**
+ * Parse a binding with an optional initial expression.
+ *   @ctx: The context.
+ *   @type: The type.
+ *   &returns: The binding.
+ */
+def e:str[pt:st:pl3:bind](pt:st:ctx ctx, st:pl3:type type) ctx_bind = {
+	var pt:char id;
+	var pt:st:pl3:expr expr;
+	var st:pl3:meta meta;
+
+	meta = e:get(ctx_meta(ctx));
+	onerr pl3:meta_delete(meta);
+	
+	id = str:dup(e:get(ctx_id(ctx)));
+	onerr mem:free(id);
+
+	if(e:get(lex:tok_try(ctx->lex, '=')) != null) {
+		if(type.tag == ev:pl3:type:sig) {
+			var st:pl3:block block;
+			var st:pl3:meta meta;
+
+			meta = e:get(ctx_meta(ctx));
+			onerr pl3:meta_delete(meta);
+
+			block = e:get(ctx_block(ctx));
+			expr = pl3:expr_func(pl3:func_new(pl3:sig_copy(type.data.sig), block), meta);
+		}
+		else if(e:get(lex:tok_peek(ctx->lex))->id == '{') {
+			var st:pl3:meta meta;
+			var pt:st:pl3:list list;
+
+			meta = e:get(ctx_meta(ctx));
+			onerr pl3:meta_delete(meta);
+
+			list = e:get(ctx_list(ctx));
+			expr = pl3:expr_comp(pl3:comp_new(pl3:type_copy(type), list), meta);
+		}
+		else
+			expr = e:get(ctx_expr(ctx));
+	}
+	else
+		expr = null;
+
+	return pl3:bind_new(id, expr, meta);
+};
+
+
+/**
+ * Parse an expression.
+ *   @ctx: The context.
+ *   &returns: The expression.
+ */
+def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_expr = {
+	return ctx_assign(ctx);
+};
+
+/**
+ * Parse an assignment expression.
+ *   @ctx: The context.
+ *   &returns: The expression.
+ */
+def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_assign = {
+	var pt:st:pl3:expr lhs, rhs;
+
+	lhs = e:get(ctx_ternary(ctx));
+	onerr pl3:expr_delete(lhs);
+
+	for() {
+		var en:pl3:op2 tag;
+		var st:pl3:meta meta;
+		var pt:st:lex:token tok;
+
+		if((tok = e:get(lex:tok_try(ctx->lex, '='))) != null)
+			tag = ev:pl3:op2:assign;
+		else if((tok = e:get(lex:tok_try(ctx->lex, tok_addeq))) != null)
+			tag = ev:pl3:op2:addeq;
+		else if((tok = e:get(lex:tok_try(ctx->lex, tok_subeq))) != null)
+			tag = ev:pl3:op2:subeq;
+		else if((tok = e:get(lex:tok_try(ctx->lex, tok_muleq))) != null)
+			tag = ev:pl3:op2:muleq;
+		else if((tok = e:get(lex:tok_try(ctx->lex, tok_diveq))) != null)
+			tag = ev:pl3:op2:diveq;
+		else if((tok = e:get(lex:tok_try(ctx->lex, tok_remeq))) != null)
+			tag = ev:pl3:op2:remeq;
+		else if((tok = e:get(lex:tok_try(ctx->lex, tok_oreq))) != null)
+			tag = ev:pl3:op2:oreq;
+		else if((tok = e:get(lex:tok_try(ctx->lex, tok_xoreq))) != null)
+			tag = ev:pl3:op2:xoreq;
+		else if((tok = e:get(lex:tok_try(ctx->lex, tok_andeq))) != null)
+			tag = ev:pl3:op2:andeq;
+		else if((tok = e:get(lex:tok_try(ctx->lex, tok_shleq))) != null)
+			tag = ev:pl3:op2:shleq;
+		else if((tok = e:get(lex:tok_try(ctx->lex, tok_shreq))) != null)
+			tag = ev:pl3:op2:shreq;
+		else
+			return lhs;
+
+		meta = tok_meta(ctx, tok);
+		onerr pl3:meta_delete(meta);
+
+		rhs = e:get(ctx_assign(ctx));
+		lhs = pl3:expr_op2(pl3:op2_new(tag, lhs, rhs), meta);
+	}
+};
+
+/**
+ * Parse a ternary expression.
+ *   @ctx: The context.
+ *   &returns: The expression.
+ */
+def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_ternary = {
+	var st:pl3:meta meta;
+	var pt:st:lex:token tok;
+	var pt:st:pl3:expr cond, ontrue, onfalse;
+
+	cond = e:get(ctx_bin(ctx, &binlist[0])); //FIXME *binlist
+	onerr pl3:expr_delete(cond);
+
+	if((tok = e:get(lex:tok_try(ctx->lex, '?'))) == null)
+		return cond;
+
+	meta = tok_meta(ctx, tok);
+	onerr pl3:meta_delete(meta);
+
+	ontrue = e:get(ctx_bin(ctx, &binlist[0])); //FIXME *binlist
+	onerr pl3:expr_delete(ontrue);
+
+	if(e:get(lex:tok_try(ctx->lex, ':')) == null)
+		e:fmt("%C: Expected ':'.", lex:loc(ctx->lex));
+
+	onfalse = e:get(ctx_ternary(ctx));
+	onerr pl3:expr_delete(onfalse);
+
+	return pl3:expr_tern(pl3:tern_new(cond, ontrue, onfalse), meta);
+};
+
+/**
+ * Parse a binary expression.
+ *   @ctx: The context.
+ *   @bin: The list of binary operations.
+ *   &returns: The expression.
+ */
+def e:str[pt:st:pl3:expr](pt:st:ctx ctx, pt:st:bin bin) ctx_bin = {
+	var pt:st:pl3:expr lhs;
+	var st:pl3:meta meta;
+	var pt:st:lex:token tok;
+	var pt:st:bin iter, next;
+
+	if(bin->tok < 0)
+		return e:get(ctx_pre(ctx));
+
+	next = bin;
+	while(!next->inc)
+		next = next + 1;// FIXME increment
+
+	next = next + 1;// FIXME increment
+
+	lhs = e:get(ctx_bin(ctx, next));
+	onerr pl3:expr_delete(lhs);
+
+	for() {
+		iter = bin;
+		for() {
+			if((tok = e:get(lex:tok_try(ctx->lex, iter->tok))) != null)
+				break;
+			else if(iter->inc)
+				return lhs;
+
+			iter = iter + 1;// FIXME increment
+		}
+
+		meta = tok_meta(ctx, tok);
+		onerr pl3:meta_delete(meta);
+
+		lhs = pl3:expr_op2(pl3:op2_new(iter->tag, lhs, e:get(ctx_bin(ctx, next))), meta);
+	}
+};
+
+/**
+ * Parse all prefix expressions.
+ *   @ctx: The context.
+ *   &returns: The expression.
+ */
+def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_pre = {
+	var pt:st:lex:token tok;
+	var st:pl3:meta meta;
+	var en:pl3:op1 tag = -1;
+
+	if((tok = e:get(lex:tok_try(ctx->lex, '+'))) != null)
+		tag = ev:pl3:op1:pos;
+	else if((tok = e:get(lex:tok_try(ctx->lex, '-'))) != null)
+		tag = ev:pl3:op1:neg;
+	else if((tok = e:get(lex:tok_try(ctx->lex, '~'))) != null)
+		tag = ev:pl3:op1:not;
+	else if((tok = e:get(lex:tok_try(ctx->lex, '!'))) != null)
+		tag = ev:pl3:op1:lnot;
+	else if((tok = e:get(lex:tok_try(ctx->lex, '*'))) != null)
+		tag = ev:pl3:op1:deref;
+	else if((tok = e:get(lex:tok_try(ctx->lex, '&'))) != null)
+		tag = ev:pl3:op1:addr;
+	else
+		return ctx_post(ctx);
+
+	meta = tok_meta(ctx, tok);
+	onerr pl3:meta_delete(meta);
+
+	return pl3:expr_op1(pl3:op1_new(tag, e:get(ctx_pre(ctx))), meta);
+};
+
+/**
+ * Parse all post-fix expressions.
+ *   @ctx: The context.
+ *   &returns: The expression.
+ */
+def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_post = {
+	var pt:st:pl3:expr expr;
+	var pt:st:lex:token tok;
+
+	expr = e:get(ctx_term(ctx));
+	onerr pl3:expr_delete(expr);
+
+	for() {
+		if((tok = e:get(lex:tok_try(ctx->lex, tok_inc))) != null)
+			expr = pl3:expr_op1(pl3:op1_new(ev:pl3:op1:postinc, expr), pl3:meta_copy(expr->meta));
+		else if((tok = e:get(lex:tok_try(ctx->lex, tok_dec))) != null)
+			expr = pl3:expr_op1(pl3:op1_new(ev:pl3:op1:postdec, expr), pl3:meta_copy(expr->meta));
+		else if((tok = e:get(lex:tok_try(ctx->lex, '['))) != null) {
+			var pt:st:pl3:expr off;
+			var st:pl3:meta meta = tok_meta(ctx, tok);
+
+			off = e:get(ctx_expr(ctx));
+			onerr pl3:expr_delete(off);
+
+			if(e:get(lex:tok_try(ctx->lex, ']')) == null)
+				e:fmt("%C: Expected ']'.", lex:loc(ctx->lex));
+
+			expr = pl3:expr_index(pl3:index_new(false, expr, off), meta);
+		}
+		else if((tok = e:get(lex:tok_try(ctx->lex, '('))) != null) {
+			var st:pl3:meta meta;
+			var pt:st:pl3:arg arg = null;
+			var pt:pt:st:pl3:arg iter = &arg;
+			
+			meta = tok_meta(ctx, tok);
+			onerr pl3:meta_delete(meta);
+			onerr pl3:arg_clear(arg);
+
+			if(e:get(lex:tok_try(ctx->lex, ')')) == null) {
+				for() {
+					*iter = pl3:arg_new(e:get(ctx_expr(ctx)));
+					iter = &(*iter)->next;
+
+					if(e:get(lex:tok_try(ctx->lex, ')')) != null)
+						break;
+					else if(e:get(lex:tok_try(ctx->lex, ',')) == null)
+						e:fmt("%C: Expected ',' or ')'.", lex:loc(ctx->lex));
+				}
+			}
+
+			expr = pl3:expr_call(pl3:call_new(false, expr, arg), meta);
+		}
+		else if((tok = e:get(lex:tok_try(ctx->lex, tok_fcall))) != null) {
+			var pt:st:pl3:arg arg = null;
+			var pt:pt:st:pl3:arg iter = &arg;
+			var st:pl3:meta meta;
+			
+			meta = tok_meta(ctx, tok);
+			onerr pl3:meta_delete(meta);
+			onerr pl3:arg_clear(arg);
+
+			if(e:get(lex:tok_try(ctx->lex, ')')) == null) {
+				for() {
+					*iter = pl3:arg_new(e:get(ctx_expr(ctx)));
+					iter = &(*iter)->next;
+
+					if(e:get(lex:tok_try(ctx->lex, ')')) != null)
+						break;
+					else if(e:get(lex:tok_try(ctx->lex, ',')) == null)
+						e:fmt("%C: Expected ',' or ')'.", lex:loc(ctx->lex));
+				}
+			}
+
+			expr = pl3:expr_call(pl3:call_new(true, expr, arg), meta);
+		}
+		else if((tok = e:get(lex:tok_try(ctx->lex, '.'))) != null) {
+			var st:pl3:meta meta;
+
+			meta = tok_meta(ctx, tok);
+			onerr pl3:meta_delete(meta);
+
+			if((tok = e:get(lex:tok_try(ctx->lex, tok_id))) == null)
+				e:fmt("%C: Expected member identifier.", lex:loc(ctx->lex));
+
+			expr = pl3:expr_elem(pl3:elem_new(false, expr, str:dup(tok->str)), meta);
+		}
+		else if((tok = e:get(lex:tok_try(ctx->lex, tok_arrow))) != null) {
+			var st:pl3:meta meta;
+
+			meta = tok_meta(ctx, tok);
+			onerr pl3:meta_delete(meta);
+
+			if((tok = e:get(lex:tok_try(ctx->lex, tok_id))) == null)
+				e:fmt("%C: Expected member identifier.", lex:loc(ctx->lex));
+
+			expr = pl3:expr_elem(pl3:elem_new(true, expr, str:dup(tok->str)), meta);
+		}
+		else
+			return expr;
+	}
+};
+
+
+/**
+ * Parse a terminal expression.
+ *   @ctx: The context.
+ *   &returns: The expression.
+ */
+def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_term = {
+	var st:pl3:meta meta;
+	var pt:st:lex:token tok;
+
+	meta = e:get(ctx_meta(ctx));
+	onerr pl3:meta_delete(meta);
+
+	if(e:get(lex:tok_try(ctx->lex, '(')) != null) {
+		var pt:st:pl3:expr expr;
+
+		expr = e:get(ctx_expr(ctx));
+		onerr pl3:expr_delete(expr);
+
+		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+			e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
+
+		pl3:meta_delete(meta);
+		return expr;
+	}
+	else if((tok = e:get(lex:tok_try(ctx->lex, tok_num))) != null)
+		return pl3:expr_lit(pl3:lit_int(e:get(m:int_parse(tok->str, 0))), meta);
+	else if((tok = e:get(lex:tok_try(ctx->lex, tok_quote1))) != null) {
+		if(tok->sz != 1)
+			e:fmt("%C: Invalid character %s.", pl3:meta_call(&meta), tok->str);
+
+		return pl3:expr_lit(pl3:lit_int(m:int_u32(u32{*cpt:u8{tok->data}})), meta);
+	}
+	else if((tok = e:get(lex:tok_try(ctx->lex, tok_quote2))) != null)
+		return pl3:expr_lit(pl3:lit_str(pl3:buf_new(mem:dup(tok->data, tok->sz), tok->sz)), meta);
+	else if(e:get(lex:tok_try(ctx->lex, tok_true)) != null)
+		return pl3:expr_lit(pl3:lit_bool(true), meta);
+	else if(e:get(lex:tok_try(ctx->lex, tok_false)) != null)
+		return pl3:expr_lit(pl3:lit_bool(false), meta);
+	else if((tok = e:get(lex:tok_try(ctx->lex, tok_id))) != null)
+		return pl3:expr_ident(pl3:ident_new(str:dup(tok->str)), meta);
+	else if((tok = e:get(lex:tok_try(ctx->lex, tok_null))) != null)
+		return pl3:expr_lit(pl3:lit_null(), meta);
+	else if((tok = e:get(lex:tok_try(ctx->lex, tok_ev))) != null) {
+		if(e:get(lex:tok_try(ctx->lex, ':')) == null)
+			e:fmt("%C: Expected ':'.", lex:loc(ctx->lex));
+
+		return pl3:expr_enref(pl3:enref_new(str:dup(e:get(ctx_id(ctx)))), meta);
+	}
+	else if((tok = e:get(lex:tok_try(ctx->lex, tok_sizeof))) != null) {
+		var pt:st:pl3:size size;
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
+			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
+
+		if(e:get(ctx_istype(ctx)))
+			size = pl3:size_new(e:get(ctx_type(ctx)), null);
+		else
+			size = pl3:size_new(pl3:type_unk, e:get(ctx_expr(ctx)));
+
+		onerr pl3:size_delete(size);
+
+		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+			e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
+
+		return pl3:expr_size(size, meta);
+	}
+	else if((tok = e:get(lex:tok_try(ctx->lex, tok_arrlen))) != null) {
+		var pt:st:pl3:arrlen alen;
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
+			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
+
+		if(e:get(ctx_istype(ctx)))
+			alen = pl3:arrlen_new(e:get(ctx_type(ctx)), null);
+		else
+			alen = pl3:arrlen_new(pl3:type_unk, e:get(ctx_expr(ctx)));
+
+		onerr pl3:arrlen_delete(alen);
+
+		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+			e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
+
+		return pl3:expr_arrlen(alen, meta);
+	}
+	else if((tok = e:get(lex:tok_try(ctx->lex, tok_offset))) != null) {
+		var st:pl3:type type;
+		var pt:char id;
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
+			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
+
+		type = e:get(ctx_type(ctx));
+		onerr pl3:type_delete(type);
+
+		if(e:get(lex:tok_try(ctx->lex, ',')) == null)
+			e:fmt("%C: Expected ','.", lex:loc(ctx->lex));
+
+		id = str:dup(e:get(ctx_id(ctx)));
+		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+			e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
+
+		return pl3:expr_offset(pl3:offset_new(type, id), meta);
+	}
+	else if((tok = e:get(lex:tok_try(ctx->lex, tok_parent))) != null) {
+		var pt:st:pl3:expr expr;
+		var st:pl3:type type;
+		var pt:char id;
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
+			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
+
+		expr = e:get(ctx_expr(ctx));
+		onerr pl3:expr_delete(expr);
+
+		if(e:get(lex:tok_try(ctx->lex, ',')) == null)
+			e:fmt("%C: Expected ','.", lex:loc(ctx->lex));
+
+		type = e:get(ctx_type(ctx));
+		onerr pl3:type_delete(type);
+
+		if(e:get(lex:tok_try(ctx->lex, ',')) == null)
+			e:fmt("%C: Expected ','.", lex:loc(ctx->lex));
+
+		id = str:dup(e:get(ctx_id(ctx)));
+		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+			e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
+
+		return pl3:expr_parent(pl3:parent_new(expr, type, id), meta);
+	}
+	else if((tok = e:get(lex:tok_try(ctx->lex, tok_getref))) != null) {
+		var pt:st:pl3:expr expr;
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
+			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
+
+		expr = e:get(ctx_expr(ctx));
+		onerr pl3:expr_delete(expr);
+
+		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+			e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
+
+		return pl3:expr_getref(expr, meta);
+	}
+	else if((tok = e:get(lex:tok_try(ctx->lex, tok_vinit))) != null) {
+		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
+			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
+
+		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+			e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
+
+		return pl3:expr_vinit(meta);
+	}
+	else if((tok = e:get(lex:tok_try(ctx->lex, tok_vget))) != null) {
+		var pt:st:pl3:expr expr;
+		var st:pl3:type type;
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
+			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
+
+		expr = e:get(ctx_expr(ctx));
+		onerr pl3:expr_delete(expr);
+
+		if(e:get(lex:tok_try(ctx->lex, ',')) == null)
+			e:fmt("%C: Expected ','.", lex:loc(ctx->lex));
+
+		type = e:get(ctx_type(ctx));
+		onerr pl3:type_delete(type);
+
+		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+			e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
+
+		return pl3:expr_vget(pl3:vget_new(expr, type), meta);
+	}
+	else if((tok = e:get(lex:tok_try(ctx->lex, tok_eget))) != null) {
+		var pt:st:pl3:expr expr;
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
+			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
+
+		expr = e:get(ctx_expr(ctx));
+		onerr pl3:expr_delete(expr);
+
+		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+			e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
+
+		return pl3:expr_eget(expr, meta);
+	}
+	else if((tok = e:get(lex:tok_try(ctx->lex, tok_ereq))) != null) {
+		var pt:st:pl3:expr expr;
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
+			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
+
+		expr = e:get(ctx_expr(ctx));
+		onerr pl3:expr_delete(expr);
+
+		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+			e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
+
+		return pl3:expr_ereq(expr, meta);
+	}
+	else if((tok = e:get(lex:tok_try(ctx->lex, tok_mnew))) != null) {
+		var pt:st:pl3:call call;
+		var st:pl3:type type;
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
+			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
+
+		type = e:get(ctx_type(ctx));
+		onerr pl3:type_delete(type);
+
+		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+			e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
+
+		call = pl3:call_new(false, pl3:expr_ident(pl3:ident_new(str:dup("mem:alloc")), pl3:meta_copy(meta)), null);
+		call->arg = pl3:arg_new(pl3:expr_size(pl3:size_new(type, null), pl3:meta_copy(meta)));
+
+		return pl3:expr_call(call, meta);
+	}
+	else if((tok = e:get(lex:tok_try(ctx->lex, tok_mmake))) != null) {
+		var pt:st:pl3:expr expr, tmp;
+		var pt:st:pl3:call call;
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
+			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
+
+		expr = e:get(ctx_expr(ctx));
+		onerr pl3:expr_delete(expr);
+
+		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+			e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
+
+
+		// FIXME we should really copy the expression
+		if(expr->tag != ev:pl3:expr:comp)
+			fatal("FIXME non-compound memmake");
+
+		tmp = pl3:expr_ident(pl3:ident_new(str:dup("mem:dup")), pl3:meta_copy(meta));
+		call = pl3:call_new(false, tmp, null);
+		call->arg = pl3:arg_new(pl3:expr_getref(expr, pl3:meta_copy(meta)));
+		call->arg->next = pl3:arg_new(pl3:expr_size(pl3:size_new(pl3:type_copy(expr->data.comp->type), null), pl3:meta_copy(meta)));
+
+		return pl3:expr_call(call, meta);
+	}
+	else if(e:get(ctx_istype(ctx))) {
+		var st:pl3:type type;
+		var pt:st:pl3:list list;
+
+		type = e:get(ctx_type(ctx));
+		onerr pl3:type_delete(type);
+
+		list = e:get(ctx_list(ctx));
+
+		return pl3:expr_comp(pl3:comp_new(type, list), meta);
+	}
+	else
+		e:fmt("%C: Expected expression.", lex:loc(ctx->lex));
+
+	return null;
+};
+
+/**
+ * Parse an initializer list.
+ *   @ctx: The context.
+ *   &returns: The initializer list.
+ */
+def e:str[pt:st:pl3:list](pt:st:ctx ctx) ctx_list = {
+	var st:pl3:meta meta;
+	var pt:st:pl3:init init = null;
+	var pt:pt:st:pl3:init iter = &init;
+
+	onerr pl3:init_clear(init);
+
+	meta = e:get(ctx_meta(ctx));
+	onerr pl3:meta_delete(meta);
+
+	if(e:get(lex:tok_try(ctx->lex, '{')) == null)
+		e:fmt("%C: Expected '{'.", lex:loc(ctx->lex));
+
+	for() {
+		var st:pl3:meta meta;
+		var pt:char id = null;
+
+		if(e:get(lex:tok_peek(ctx->lex))->id == '}')
+			break;
+
+		meta = e:get(ctx_meta(ctx));
+		onerr pl3:meta_delete(meta);
+
+		onerr mem:erase(id);
+
+		if(e:get(lex:tok_try(ctx->lex, '.')) != null) {
+			id = str:dup(e:get(ctx_id(ctx)));
+
+			if(e:get(lex:tok_try(ctx->lex, '=')) == null)
+				e:fmt("%C: Expected '='.", lex:loc(ctx->lex));
+		}
+
+		if(e:get(lex:tok_peek(ctx->lex))->id == '{')
+			*iter = pl3:init_nest(e:get(ctx_list(ctx)), id, meta);
+		else
+			*iter = pl3:init_expr(e:get(ctx_expr(ctx)), id, meta);
+
+		meta = pl3:meta_blank();
+		if(e:get(lex:tok_peek(ctx->lex))->id == '}')
+			break;
+		else if(e:get(lex:tok_try(ctx->lex, ',')) == null)
+			e:fmt("%C: Expected ',' or '}'.", lex:loc(ctx->lex));
+
+		iter = &(*iter)->next;
+	}
+
+	if(e:get(lex:tok_try(ctx->lex, '}')) == null)
+		e:fmt("%C: Expected '}'.", lex:loc(ctx->lex));
+
+	return pl3:list_new(init, false, meta);
+};
+
+
+/**
+ * Parse a type declaration.
+ *   @ctx: The context.
+ *   &returns: The declaration or null not found.
+ */
+def e:str[pt:st:pl3:tydecl](pt:st:ctx ctx) ctx_tydecl = {
+	var i32 pre;
+	var pt:char id;
+	var st:pl3:type type;
+	var st:pl3:meta meta;
+	var pt:st:pl3:attr attr;
+	var pt:st:lex:token tok;
+	var pt:st:pl3:tydecl decl;
+	
+	if((tok = e:get(lex:tok_try(ctx->lex, tok_tydef))) == null)
+		return null;
+
+	meta = tok_meta(ctx, tok);
+	onerr pl3:meta_delete(meta);
+
+	attr = e:get(ctx_attr(ctx));
+	onerr pl3:attr_clear(attr);
+
+	if(e:get(lex:tok_try(ctx->lex, tok_ty)) != null)
+		pre = tok_ty;
+	else if(e:get(lex:tok_try(ctx->lex, tok_st)) != null)
+		pre = tok_st;
+	else if(e:get(lex:tok_try(ctx->lex, tok_un)) != null)
+		pre = tok_un;
+	else if(e:get(lex:tok_try(ctx->lex, tok_en)) != null)
+		pre = tok_en;
+	else
+		e:fmt("%C: Expected type prefix.", lex:loc(ctx->lex));
+
+	if(e:get(lex:tok_try(ctx->lex, ':')) == null)
+		e:fmt("%C: Expected ':'.", lex:loc(ctx->lex));
+
+	id = str:dup(e:get(ctx_id(ctx)));
+	onerr mem:free(id);
+
+	if(e:get(lex:tok_try(ctx->lex, '=')) != null) {
+		type = e:get(ctx_type(ctx));
+		onerr pl3:type_delete(type);
+
+		e:get(lex:tok_req(ctx->lex, ';', ";"));
+
+		decl = pl3:tydecl_alias(str:fmt("ty:%s", id), attr, pl3:alias_new(type), meta);
+	}
+	else if(e:get(lex:tok_try(ctx->lex, '{')) != null) {
+		if(pre == tok_en) {
+			var pt:st:pl3:enval val = null;
+			var pt:pt:st:pl3:enval iter = &val;
+
+			onerr pl3:enval_clear(val);
+
+			for() {
+				var pt:char id;
+				var pt:st:lex:token tok;
+
+				if(e:get(lex:tok_try(ctx->lex, '}')) != null)
+					break;
+				if((tok = e:get(lex:tok_try(ctx->lex, tok_quote2))) != null) {
+					id = mem:dup(tok->data, tok->sz); // TODO validate the string
+				}
+				else if((id = str:dup(e:get(ctx_id(ctx)))) == null)
+					e:fmt("%C: Expected enumerated value.", lex:loc(ctx->lex));
+
+				onerr mem:free(id);
+
+				if(e:get(lex:tok_try(ctx->lex, '=')) != null)
+					fatal("FIXME stub");
+
+				*iter = pl3:enval_new(id, null);
+				iter = &(*iter)->next;
+
+				if(e:get(lex:tok_try(ctx->lex, '}')) != null)
+					break;
+				else if(e:get(lex:tok_try(ctx->lex, ',')) == null)
+					e:fmt("%C: Expected ',' or '}'.", lex:loc(ctx->lex));
+			}
+
+			e:get(lex:tok_req(ctx->lex, ';', ";"));
+
+			decl = pl3:tydecl_enum(str:fmt("en:%s", id), attr, pl3:enum_new(val), meta);
+		}
+		else {
+			var pt:st:pl3:memb memb = null;
+			var pt:pt:st:pl3:memb imemb = &memb;
+
+			onerr pl3:memb_clear(memb);
+
+			while(e:get(lex:tok_try(ctx->lex, '}')) == null) {
+				*imemb = e:get(ctx_memb(ctx));
+				imemb = &(*imemb)->next;
+			}
+
+			e:get(lex:tok_req(ctx->lex, ';', ";"));
+
+			if(pre == tok_st)
+				decl = pl3:tydecl_struct(str:dup(id), attr, pl3:agg_new(str:fmt("st:%s", id), memb), meta);
+			else if(pre == tok_un)
+				decl = pl3:tydecl_union(str:dup(id), attr, pl3:agg_new(str:fmt("un:%s", id), memb), meta);
+			else
+				e:fmt("%C: Invalid aggregate declaration.", pl3:meta_call(&meta));
+		}
+	}
+	else
+		e:fmt("%C: Expected '=' or '{'.", lex:loc(ctx->lex));
+
+	mem:free(id);
+	return decl;
+};
+
+/**
+ * Parse a member declaration.
+ *   @ctx: The context.
+ *   &returns: The member.
+ */
+def e:str[pt:st:pl3:memb](pt:st:ctx ctx) ctx_memb = {
+	var st:pl3:type type;
+	var pt:st:pl3:field field = null;
+	var pt:pt:st:pl3:field ifield = &field;
+
+	type = e:get(ctx_type(ctx));
+	onerr pl3:type_delete(type);
+
+	*ifield = pl3:field_new(str:dup(e:get(ctx_id(ctx))));
+	ifield = &(*ifield)->next;
+
+	while(e:get(lex:tok_try(ctx->lex, ',')) != null) {
+		*ifield = pl3:field_new(str:dup(e:get(ctx_id(ctx))));
+		ifield = &(*ifield)->next;
+	}
+
+	if(e:get(lex:tok_try(ctx->lex, ';')) == null)
+		e:fmt("%C: Expected ','; or ';'.", lex:loc(ctx->lex));
+
+	return pl3:memb_new(type, field);
+};
+
+
+/**
+ * Parse a full type.
+ *   @ctx: The context.
+ *   &returns: The type.
+ */
+def e:str[st:pl3:type](pt:st:ctx ctx) ctx_type = {
+	return ctx_sig(ctx);
+};
+
+/**
+ * Parse a type signature.
+ *   @ctx: The context.
+ *   &returns: The type.
+ */
+def e:str[st:pl3:type](pt:st:ctx ctx) ctx_sig = {
+	var st:pl3:type type;
+
+	type = e:get(ctx_base(ctx));
+	onerr pl3:type_delete(type);
+
+	if(e:get(lex:tok_try(ctx->lex, '(')) != null) {
+		var bool vargs = false;
+		var pt:st:pl3:param param = null;
+		var pt:pt:st:pl3:param iter = &param;
+
+		onerr pl3:param_clear(param);
+
+		if(e:get(lex:tok_try(ctx->lex, ')')) == null) {
+			for() {
+				if(e:get(lex:tok_try(ctx->lex, tok_dots)) != null) {
+					vargs = true;
+					if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+						e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
+
+					break;
+				}
+				else {
+					var pt:char id;
+					var st:pl3:type sub;
+					var pt:st:lex:token tok;
+
+					sub = e:get(ctx_type(ctx));
+					onerr pl3:type_delete(sub);
+
+					if((tok = e:get(lex:tok_try(ctx->lex, tok_id))) != null)
+						id = str:dup(tok->str);
+					else
+						id = null;
+
+					*iter = pl3:param_new(sub, id);
+					iter = &(*iter)->next;
+
+					if(e:get(lex:tok_try(ctx->lex, ')')) != null)
+						break;
+					else if(e:get(lex:tok_try(ctx->lex, ',')) == null)
+						e:fmt("%C: Expected ',' or ')'.", lex:loc(ctx->lex));
+				}
+			}
+		}
+
+		type = pl3:type_sig(pl3:sig_new(type, param, vargs));
+	}
+
+	return type;
+};
+
+
+/**
+ * Determine if the next token is a type.
+ *   @ctx: The context.
+ *   &returns: True if a type, false otherwise.
+ */
+def e:str[bool](pt:st:ctx ctx) ctx_istype = {
+	switch(e:get(lex:tok_peek(ctx->lex))->id) {
+	case tok_void:
+	case tok_char:
+	case tok_bool:
+	case tok_u8:
+	case tok_i8:
+	case tok_u16:
+	case tok_i16:
+	case tok_u32:
+	case tok_i32:
+	case tok_u64:
+	case tok_i64:
+	case tok_pt:
+	case tok_cpt:
+	case tok_ty:
+	case tok_st:
+	case tok_un:
+	case tok_en:
+	case tok_ar:
+	case tok_ety:
+	case tok_vty:
+	case tok_estr:
+	case tok_ei32:
+		return true;
+	
+	default:
+		return false;
+	}
+};
+
+/**
+ * Parse a base type.
+ *   @ctx: The context.
+ *   &returns: The type.
+ */
+def e:str[st:pl3:type](pt:st:ctx ctx) ctx_base = {
+	var st:pl3:type type;
+
+	if(e:get(lex:tok_try(ctx->lex, tok_void)) != null)
+		type = pl3:type_void;
+	else if(e:get(lex:tok_try(ctx->lex, tok_char)) != null)
+		type = pl3:type_u8;
+	else if(e:get(lex:tok_try(ctx->lex, tok_bool)) != null)
+		type = pl3:type_bool;
+	else if(e:get(lex:tok_try(ctx->lex, tok_u8)) != null)
+		type = pl3:type_u8;
+	else if(e:get(lex:tok_try(ctx->lex, tok_i8)) != null)
+		type = pl3:type_i8;
+	else if(e:get(lex:tok_try(ctx->lex, tok_u16)) != null)
+		type = pl3:type_u16;
+	else if(e:get(lex:tok_try(ctx->lex, tok_i16)) != null)
+		type = pl3:type_i16;
+	else if(e:get(lex:tok_try(ctx->lex, tok_u32)) != null)
+		type = pl3:type_u32;
+	else if(e:get(lex:tok_try(ctx->lex, tok_i32)) != null)
+		type = pl3:type_i32;
+	else if(e:get(lex:tok_try(ctx->lex, tok_u64)) != null)
+		type = pl3:type_u64;
+	else if(e:get(lex:tok_try(ctx->lex, tok_i64)) != null)
+		type = pl3:type_i64;
+	else if(e:get(lex:tok_try(ctx->lex, tok_fp32)) != null)
+		type = pl3:type_fp32;
+	else if(e:get(lex:tok_try(ctx->lex, tok_fp64)) != null)
+		type = pl3:type_fp64;
+	else if(e:get(lex:tok_try(ctx->lex, tok_pt)) != null) {
+		if(e:get(lex:tok_try(ctx->lex, ':')) == null)
+			e:fmt("%C: Expected ':'.", lex:loc(ctx->lex));
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) != null) {
+			fatal("stub");
+		}
+		else
+			type = pl3:type_ptr(pl3:ptr_new(e:get(ctx_base(ctx)), true));
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_cpt)) != null) {
+		if(e:get(lex:tok_try(ctx->lex, ':')) == null)
+			e:fmt("%C: Expected ':'.", lex:loc(ctx->lex));
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) != null) {
+			fatal("stub");
+		}
+		else
+			type = pl3:type_ptr(pl3:ptr_new(e:get(ctx_base(ctx)), false));
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_ty)) != null) {
+		var cpt:char id;
+
+		if(e:get(lex:tok_try(ctx->lex, ':')) == null)
+			e:fmt("%C: Expected ':'.", lex:loc(ctx->lex));
+
+		id = e:get(ctx_id(ctx));
+		type = pl3:type_name(pl3:name_new(str:fmt("ty:%s", id), null));
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_st)) != null) {
+		var cpt:char id;
+
+		if(e:get(lex:tok_try(ctx->lex, ':')) == null)
+			e:fmt("%C: Expected ':'.", lex:loc(ctx->lex));
+
+		id = e:get(ctx_id(ctx));
+		type = pl3:type_name(pl3:name_new(str:fmt("st:%s", id), null));
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_un)) != null) {
+		var cpt:char id;
+
+		if(e:get(lex:tok_try(ctx->lex, ':')) == null)
+			e:fmt("%C: Expected ':'.", lex:loc(ctx->lex));
+
+		id = e:get(ctx_id(ctx));
+		type = pl3:type_name(pl3:name_new(str:fmt("un:%s", id), null));
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_en)) != null) {
+		var cpt:char id;
+
+		if(e:get(lex:tok_try(ctx->lex, ':')) == null)
+			e:fmt("%C: Expected ':'.", lex:loc(ctx->lex));
+
+		id = e:get(ctx_id(ctx));
+		type = pl3:type_name(pl3:name_new(str:fmt("en:%s", id), null));
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_ar)) != null) {
+		var u32 len;
+		var pt:st:lex:token tok;
+
+		if(e:get(lex:tok_try(ctx->lex, '[')) == null)
+			e:fmt("%C: Expected '['.", lex:loc(ctx->lex));
+
+		if((tok = e:get(lex:tok_try(ctx->lex, tok_num))) != null) {
+			// FIXME make this a std lib func
+			// FIXME parse hex too
+			var cpt:char str = tok->str;
+
+			len = 0;
+			while(*str != '\0') {
+				if((*str < '0') || (*str > '9'))
+					e:fmt("%C: Invalid array length.", lex:loc(ctx->lex));
+
+				len = 10 * len + u32{*str} - '0';
+				str++;
+			}
+		}
+		else
+			len = 0;
+
+		if(e:get(lex:tok_try(ctx->lex, ']')) == null)
+			e:fmt("%C: Expected ']'.", lex:loc(ctx->lex));
+
+		if(e:get(lex:tok_try(ctx->lex, ':')) == null)
+			e:fmt("%C: Expected ':'.", lex:loc(ctx->lex));
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) != null) {
+			fatal("stub");
+		}
+		else
+			type = pl3:type_arr(pl3:arr_new(len, e:get(ctx_base(ctx))));
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_ety)) != null) {
+		var st:pl3:type suc, fail;
+
+		if(e:get(lex:tok_try(ctx->lex, '[')) == null)
+			e:fmt("%C: Expected '['.", lex:loc(ctx->lex));
+
+		suc = e:get(ctx_type(ctx));
+		onerr pl3:type_delete(suc);
+
+		if(e:get(lex:tok_try(ctx->lex, ',')) == null)
+			e:fmt("%C: Expected ','.", lex:loc(ctx->lex));
+
+		fail = e:get(ctx_type(ctx));
+		onerr pl3:type_delete(fail);
+
+		if(e:get(lex:tok_try(ctx->lex, ']')) == null)
+			e:fmt("%C: Expected ']'.", lex:loc(ctx->lex));
+
+		type = pl3:type_err(pl3:err_new(suc, fail));
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_estr)) != null) {
+		var st:pl3:type suc;
+
+		if(e:get(lex:tok_try(ctx->lex, '[')) == null)
+			e:fmt("%C: Expected '['.", lex:loc(ctx->lex));
+
+		suc = e:get(ctx_type(ctx));
+		onerr pl3:type_delete(suc);
+
+		if(e:get(lex:tok_try(ctx->lex, ']')) == null)
+			e:fmt("%C: Expected ']'.", lex:loc(ctx->lex));
+
+		type = pl3:type_err(pl3:err_new(suc, pl3:type_str()));
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_ei32)) != null) {
+		var st:pl3:type suc;
+
+		if(e:get(lex:tok_try(ctx->lex, '[')) == null)
+			e:fmt("%C: Expected '['.", lex:loc(ctx->lex));
+
+		suc = e:get(ctx_type(ctx));
+		onerr pl3:type_delete(suc);
+
+		if(e:get(lex:tok_try(ctx->lex, ']')) == null)
+			e:fmt("%C: Expected ']'.", lex:loc(ctx->lex));
+
+		type = pl3:type_err(pl3:err_new(suc, pl3:type_i32));
+	}
+	else if(e:get(lex:tok_try(ctx->lex, tok_vty)) != null)
+		type = pl3:type_args;
+	else
+		e:fmt("%C: Expected type.", lex:loc(ctx->lex));
+
+	return type;
+};
+
+/**
+ * Parse an identifier. The returned identifier lasts only until the lexer is
+ * advanced. You should quickly duplicate it if you need to retain it.
+ *   @ctx: The context.
+ *   &returns: The identifier.
+ */
+def e:str[pt:char](pt:st:ctx ctx) ctx_id = {
+	var pt:st:lex:token tok;
+
+	tok = e:get(lex:tok_try(ctx->lex, tok_id));
+	if(tok == null)
+		e:fmt("%C: Expected identifier.", lex:loc(ctx->lex));
+
+	return tok->str;
+};
+
+/**
+ * Create a location structure for the current parser location (aka token
+ * index zero).
+ *   @ctx: The context.
+ *   &returns: The location.
+ */
+def e:str[pt:st:pl3:loc](pt:st:ctx ctx) ctx_loc = {
+	var pt:st:lex:token tok = e:get(lex:tok_get(ctx->lex, 0));
+
+	return pl3:loc_new(pl3:str_copy(ctx->path), tok->lin, tok->col);
+};
+
+/**
+ * Create a metadata structure with the current parser location (aka token at
+ * index zero).
+ *   @ctx: The context.
+ *   &returns: The metadata.
+ */
+def e:str[st:pl3:meta](pt:st:ctx ctx) ctx_meta = {
+	return pl3:meta_new(e:get(ctx_loc(ctx)));
+};
+
+
+/**
+ * Create a location from a token.
+ *   @ctx: The context.
+ *   @tok: The token.
+ *   &returns: The location.
+ */
+def pt:st:pl3:loc(pt:st:ctx ctx, pt:st:lex:token tok) tok_loc = {
+	return pl3:loc_new(pl3:str_copy(ctx->path), tok->lin, tok->col);
+};
+
+/**
+ * Create a metadata from a token.
+ *   @ctx: The context.
+ *   @tok: The token.
+ *   &returns: The metadata.
+ */
+def st:pl3:meta(pt:st:ctx ctx, pt:st:lex:token tok) tok_meta = {
+	return pl3:meta_new(tok_loc(ctx, tok));
+};
+
+
+/**
+ * A special parsing rule for PL3-style identifiers.
+ *   @parse: The lexeme parser.
+ *   @arg: The argument, which is the token ID casted to a pointer.
+ *   &returns: The token or null.
+ */
+def e:str[pt:st:lex:token](pt:st:lex:parse parse, pt:void arg) rule_ident = {
+	var u32 i;
+	var i16 ch;
+
+	ch = lex:ch_get(parse, 0);
+	if(!lex:is_alpha(ch) && (ch != '_') && (ch != ':'))
+		return null;
+
+	i = 1;
+	while(lex:is_alnum(lex:ch_get(parse, i)) || (lex:ch_get(parse, i) == '_') || ((lex:ch_get(parse, i) == ':') && (lex:is_alnum(lex:ch_get(parse, i+1)) || (lex:ch_get(parse, i+1) == '_'))))
+		i++;
+
+	return e:get(lex:tok_new(parse, i32{arg}, i, null, 0));
+};
+
+/**
+ * Parse a prefix keyword.
+ *   @parse: The parser.
+ *   @arg: Unused argument.
+ *   &returns: The token if found, null if not.
+ */
+def e:str[pt:st:lex:token](pt:st:lex:parse parse, pt:void arg) rule_prefix = {
+	def ar[]:st:lex:map list = {
+		{ tok_pt,  "pt"  },
+		{ tok_cpt, "cpt" },
+		{ tok_ty,  "ty"  },
+		{ tok_st,  "st"  },
+		{ tok_un,  "un"  },
+		{ tok_en,  "en"  },
+		{ tok_ev,  "ev"  },
+		{ tok_ar,  "ar"  }
+	};
+
+	var u32 i, k;
+	var i16 ch;
+
+	for(i = 0; i < arrlen(list); i++) {
+		for(k = 0; list[i].str[k] != '\0'; k++) {
+			if(lex:ch_get(parse, k) != i16{list[i].str[k]})
+				break; // TODO replace this with continue(2)
+		}
+
+		if(list[i].str[k] != '\0')
+			continue;
+
+		ch = lex:ch_get(parse, k);
+		if(lex:is_alnum(ch) || (ch == '_'))
+			continue;
+
+		return e:get(lex:tok_new(parse, list[i].id, k, null, 0));
+	}
+
+	return null;
+};
+
+
+def e:str[void]() build = {
+	var pt:st:pl3:top top;
+
+	top = pl3:top_new();
+	onerr pl3:top_delete(top);
+
+	//e:get(pl3:parse("test.el", pl3:top_unit(top)));
+	//e:get(pl3:parse("bar.el", pl3:top_unit(top)));
+	e:get(pl3:parse("foo.el", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/avl/avl.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/avl/test.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/io/accum.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/io/file.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/io/fmt.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/io/view.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/lex/ch.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/lex/parse.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/lex/rules.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/math/int.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/math/lim.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/mem/alloc.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/mem/buf.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/mem/std.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/os/linux/io.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/os/linux/linux.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/str/buf.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/str/fmt.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/str/std.pl3", pl3:top_unit(top)));
+
+	e:get(pl3:parse("../self/src/meta.el", pl3:top_unit(top)));
+
+	e:get(pl3:parse("../self/src/enum.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../self/src/expr.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../self/src/list.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../self/src/stmt.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../self/src/top.el", pl3:top_unit(top)));
+	e:get(pl3:parse("../self/src/type.pl3", pl3:top_unit(top)));
+
+	e:get(pl3:parse("../self/src/check.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../self/src/elf.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../self/src/dwarf.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../self/src/llvm.pl3", pl3:top_unit(top)));
+
+	e:get(pl3:parse("../self/src/parse.pl3", pl3:top_unit(top)));
+
+	/*
+	 * self/src/parse.pl3
+	 */
+
+	//e:get(pl3:parse("baz.pl3", pl3:top_unit(top)));
+	e:get(pl3:check_brief(top));
+	e:get(pl3:llvm(top, "foo.ll"));
+
+	pl3:top_delete(top);
+};
+
+def[export] void() go = {
+	var pt:char err;
+
+	m:int:test();
+	mem:assert();
+
+	err = build().err;
+	if(err != null) {
+		print("%s\n", err);
+		mem:free(err);
+		mem:assert();
+		os:exit(1);
+	}
+
+	mem:assert();
+ 	//os_write(1, "test\n", 5);
+	//io:file_open("testfile", io:WRITE);
+};
+var[export] bool DEBUG = false;
+
+
+
+tydef st:list {
+	cpt:char path;
+	pt:st:list next;
+};
+
+def void(pt:st:list list) list_clear = {
+	var pt:st:list tmp;
+
+	while(list != null) {
+		list = (tmp = list)->next;
+		mem:free(tmp);
+	}
+};
+
+def[export] void(pt:pt:char args) run = {
+	var pt:st:pl3:top top;
+	var pt:st:list iter, list = null;
+	var pt:pt:st:list ilist = &list;
+
+	var u32 i;
+	var cpt:char out = null;
+	var i64 mark;
+	var u32 rd, chk, gen;
+
+	for(i = 1; args[i] != null; i++) {
+		if(str:equal(args[i], "-o")) {
+			i++;
+			if(args[i] == null)
+				fatal("Unexpected end of arguments.");
+
+			out = args[i];
+		}
+		else {
+			*ilist = mem:make(st:list{ args[i], null });
+			ilist = &(*ilist)->next;
+		}
+	}
+
+	if(out == null)
+		fatal("Require output file '-o'.");
+
+	top = pl3:top_new();
+	onerr pl3:top_delete(top);
+
+	{
+		mark = tm:usec();
+
+		for(iter = list; iter != null; iter = iter->next)
+			e:req(pl3:parse(iter->path, pl3:top_unit(top)));
+
+		rd = u32{tm:usec() - mark};
+		//print("parse %ums\n", rd / 1000);
+	}
+
+	{
+		mark = tm:usec();
+
+		e:req(pl3:check_brief(top));
+
+		chk = u32{tm:usec() - mark};
+		//print("check %ums\n", chk / 1000);
+	}
+
+	{
+		mark = tm:usec();
+
+		e:req(pl3:llvm(top, out));
+
+		gen = u32{tm:usec() - mark};
+		//print("gen   %ums\n", gen / 1000);
+	}
+	
+	pl3:top_delete(top);
+	list_clear(list);
+};
+
+def[export] e:str[void]() go2 = {
+	var pt:st:pl3:top top;
+
+	top = pl3:top_new();
+	onerr pl3:top_delete(top);
+
+	e:get(pl3:parse("foo.el", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/avl/avl.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/avl/test.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/io/accum.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/io/file.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/io/fmt.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/io/view.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/lex/ch.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/lex/parse.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/lex/rules.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/math/int.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/math/lim.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/mem/alloc.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/mem/buf.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/mem/std.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/os/linux/io.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/os/linux/linux.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/str/buf.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/str/fmt.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../rt/src/str/std.pl3", pl3:top_unit(top)));
+
+	e:get(pl3:parse("../self/src/meta.el", pl3:top_unit(top)));
+
+	e:get(pl3:parse("../self/src/enum.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../self/src/expr.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../self/src/list.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../self/src/stmt.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../self/src/top.el", pl3:top_unit(top)));
+	e:get(pl3:parse("../self/src/type.pl3", pl3:top_unit(top)));
+
+	e:get(pl3:parse("../self/src/check.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../self/src/elf.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../self/src/dwarf.pl3", pl3:top_unit(top)));
+	e:get(pl3:parse("../self/src/llvm.pl3", pl3:top_unit(top)));
+
+	e:get(pl3:parse("../self/src/parse.pl3", pl3:top_unit(top)));
+
+	e:req(pl3:check_brief(top));
+	//e:req(pl3:check_brief(top));
+	e:req(pl3:llvm(top, "foo2.ll"));
+
+	print("mem: %d\n", mem:cnt);
+	pl3:top_delete(top);
+
+	print("mem: %d\n", mem:cnt);
+};

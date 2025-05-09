@@ -1,0 +1,11 @@
+/**
+ * Retrieve the system time in microseconds.
+ *   &returns: The time in microseconds.
+ */
+def[export] i64() tm:usec = {
+	var st:os:linux:tv tv;
+
+	os:linux:gettimeofday(&tv);
+
+	return 1000000 * tv.sec + tv.usec;
+};

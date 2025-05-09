@@ -1,0 +1,61 @@
+def u32(pt:st:avl:root root) count = {
+	var pt:st:avl:node node;
+	var u32 i = 0;
+
+	for(node = avl:root_first(root); node != null; node = avl:node_next(node))
+		i++;
+	
+	return i;
+};
+def void(pt:st:avl:root root) dump = {
+	dumpnode(root->node, 0);
+};
+def void(pt:st:avl:node node, u32 indent) dumpnode = {
+	if(node == null)
+		return;
+
+	dumpnode(node->left, indent + 1);
+	var u32 i;
+	for(i = 0; i < indent; i++)
+		print("  ");
+	print("%p (%p)\n", node->ref, (node->parent != null) ? (node->parent->ref) : 0);
+	dumpnode(node->right, indent + 1);
+};
+
+def[export] void() avl:test:run = {
+	var st:avl:root root;
+	var ar[20]:st:avl:node node;
+	var u32 i;
+
+	for(i = 0; i < 20; i++)
+		node[i].ref = &node[i];
+
+	root = avl:root_new(&avl:cmp_ptr);
+	avl:root_add(&root, &node[0]);
+	avl:root_add(&root, &node[1]);
+	avl:root_add(&root, &node[2]);
+	avl:root_add(&root, &node[3]);
+	avl:root_add(&root, &node[4]);
+	avl:root_add(&root, &node[5]);
+	avl:root_add(&root, &node[6]);
+	avl:root_add(&root, &node[7]);
+	avl:root_add(&root, &node[8]);
+	avl:root_add(&root, &node[9]);
+	avl:root_add(&root, &node[10]);
+	avl:root_add(&root, &node[11]);
+	avl:root_add(&root, &node[12]);
+
+/*
+	if(true) {
+		var pt:st:avl:node node;
+		for(node = avl:root_first(&root); node != null; node = avl:node_next(node)) {
+			print("%p\n", node->ref);
+			if(avl:node_next(node) == null)
+				print("right: %p\n", node->right);
+		}
+	}
+	*/
+
+	if(count(&root) != root.cnt)
+		fatal("mismatch %u %u", count(&root), root.cnt);
+};

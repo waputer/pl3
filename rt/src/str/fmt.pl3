@@ -1,0 +1,91 @@
+def[export] pt:char(cpt:char fmt, ...) str:fmt = {
+	var st:io:file file;
+	var pt:char str = mem:alloc(100);
+	var u32 sz = 100;
+	var ty:args args = args:init();
+
+	file = mem:file(&str, &sz);
+	io:fmtv(file, fmt, &args);
+	io:wr_u8(file, 0);
+	io:close(file);
+
+	return str;
+};
+
+def[export] pt:char(cpt:char fmt, ty:args args) str:fmtv = {
+	var st:io:file file;
+	var u32 sz = 100;
+	var pt:char str = mem:alloc(100);
+
+	file = mem:file(&str, &sz);
+	io:fmtv(file, fmt, &args);
+	io:wr_u8(file, 0);
+	io:close(file);
+
+	return str;
+};
+
+
+/**
+ * Internal buffer for memory-based files.
+ *   @data: The data pointer.
+ *   @len: The length pointer.
+ *   @idx, cap: The current index and capacity.
+ */
+tydef st:buf {
+	pt:pt:void data;
+	pt:u32 len;
+	u32 idx, cap;
+};
+
+/**
+ * Create a file that reads and writes to a memory buffer.
+ *   @data: The data pointer.
+ *   @len: The length pointer.
+ *   &returns: The file.
+ */
+def[export] st:io:file(pt:pt:void data, pt:u32 len) mem:file = {
+	var pt:st:buf buf;
+
+	if(*data == null)
+		*data = mem:alloc(0);
+
+	buf = mem:alloc(sizeof(st:buf));
+	buf->data = data;
+	buf->len = len;
+	buf->idx = 0;
+	buf->cap = *len;
+
+	return st:io:file{ buf, &io_iface };
+};
+
+def e:str[u32](pt:void ptr, pt:void buf, u32 sz) io_read = {
+	e:fmt("Read not supported.");
+};
+def e:str[u32](pt:void ptr, cpt:void buf, u32 sz) io_write = {
+	var pt:st:buf mem = ptr;
+
+	if((mem->idx + sz) > mem->cap) {
+		mem->cap = 2 * (mem->idx + sz);
+		*mem->data = mem:realloc(*mem->data, mem->cap);
+	}
+
+	mem:copy(*mem->data + mem->idx, buf, sz);
+
+	mem->idx += sz;
+	if(mem->idx > *mem->len)
+		*mem->len = mem->idx;
+
+	return sz;
+};
+def e:str[i32](pt:void ptr, u32 id, pt:void buf) io_ctrl = {
+	return -1;
+};
+def e:str[void](pt:void ptr) io_close = {
+	var pt:st:buf buf = ptr;
+
+	mem:free(buf);
+};
+
+
+def st:io:file_iface io_iface = { &io_read, &io_write, &io_ctrl, &io_close };

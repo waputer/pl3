@@ -1,0 +1,152 @@
+
+def[export] e:str[pt:char](cpt:char path) io:std_open = {
+	var i64 fd;
+
+	fd = os:open(path, 0, 0);
+	if(fd < 0)
+		e:fmt("Failed to open '%s'.", path);
+
+	return pt:void{fd};
+};
+
+/**
+ * Standard close.
+ *   @ptr: The pointer.
+ */
+def[export] e:str[void](pt:void ptr) io:std_close = {
+	var i64 fd = i64{ptr};
+	
+	os:close(fd);
+};
+
+/**
+ * Standard read.
+ *   @ptr: The pointer.
+ *   @buf: The buffer.
+ *   @size: The size.
+ *   &returns: Bytes read or negative on error.
+ */
+def[export] e:str[u32](pt:void ptr, pt:void buf, u32 size) io:std_read = {
+	var i64 ret, fd = i64{ptr};
+
+	ret = os:read(fd, buf, u64{size});
+	if(ret < 0)
+		e:fmt("Read failed."); // TODO: error codes
+
+	return u32{ret};
+};
+
+def[export] e:str[i32](pt:void ptr, u32 id, pt:void arg) io:std_ctrl = {
+	return -1;
+};
+
+/**
+ * Standard write.
+ *   @ptr: The pointer.
+ *   @buf: The buffer.
+ *   @size: The size.
+ *   &returns: Bytes written or negative on error.
+ */
+def[export] e:str[u32](pt:void ptr, cpt:void buf, u32 size) io:std_write = {
+	var i64 ret, fd = i64{ptr};
+	
+	ret = os:write(fd, buf, u64{size});
+	if(ret < 0)
+		e:fmt("Write failed.");
+	
+	return u32{ret};
+};
+
+def[export] st:io:file_iface io:std_iface = { &io:std_read, &io:std_write, &io:std_ctrl, &io:std_close };
+
+def[export] st:io:file io:stdout = { 1, &io:std_iface };
+def[export] st:io:file io:stderr = { 2, &io:std_iface };
+
+
+
+
+/**
+ * Crate a raw file from a file desriptor.
+ *   @fd: The file descriptor.
+ *   &returns: The file.
+ */
+def[export] st:io:file(i64 fd) io:raw_file = {
+	return st:io:file{ pt:void{fd}, &io:raw_iface };
+};
+
+/**
+ * Raw file read.
+ *   @ptr: The pointer.
+ *   @buf: The buffer.
+ *   @size: The size.
+ *   &returns: Bytes read or negative on error.
+ */
+def[export] e:str[u32](pt:void ptr, pt:void buf, u32 size) io:raw_read = {
+	var i64 ret, fd = i64{ptr};
+
+	mem:cnt++;
+	ret = os:read(fd, buf, u64{size});
+	if(ret < 0)
+		e:fmt("Read failed.");
+
+	return u32{ret};
+};
+
+/**
+ * Raw file write.
+ *   @ptr: The pointer.
+ *   @buf: The buffer.
+ *   @size: The size.
+ *   &returns: Bytes written or negative on error.
+ */
+def[export] e:str[u32](pt:void ptr, cpt:void buf, u32 size) io:raw_write = {
+	var i64 ret, fd = i64{ptr};
+	
+	ret = os:write(fd, buf, u64{size});
+	if(ret < 0)
+		e:fmt("Write failed.");
+	
+	return u32{ret};
+};
+
+/**
+ * Raw file control.
+ *   @ptr: The pointer.
+ */
+def[export] e:str[i32](pt:void ptr, u32 id, pt:void arg) io:raw_ctrl = {
+	switch(id) {
+	case io:ctrl:seek:
+		{
+			var cpt:st:io:seek seek = arg;
+
+			seek->off = os:lseek(i64{ptr}, i64{seek->off}, u64{seek->mode});
+
+			return (seek->off >= 0) ? 0 : -1;
+		}
+
+	case io:ctrl:tell:
+		{
+			var i64 off;
+
+			off = os:lseek(i64{ptr}, 0, u64{io:seek:cur});
+			*pt:u64{arg} = u64{off};
+
+			return (off >= 0) ? 0 : -1;
+		}
+	}
+
+	return -1;
+};
+
+/**
+ * Raw file close.
+ *   @ptr: The pointer.
+ */
+def[export] e:str[void](pt:void ptr) io:raw_close = {
+	os:close(i64{ptr});
+};
+
+/*
+ * i/o interfaces
+ */
+def[export] st:io:file_iface io:raw_iface = { &io:raw_read, &io:raw_write, &io:raw_ctrl, &io:raw_close };

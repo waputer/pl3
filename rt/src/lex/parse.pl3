@@ -1,0 +1,400 @@
+/**
+ * Token parsing function.
+ *   @parse: The parser.
+ *   @arg: The argument.
+ *   &returns: The token if parsed, null if not parsed, or error.
+ */
+tydef[export] ty:lex:func = e:str[pt:st:lex:token](pt:st:lex:parse parse, pt:void arg);
+
+
+/**
+ * Lexeme parser structure.
+ *   @file: The input file.
+ *   @path: The file path.
+ *   @buf: The character buffer.
+ *   @idx, sz: The index and size of the buffer.
+ *   @trim: The trim flag.
+ *   @lin, col: The line and column.
+ *   @rule: The rule list.
+ *   @tail: The last rule iterator.
+ *   @tok: The token list.
+ */
+tydef[export] st:lex:parse {
+	st:io:file file;
+	pt:char path;
+	pt:i16 buf;
+	u32 idx, sz;
+	bool trim;
+
+	u32 lin, col;
+
+	pt:st:lex:rule rule;
+	pt:pt:st:lex:rule irule;
+
+	pt:st:lex:token tok;
+	pt:pt:st:lex:token itok;
+};
+
+/**
+ * Parsing rule.
+ *   @func: The parsing function.
+ *   @arg: The argument.
+ *   @next: The next rule.
+ */
+tydef[export] st:lex:rule {
+	pt:ty:lex:func func;
+	pt:void arg;
+
+	pt:st:lex:rule next;
+};
+
+/**
+ * Token structure.
+ *   @id: The identifier.
+ *   @str: The string data.
+ *   @file: The file.
+ *   @lin, col: The line and column.
+ *   @data: Unstructured data.
+ *   @sz: The data size.
+ *   @next: The next token.
+ */
+tydef[export] st:lex:token {
+	i32 id;
+	pt:char str;
+	cpt:char file;
+	u32 lin, col;
+	pt:void data;
+	u32 sz;
+
+	pt:st:lex:token next;
+};
+
+/**
+ * String-identifier mapping structure.
+ *   @id: The identifier.
+ *   @str: The string.
+ */
+tydef[export] st:lex:map {
+	i32 id;
+	cpt:char str;
+};
+
+
+/**
+ * Open a lexeme parser.
+ *   @path: The file path.
+ *   @init: The initial buffer size.
+ *   @trim: Trim flag. Automatically trims whitespace.
+ *   &returns: The parser if successful, null on failure.
+ */
+def[export] e:str[pt:st:lex:parse](cpt:char path, u32 init, bool trim) lex:open = {
+	var st:io:file file;
+	var pt:st:lex:parse parse;
+	var u32 i;
+
+	file = e:get(io:open(path, io:mode:read));
+	onerr io:close(file);
+
+	parse = mem:new(st:lex:parse);
+	parse->path = str:dup(path);
+
+	parse->file = file;
+	parse->buf = mem:alloc(init * sizeof(i16));
+	parse->idx = 0;
+	parse->sz = init;
+	parse->trim = trim;
+
+	for(i = 0; i < init; i++)
+		parse->buf[i] = e:get(io:rd_byte(parse->file));
+
+	parse->lin = parse->col = 0;
+
+	parse->rule = null;
+	parse->irule = &parse->rule;
+
+	parse->tok = null;
+	parse->itok = &parse->tok;
+
+	lex:tok_new(parse, 0, 0, null, 0);
+
+	return parse;
+};
+
+/**
+ * Close a lexeme parser.
+ *   @parse: The parser.
+ */
+def[export] void(pt:st:lex:parse parse) lex:close = {
+	var pt:st:lex:rule rule;
+	var pt:st:lex:token tok;
+
+	while(parse->rule != null) {
+		parse->rule = (rule = parse->rule)->next;
+		mem:free(rule);
+	}
+
+	while(parse->tok != null) {
+		parse->tok = (tok = parse->tok)->next;
+		lex:tok_delete(tok);
+	}
+
+	io:close(parse->file);
+	mem:free(parse->buf);
+	mem:free(parse->path);
+	mem:free(parse);
+};
+
+
+/**
+ * Resize the buffer.
+ *   @parser: The parser.
+ *   @size: The new size.
+ */
+def[export] e:str[void](pt:st:lex:parse parse, u32 sz) lex:resize = {
+	var u32 i;
+	var pt:i16 buf;
+
+	if(sz <= parse->sz)
+		return;
+
+	buf = mem:alloc(2 * sz);
+
+	mem:copy(buf, parse->buf + parse->idx, 2 * (parse->sz - parse->idx));
+	mem:copy(buf + parse->sz - parse->idx, parse->buf,  2 * parse->idx);
+
+	for(i = parse->sz; i < sz; i++)
+		buf[i] = e:get(io:rd_byte(parse->file));
+
+	mem:free(parse->buf);
+	parse->idx = 0;
+	parse->sz = sz;
+	parse->buf = buf;
+};
+
+
+/**
+ * Retrieve the top (or first) character.
+ *   @parse: The parser.
+ *   &returns: The top character.
+ */
+def[export] i16(pt:st:lex:parse parse) lex:ch_top = {
+	return lex:ch_get(parse, 0);
+};
+
+/**
+ * Get a character from the parser.
+ *   @parse: The parser.
+ *   @idx: The index.
+ *   &returns: The character or negative on end-of-stream.
+ */
+def[export] i16(pt:st:lex:parse parse, u32 idx) lex:ch_get = {
+	if(idx >= parse->sz)
+		lex:resize(parse, 2 * idx);
+
+	return parse->buf[(parse->idx + idx) % parse->sz];
+};
+
+/**
+ * Read the next character into the parser buffer, discarding the previous
+ * character.
+ *   @parse: The parser.
+ *   &returns: The character or negative on end-of-stream.
+ */
+def[export] e:str[i16](pt:st:lex:parse parse) lex:ch_pop = {
+	var i16 ch;
+
+	ch = parse->buf[parse->idx];
+	parse->buf[parse->idx] = e:get(io:rd_byte(parse->file));
+	parse->idx = (parse->idx + 1) % parse->sz;
+
+	if(ch == '\n') {
+		parse->lin++;
+		parse->col = 0;
+	}
+	else
+		parse->col++;
+
+	return ch;
+};
+
+
+/**
+ * Retrieve the location of the parser as a callback.
+ *   @parse; The parser.
+ *   &returns: The callback.
+ */
+def[export] st:io:call(pt:st:lex:parse parse) lex:loc = {
+	def e:str[void](st:io:file file, pt:void arg) func = {
+		var pt:st:lex:parse parse = arg;
+
+		if((parse->tok == null) || (parse->tok->next == null))
+			io:fmt(file, "%s:%u:%u", parse->path, parse->lin + 1, parse->col + 1);
+		else
+			io:fmt(file, "%s:%u:%u", parse->tok->next->file, parse->tok->next->lin + 1, parse->tok->next->col + 1);
+	};
+
+	return st:io:call{ &func, parse };
+};
+
+
+/**
+ * Create a token from the current parser buffer.
+ *   @parse: The parser.
+ *   @id: The token ID.
+ *   @len: The number of characters to consume for the token.
+ *   @data: Consumed. Unstructured data.
+ *   &returns: The token.
+ */
+def[export] e:str[pt:st:lex:token](pt:st:lex:parse parse, i32 id, u32 len, pt:void data, u32 sz) lex:tok_new = {
+	var u32 i;
+	var pt:st:lex:token tok;
+
+	tok = mem:make(st:lex:token{ id, mem:alloc(len + 1), parse->path, parse->lin, parse->col, data, sz, null });
+
+	for(i = 0; i < len; i++)
+		tok->str[i] = char{e:get(lex:ch_pop(parse))};
+
+	tok->str[len] = '\0';
+
+	if(id >= 0) {
+		*parse->itok = tok;
+		parse->itok = &tok->next;
+	}
+
+	return tok;
+};
+
+/**
+ * Delete a token.
+ *   @tok: The token.
+ */
+def[export] void(pt:st:lex:token tok) lex:tok_delete = {
+	mem:erase(tok->data);
+	mem:free(tok->str);
+	mem:free(tok);
+};
+
+/**
+ * Parse the next token and add it to the token list.
+ *   @parse: The parser.
+ *   &returns: The token or an error.
+ */
+def[export] e:str[pt:st:lex:token](pt:st:lex:parse parse) lex:tok_next = {
+	var pt:st:lex:rule rule;
+	var pt:st:lex:token tok;
+
+	if(parse->trim) {
+		while(lex:is_space(lex:ch_top(parse)))
+			lex:ch_pop(parse);
+	}
+	
+	for(rule = parse->rule; rule != null; rule = rule->next) {
+		tok = e:get(rule->func->(parse, rule->arg));
+		if(tok != null) {
+			if(tok->id >= 0)
+				return tok;
+
+			lex:tok_delete(tok);
+
+			return e:get(lex:tok_next(parse)); //FIXME: no recursion
+		}
+	}
+
+	e:fmt("%C: Unknown input.", lex:loc(parse));
+};
+
+/**
+ * Advance the parser by a single token.
+ *   @parse: The parser.
+ */
+def[export] e:str[void](pt:st:lex:parse parse) lex:tok_adv = {
+	if(parse->tok != null) {
+		var pt:st:lex:token tmp;
+
+		parse->tok = (tmp = parse->tok)->next;
+		lex:tok_delete(tmp);
+
+		if(parse->tok == null)
+			parse->itok = &parse->tok;
+	}
+	else
+		lex:tok_delete(e:get(lex:tok_next(parse)));
+};
+
+/**
+ * Retrieve a token from the parser.
+ *   @parse: The parser.
+ *   @idx: The index.
+ *   &returns: The token.
+ */
+def[export] e:str[pt:st:lex:token](pt:st:lex:parse parse, u32 idx) lex:tok_get = {
+	var pt:pt:st:lex:token tok = &parse->tok;
+
+	idx++;
+	while(true) {
+		if(*tok == null)
+			*tok = e:get(lex:tok_next(parse));
+
+		if(idx == 0)
+			return *tok;
+
+		idx--;
+		tok = &(*tok)->next;
+	}
+};
+
+/**
+ * Attempt to parse a token with a given identifier.
+ *   @parse: The parser.
+ *   @id: The identifier.
+ *   &returns: The token or null.
+ */
+def[export] e:str[pt:st:lex:token](pt:st:lex:parse parse, i32 id) lex:tok_try = {
+	var pt:st:lex:token tok;
+
+	tok = e:get(lex:tok_get(parse, 0));
+	if((tok == null) || (tok->id != id))
+		return null;
+
+	lex:tok_adv(parse);
+	return tok;
+};
+
+/**
+ * Require a token with the given identifier.
+ *   @parse: The parser.
+ *   @id: The identifier.
+ *   @req: The required token string.
+ *   &returns: The token.
+ */
+def[export] e:str[pt:st:lex:token](pt:st:lex:parse parse, i32 id, cpt:char req) lex:tok_req = {
+	var pt:st:lex:token tok;
+
+	tok = e:get(lex:tok_try(parse, id));
+	if(tok == null)
+		e:fmt("%C: Expected '%s'.", lex:loc(parse), req);
+	
+	return tok;
+};
+def[export] e:str[pt:st:lex:token](pt:st:lex:parse parse) lex:tok_peek = {
+	return lex:tok_get(parse, 0);
+};
+
+
+tydef[export] st:mem:set {
+	pt:pt:void arr;
+	u32 cnt;
+};
+
+def[export] pt:st:mem:set() mem:set_new = {
+	return mem:make(st:mem:set{ mem:alloc(0), 0 });
+};
+
+def[export] void(pt:st:mem:set set) mem:set_delete = {
+	var u32 i;
+	
+	for(i = 0; i < set->cnt; i++)
+		mem:free(set->arr[i]);
+
+	mem:free(set);
+};

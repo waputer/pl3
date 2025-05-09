@@ -1,0 +1,75 @@
+/**
+ * Buffer structure.
+ *   @arr: The array.
+ *   @sz, cap: The size and capacity in bytes.
+ */
+tydef[export] st:mem:buf {
+	pt:u8 arr;
+	u32 sz, cap;
+};
+
+/**
+ * Create an empty buffer.
+ *   @init: The initial buffer capacity.
+ *   &returns: The buffer.
+ */
+def[export] st:mem:buf(u32 init) mem:buf_new = {
+	return st:mem:buf{ mem:alloc(init), 0, init };
+};
+
+/**
+ * Delete a buffer.
+ *   @buf: The buffer.
+ */
+def[export] void(st:mem:buf buf) mem:buf_delete = {
+	mem:free(buf.arr);
+};
+
+/**
+ * Finish with a buffer. The return value should be freed with `mem:free` or
+ * deleted with `mem:buf_delete`.
+ *   @buf: The buffer.
+ *   @sz: Out. Optional. The size of the buffer.
+ *   &returns: The finished string.
+ */
+def[export] pt:void(pt:st:mem:buf buf, pt:u32 sz) mem:buf_done = {
+	if(sz != null)
+		*sz = buf->sz;
+
+	return buf->arr;
+};
+
+
+/**
+ * Add a byte to the buffer.
+ *   @buf: The buffer.
+ *   @byte: THe byte.
+ */
+def[export] void(pt:st:mem:buf buf, u8 byte) mem:buf_byte = {
+	if(buf->sz == buf->cap)
+		buf->arr = mem:realloc(buf->arr, buf->cap *= 2);
+	
+	pt:u8{buf->arr}[buf->sz++] = byte;
+};
+
+/**
+ * Write data to the buffer.
+ *   @buf: The buffer.
+ *   @src: The source data.
+ *   @sz: The source size in bytes.
+ */
+def[export] void(pt:st:mem:buf buf, cpt:void src, u32 sz) mem:buf_write = {
+	var cpt:u8 ptr = src;
+
+	while(sz-- > 0)
+		mem:buf_byte(buf, *ptr++);
+};
+
+
+def[export] void(pt:st:mem:buf buf, u8 byte) mem:buf_ch = {
+	mem:buf_byte(buf, byte);
+};
+
+def[export] void(pt:st:mem:buf buf, u8 byte) mem:buf_u8 = {
+	mem:buf_byte(buf, byte);
+};

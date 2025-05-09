@@ -1,0 +1,268 @@
+/**
+ * Add a rule to the lexeme parser.
+ *   @parse: The parser.
+ *   @func: The rule function.
+ *   @arg: The argument.
+ */
+def[export] void(pt:st:lex:parse parse, pt:ty:lex:func func, pt:void arg) lex:rule_add = {
+	*parse->irule = mem:make(st:lex:rule{ func, arg, null });
+	parse->irule = &(*parse->irule)->next;
+};
+
+
+/**
+ * Add an end-of-file rule to the lexeme parser.
+ *   @parse: The parser.
+ *   @id: The token ID.
+ */
+def[export] void(pt:st:lex:parse parse, i32 id) lex:rule_eos = {
+	def e:str[pt:st:lex:token](pt:st:lex:parse parse, pt:void arg) func = {
+		if(lex:ch_get(parse, 0) >= 0)
+			return null;
+
+		return e:get(lex:tok_new(parse, i32{arg}, 0, null, 0));
+	};
+
+	lex:rule_add(parse, &func, pt:void{id});
+};
+
+/**
+ * Add an identifier parsing rule to the lexeme parser.
+ *   @parse: The parser.
+ *   @id: The token ID.
+ */
+def[export] void(pt:st:lex:parse parse, i32 id) lex:rule_ident = {
+	def e:str[pt:st:lex:token](pt:st:lex:parse parse, pt:void arg) func = {
+		var u32 i;
+		var i16 ch;
+
+		ch = lex:ch_get(parse, 0);
+		if(!lex:is_alpha(ch) && (ch != '_'))
+			return null;
+
+		i = 1;
+		while(lex:is_alnum(lex:ch_get(parse, i)))
+			i++;
+
+		return e:get(lex:tok_new(parse, i32{arg}, i, null, 0));
+	};
+
+	lex:rule_add(parse, &func, pt:void{id});
+};
+
+
+def e:str[pt:st:lex:token](pt:st:lex:parse parse, i32 id, char delim) getquote = {
+	var u32 i, sz;
+	var st:mem:buf buf;
+	var pt:void data;
+
+	if(lex:ch_get(parse, 0) != i16{delim})
+		return null;
+
+	buf = mem:buf_new(4);
+	onerr mem:buf_delete(buf);
+
+	i = 1;
+	for() {
+		if(lex:ch_get(parse, i) == '\\') {
+			i++;
+			if(lex:ch_get(parse, i) == 'x') {
+				fatal("FIXME");
+			}
+			else {
+				switch(lex:ch_get(parse, i)) {
+				case 'n': mem:buf_u8(&buf, '\n'); break;
+				case 't': mem:buf_u8(&buf, '\t'); break;
+				case 'r': mem:buf_u8(&buf, '\r'); break;
+				case 'v': mem:buf_u8(&buf, '\v'); break;
+				case '0': mem:buf_u8(&buf, char{0}/*FIXME*/); break;
+				case '\'': mem:buf_u8(&buf, '\''); break;
+				case '"': mem:buf_u8(&buf, '"'); break;
+				case '\\': mem:buf_u8(&buf, '\\'); break;
+				default: e:fmt("Unknown escape sequence '%%c'.", lex:ch_get(parse, i));
+				}
+				i++;
+			}
+		}
+		else if(lex:ch_get(parse, i) < 0)
+			e:fmt("Unterminated quote.");
+		else if(lex:ch_get(parse, i) == i16{delim})
+			break;
+		else
+			mem:buf_u8(&buf, u8{lex:ch_get(parse, i++)});
+	}
+
+	if(delim == '"')
+		mem:buf_u8(&buf, '\0');
+
+	data = mem:buf_done(&buf, &sz);
+	return e:get(lex:tok_new(parse, id, i + 1, data, sz));
+};
+
+def[export] void(pt:st:lex:parse parse, i32 id) lex:rule_quote1 = {
+	def e:str[pt:st:lex:token](pt:st:lex:parse parse, pt:void arg) func = {
+		return getquote(parse, i32{arg}, '\'');
+	};
+
+	lex:rule_add(parse, &func, pt:void{id});
+};
+
+def[export] void(pt:st:lex:parse parse, i32 id) lex:rule_quote2 = {
+	def e:str[pt:st:lex:token](pt:st:lex:parse parse, pt:void arg) func = {
+		return getquote(parse, i32{arg}, '"');
+	};
+
+	lex:rule_add(parse, &func, pt:void{id});
+};
+
+/**
+ * Add an number parsing rule to the lexeme parser, either an integer or
+ * floating-point.
+ *   @parse: The parser.
+ *   @id: The identifier.
+ */
+def[export] void(pt:st:lex:parse parse, i32 id) lex:rule_num = {
+	def e:str[pt:st:lex:token](pt:st:lex:parse parse, pt:void arg) func = {
+		var u32 i;
+		var i16 ch;
+
+		ch = lex:ch_get(parse, 0);
+		if(!lex:is_digit(ch))
+			return null;
+
+		i = 1;
+		while(lex:is_alnum(lex:ch_get(parse, i)) || (lex:ch_get(parse, i) == '.'))
+			i++;
+
+		return e:get(lex:tok_new(parse, i32{arg}, i, null, 0));
+	};
+
+	lex:rule_add(parse, &func, pt:void{id});
+};
+
+/**
+ * Add a set of keywords to the parser.
+ *   @parse: The parser.
+ *   @map: The map of keywords.
+ *   @len: The length of the map.
+ */
+def[export] void(pt:st:lex:parse parse, cpt:st:lex:map map, u32 cnt) lex:rule_keywords = {
+	def e:str[pt:st:lex:token](pt:st:lex:parse parse, pt:void arg) func = {
+		var u32 i;
+		var cpt:st:lex:map map = arg;
+		var cpt:char str = map->str;
+
+		for(i = 0; str[i] != '\0'; i++) {
+			if(lex:ch_get(parse, i) != i16{str[i]})
+				return null;
+		}
+
+		if(lex:is_alnum(lex:ch_get(parse, i)) || (lex:ch_get(parse, i) == '_'))
+			return null;
+
+		return e:get(lex:tok_new(parse, map->id, i, null, 0));
+	};
+
+	var u32 i;
+
+	for(i = 0; i < cnt; i++)
+		lex:rule_add(parse, &func, &map[i]);
+};
+
+/**
+ * Add a set of prefixes to the parser.
+ *   @parse: The parser.
+ *   @map: The map of prefixes.
+ *   @len: The length of the map.
+ */
+def[export] void(pt:st:lex:parse parse, cpt:st:lex:map map, u32 cnt) lex:rule_prefixes = {
+	def e:str[pt:st:lex:token](pt:st:lex:parse parse, pt:void arg) func = {
+		var u32 i;
+		var cpt:st:lex:map map = arg;
+		var cpt:char str = map->str;
+
+		for(i = 0; str[i] != '\0'; i++) {
+			if(lex:ch_get(parse, i) != i16{str[i]})
+				return null;
+		}
+
+		return e:get(lex:tok_new(parse, map->id, i, null, 0));
+	};
+
+	var u32 i;
+
+	for(i = 0; i < cnt; i++)
+		lex:rule_add(parse, &func, &map[i]);
+};
+
+/**
+ * Add a set of symbols to the parser.
+ *   @parse: The parser.
+ *   @map: The map of symbols.
+ *   @len: The length of the map.
+ */
+def[export] void(pt:st:lex:parse parse, cpt:st:lex:map map, u32 cnt) lex:rule_symbols = {
+	def e:str[pt:st:lex:token](pt:st:lex:parse parse, pt:void arg) func = {
+		var u32 i;
+		var cpt:st:lex:map map = arg;
+		var cpt:char str = map->str;
+
+		for(i = 0; str[i] != '\0'; i++) {
+			if(lex:ch_get(parse, i) != i16{str[i]})
+				return null;
+		}
+
+		return e:get(lex:tok_new(parse, map->id, i, null, 0));
+	};
+
+	var u32 i;
+
+	for(i = 0; i < cnt; i++)
+		lex:rule_add(parse, &func, &map[i]);
+};
+
+/**
+ * Add a rule to parse single line comments starting with two slashes.
+ *   @parse: The parser.
+ *   @id: The token ID.
+ */
+def[export] void(pt:st:lex:parse parse, i32 id) lex:rule_slashslash = {
+	def e:str[pt:st:lex:token](pt:st:lex:parse parse, pt:void arg) func = {
+		var u32 i;
+
+		if((lex:ch_get(parse, 0) != '/') || (lex:ch_get(parse, 1) != '/'))
+			return null;
+
+		i = 2;
+		while((lex:ch_get(parse, i) != '\n') && (lex:ch_get(parse, i) >= 0))
+			i++;
+
+		return e:get(lex:tok_new(parse, i32{arg}, i, null, 0));
+	};
+
+	lex:rule_add(parse, &func, pt:void{id});
+};
+
+/**
+ * Add a rule to parse multiline comments starting with `/*`.
+ *   @parse: The parser.
+ *   @id: The token ID.
+ */
+def[export] void(pt:st:lex:parse parse, i32 id) lex:rule_slashstar = {
+	def e:str[pt:st:lex:token](pt:st:lex:parse parse, pt:void arg) func = {
+		var u32 i = 2;
+
+		if((lex:ch_get(parse, 0) != '/') || (lex:ch_get(parse, 1) != '*'))
+			return null;
+
+		if(lex:ch_get(parse, i) < 0)
+			e:fmt("Unterminated comment. Unexpected end of input.");
+
+		while((lex:ch_get(parse, i) != '*') || (lex:ch_get(parse, i + 1) != '/'))
+			i++;
+
+		return e:get(lex:tok_new(parse, i32{arg}, i + 2, null, 0));
+	};
+
+	lex:rule_add(parse, &func, pt:void{id});
+};

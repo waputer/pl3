@@ -1,0 +1,147 @@
+/**
+ * Memory protection flags.
+ */
+def[export] u64 os:PROT_READ  = 0x01,
+                os:PROT_WRITE = 0x02,
+                os:PROT_EXEC  = 0x04;
+
+/**
+ * Mapping flags.
+ */
+def[export] u64 os:MAP_SHARED    = 0x01,
+                os:MAP_PRIVATE   = 0x02,
+                os:MAP_FIXED     = 0x10,
+                os:MAP_ANONYMOUS = 0x20;
+
+/**
+ * Function control flags.
+ */
+def[export] u64 os:O_RDONLY = 0x0000,
+                os:O_WRONLY = 0x0001,
+		os:O_RDWR   = 0x0002,
+		os:O_CREAT  = 0x0040,
+		os:O_TRUNC  = 0x0200;
+
+/**
+ * Seek mode values.
+ */
+def[export] u64 os:SEEK_SET = 0,
+                os:SEEK_CUR = 1,
+		os:SEEK_END = 2;
+
+/**
+ * Exit the program with the given code.
+ *   @code: The exit code.
+ *   &noreturn
+ */
+def[export] void(i64 code) os:exit = {
+	bi:syscall(60, code, 0, 0, 0, 0, 0);
+};
+
+/**
+ * Seek a file to a given location.
+ *   @fd: The file descriptor.
+ *   @off: The offset.
+ *   @mode: The seek mode.
+ *   &returns: The new offset or negative on error.
+ */
+def[export] i64(i64 fd, i64 off, u64 mode) os:lseek = {
+	return bi:syscall(8, fd, off, i64{mode}, 0, 0, 0);
+};
+
+/**
+ * Map memory.
+ *   @addr: The address.
+ *   @len: The length.
+ *   @prot: The protocol.
+ *   @flags: The flags.
+ *   @off: The offset.
+ *   &returns: The address.
+ */
+def[export] pt:void(pt:void addr, u64 len, u64 prot, u64 flags, i64 fd, i64 off) os:mmap = {
+	return pt:void{bi:syscall(9, i64{addr}, i64{len}, i64{prot}, i64{flags}, fd, off)};
+};
+
+/**
+ * Unmap memory.
+ *   @addr: The address.
+ *   @len: The length.
+ *   &returns: An error code.
+ */
+def[export] i64(pt:void addr, u64 len) os:munmap = {
+	return bi:syscall(11, i64{addr}, i64{len}, 0, 0, 0, 0);
+};
+
+
+/**
+ * Open a file.
+ *   @path: The path.
+ *   @flags: The flags.
+ *   @mode: The mode bits (if needed).
+ *   &returns: The file descriptor or an error.
+ */
+def[export] i64(cpt:char path, u64 flags, u64 mode) os:open = {
+	return bi:syscall(2, i64{path}, i64{flags}, i64{mode}, 0, 0, 0);
+};
+
+/**
+ * Close a file.
+ *   @fd: The file descriptor.
+ */
+def[export] void(i64 fd) os:close = {
+	bi:syscall(3, fd, 0, 0, 0, 0, 0);
+};
+
+/**
+ * Read data from a file descriptor.
+ *   @fd: The file descriptor.
+ *   @buf: The data buffer.
+ *   @size: The size in bytes.
+ *   &returns: The number of bytes read.
+ */
+def[export] i64(i64 fd, pt:char buf, u64 size) os:read = {
+	return bi:syscall(0, fd, i64{buf}, i64{size}, 0, 0, 0);
+};
+
+/**
+ * Write data to a file descriptor.
+ *   @fd: The file descriptor.
+ *   @buf: The data buffer.
+ *   @size: The size in bytes.
+ *   &returns: The number of bytes written.
+ */
+def[export] i64(i64 fd, cpt:char buf, u64 size) os:write = {
+	return bi:syscall(1, fd, i64{buf}, i64{size}, 0, 0, 0);
+};
+
+/**
+ * Retrieve the current time in seconds.
+ *   &returns: The time in seconds.
+ */
+def[export] i64() os:sec = {
+	var i64 sec;
+
+	bi:syscall(201, i64{&sec}, 0, 0, 0, 0, 0);
+
+	return sec;
+};
+
+
+/**
+ * Timevalue structure.
+ *   @sec: The number of seconds.
+ *   @usec: The fraction of microseconds.
+ */
+tydef[export] st:os:linux:tv {
+	i64 sec;
+	i64 usec;
+};
+
+/**
+ * Retrieve the time of day.
+ *   @tv: The timevalue structure.
+ *   &returns: Zero on success.
+ */
+def[export] i64(pt:st:os:linux:tv tv) os:linux:gettimeofday = {
+	return bi:syscall(96, i64{tv}, 0, 0, 0, 0, 0);
+};

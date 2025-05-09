@@ -1,0 +1,320 @@
+/**
+ * Mode flags
+ */
+def[export] u32 io:mode:read   = 0x010000,
+                io:mode:write  = 0x020000,
+                io:mode:rdwr   = 0x030000,
+                io:mode:create = 0x040000,
+                io:mode:trunc  = 0x080000,
+                io:mode:excl   = 0x100000,
+                io:mode:raw    = 0x200000;
+
+tydef[export] ty:io:file_read = e:str[u32](pt:void, pt:void, u32);
+tydef[export] ty:io:file_write = e:str[u32](pt:void, cpt:void, u32);
+tydef[export] ty:io:file_ctrl = e:str[i32](pt:void, u32, pt:void);
+tydef[export] ty:io:file_close = e:str[void](pt:void);
+
+def[export] u32 io:ctrl:seek = 0x01,
+                io:ctrl:tell = 0x02,
+		io:ctrl:eof  = 0x03,
+		io:ctrl:dup  = 0x04;
+
+def[export] u32 io:seek:set = 0,
+                io:seek:cur = 1,
+                io:seek:end = 2;
+
+def[export] i32 io:e:noctrl = -1;
+
+tydef[export] st:io:seek {
+	i64 off;
+	u32 mode;
+};
+
+/**
+ * File interface structure.
+ *   @read: File read.
+ *   @write: File write.
+ *   @ctrl: Control signal.
+ *   @close: Close file.
+ */
+tydef[export] st:io:file_iface {
+	cpt:ty:io:file_read read;
+	cpt:ty:io:file_write write;
+	cpt:ty:io:file_ctrl ctrl;
+	cpt:ty:io:file_close close;
+};
+
+/**
+ * File structure.
+ *   @ref: The reference.
+ *   @iface: The interface.
+ */
+tydef[export] st:io:file {
+	pt:void ref;
+	cpt:st:io:file_iface iface;
+};
+
+
+/**
+ * Open a file at a given path.
+ *   @path: The path.
+ *   @flags: The flags.
+ *   &returns: The file.
+ */
+def[export] e:str[st:io:file](cpt:char path, u32 flags) io:open = {
+	var i64 fd;
+	var u64 osflags = 0;
+
+	switch(flags & 0x30000) {
+	case io:mode:read: osflags = os:O_RDONLY; break;
+	case io:mode:write: osflags = os:O_WRONLY; break;
+	case io:mode:rdwr: osflags = os:O_RDWR; break;
+	default: e:fmt("Invalid flags for `file_open`."); break;
+	}
+
+	if((flags & io:mode:create) != 0)
+		osflags |= os:O_CREAT;
+
+	if((flags & io:mode:trunc) != 0)
+		osflags |= os:O_TRUNC;
+
+	fd = os:open(path, osflags, 0777);
+	if(fd < 0)
+		e:fmt("Failed to open '%s'. (%d)", path, -fd); // TODO: better error info
+
+	return io:raw_file(fd);
+};
+
+/**
+ * Read from a file.
+ *   @file: The file.
+ *   @buf: The data buffer.
+ *   @sz: The data size in bytes.
+ *   &returns: The number of bytes read.
+ */
+def[export] e:str[u32](st:io:file file, pt:void buf, u32 sz) io:read = {
+	return e:get(file.iface->read->(file.ref, buf, sz));
+};
+
+/**
+ * Write to a file.
+ *   @file: The file.
+ *   @buf: The data buffer.
+ *   @sz: The data size in bytes.
+ *   &returns: The number of bytes written.
+ */
+def[export] e:str[u32](st:io:file file, cpt:void buf, u32 sz) io:write = {
+	return e:get(file.iface->write->(file.ref, buf, sz));
+};
+
+/**
+ * Sent a control message.
+ *   @file: The file.
+ *   @id: The identifier.
+ *   @arg: The argument.
+ *   &returns: Negative on error. The value `-1` indicates the message is not
+ *     supported.
+ */
+def[export] e:str[i32](st:io:file file, u32 id, pt:void arg) io:ctrl = {
+	return file.iface->ctrl->(file.ref, id, arg);
+};
+
+/**
+ * Close a file.
+ *   @file: The file.
+ */
+def[export] e:str[void](st:io:file file) io:close = {
+	file.iface->close->(file.ref);
+};
+
+
+/**
+ * Seek within a file.
+ *   @file: The file.
+ *   @mode: The seek mode.
+ *   @off: The offset.
+ *   &returns: The previous position in the file.
+ */
+def[export] e:str[u64](st:io:file file, u32 mode, i64 off) io:seek = {
+	var i32 ret;
+	var st:io:seek seek = { off, mode };
+
+	ret = e:get(io:ctrl(file, io:ctrl:seek, &seek));
+	if(ret < 0)
+		e:fmt("File does not support seeking.");
+
+	return seek.off;
+};
+
+/**
+ * Perform a seek to a given offset from the beginning.
+ *   @file: The file.
+ *   @off: The offset.
+ *   &returns: The previous position in the file.
+ */
+def[export] e:str[u64](st:io:file file, i64 off) io:seek_set = {
+	return io:seek(file, io:seek:set, off);
+};
+
+/**
+ * Perform a seek to a given offset from the current position.
+ *   @file: The file.
+ *   @off: The offset.
+ *   &returns: The previous position in the file.
+ */
+def[export] e:str[u64](st:io:file file, i64 off) io:seek_cur = {
+	return io:seek(file, io:seek:cur, off);
+};
+
+def[export] e:str[u64](st:io:file file) io:tell = {
+	var i32 ret;
+	var u64 off;
+
+	ret = e:get(io:ctrl(file, io:ctrl:tell, &off));
+	if(ret < 0)
+		e:fmt("File does not support file positions.");
+
+	return off;
+};
+
+/**
+ * Duplicate a file.
+ *   @file: The file.
+ */
+def[export] e:str[st:io:file](st:io:file file) io:dup = {
+	var i32 ret;
+	var st:io:file dup;
+
+	ret = e:get(io:ctrl(file, io:ctrl:dup, &dup));
+	if(ret < 0)
+		e:fmt("File does not support duplication.");
+	
+	return dup;
+};
+
+
+/**
+ * Read a byte from the file.
+ *   @file: The file.
+ *   &returns: Non-negative on success, negative on error of end-of-file.
+ */
+def[export] e:str[i16](st:io:file file) io:rd_byte = {
+	var u8 val;
+
+	if(e:get(file.iface->read->(file.ref, &val, 1)) == 0)
+		return -1;
+
+	return i16{val};
+};
+
+
+/**
+ * Read a buffer in its entirety.
+ *   @file: The file.
+ *   @buf: The output buffer.
+ *   @sz: The size (in bytes) to be read.
+ */
+def[export] e:str[void](st:io:file file, pt:void buf, u32 sz) io:rd_buf = {
+	var u32 rd;
+
+	while(sz > 0) {
+		rd = e:get(file.iface->read->(file.ref, buf, sz));
+		if(rd == 0)
+			e:fmt("Unexpected end-of-file.");
+		
+		sz -= u32{rd};
+		buf += rd;
+	}
+};
+
+/**
+ * Read an unsigned 8-bit integer in its entirety.
+ *   @file: The file.
+ *   &returns: The value.
+ */
+def[export] e:str[u8](st:io:file file) io:rd_u8 = {
+	var u8 val;
+
+	e:get(io:rd_buf(file, &val, sizeof(val)));
+
+	return val;
+};
+
+/**
+ * Read an unsigned 16-bit integer in its entirety.
+ *   @file: The file.
+ *   &returns: The value.
+ */
+def[export] e:str[u16](st:io:file file) io:rd_u16 = {
+	var u16 val;
+
+	e:get(io:rd_buf(file, &val, sizeof(val)));
+
+	return val;
+};
+
+/**
+ * Read an unsigned 32-bit integer in its entirety.
+ *   @file: The file.
+ *   &returns: The value.
+ */
+def[export] e:str[u32](st:io:file file) io:rd_u32 = {
+	var u32 val;
+
+	e:get(io:rd_buf(file, &val, sizeof(val)));
+
+	return val;
+};
+
+/**
+ * Read an unsigned 64-bit integer in its entirety.
+ *   @file: The file.
+ *   &returns: The value.
+ */
+def[export] e:str[u64](st:io:file file) io:rd_u64 = {
+	var u64 val;
+
+	e:get(io:rd_buf(file, &val, sizeof(val)));
+
+	return val;
+};
+
+def[export] e:str[u64](st:io:file file) io:rd_uleb128 = {
+	var u64 i = 0, v = 0;
+	var u8 b;
+
+	do {
+		b = e:get(io:rd_u8(file));
+		v = v + (u64{b & 0x7F} << (7 * i++));
+	} while((b & 0x80) != 0);
+
+	return v;
+};
+
+
+/**
+ * Write a character to a file.
+ *   @file: The file.
+ *   @ch: The character.
+ */
+def[export] e:str[void](st:io:file file, char ch) io:wr_ch = {
+	e:get(file.iface->write->(file.ref, &ch, 1));
+};
+
+/**
+ * Write a null terminated string to a file.
+ *   @file: The file.
+ *   @str: The null terminated string.
+ */
+def[export] void(st:io:file file, pt:char str) io:wr_str = {
+	file.iface->write->(file.ref, str, str:len(str));
+};
+
+/**
+ * Write an unsiend 8-bit integer to a file.
+ *   @file: The file.
+ *   @val: The value
+ */
+def[export] void(st:io:file file, u8 val) io:wr_u8 = {
+	file.iface->write->(file.ref, &val, 1);
+};

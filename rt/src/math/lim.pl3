@@ -1,0 +1,3 @@
+def[export] u8 m:u8_max = 0xFF;
+def[export] u16 m:u16_max = 0xFFFF;
+def[export] u32 m:u32_max = 0xFFFFFFFF;

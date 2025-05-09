@@ -1,0 +1,66 @@
+/**
+ * Zero a piece of memory.
+ *   @dst: The destination.
+ *   @sz: The size in bytes.
+ */
+def[export] void(pt:void dst, u32 sz) mem:zero = {
+	var u32 i;
+	var pt:u8 dst8 = dst;
+
+	for(i = 0; i < sz; i++)
+		dst8[i] = 0;
+};
+
+/**
+ * Copy nono-verlapping buffeers.
+ *   @dst: The destination.
+ *   @src: The source.
+ *   @sz: The size in bytes.
+ */
+def[export] void(pt:void dst, cpt:void src, u32 sz) mem:copy = {
+	var u32 i;
+	var pt:u8 dst8 = dst;
+	var cpt:u8 src8 = src;
+
+	for(i = 0; i < sz; i++)
+		dst8[i] = src8[i];
+};
+
+
+/**
+ * Swap the contents of two memory regions.
+ *   @lhs: The left-hand side.
+ *   @rhs: The right-hand side.
+ *   @sz: The size of the memory regions.
+ */
+def[export] void(pt:void lhs, pt:void rhs, u32 sz) mem:swap = {
+	var u8 t;
+	var u32 i;
+	var pt:u8 a = lhs, b = rhs;
+
+	for(i = 0; i < sz; i++) {
+		t = a[i];
+		a[i] = b[i];
+		b[i] = t;
+	}
+};
+
+
+/**
+ * Find the location in a piece of memory.
+ *   @mem: The memory pointer.
+ *   @sz: The memory size.
+ *   @val: The sought value.
+ *   &returns: The index of the value or `-1` if not found.
+ */
+def[export] i32(cpt:void ptr, u32 sz, u8 val) mem:find_u8 = {
+	var u32 i;
+	var cpt:u8 buf = ptr;
+
+	for(i = 0; i < sz; i++) {
+		if(buf[i] == val)
+			return i32{i};
+	}
+
+	return -1;
+};

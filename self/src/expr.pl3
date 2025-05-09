@@ -1,0 +1,1379 @@
+/**
+ * Expression structure.
+ *   @tag: The tag.
+ *   @data: The data.
+ *   @type: The type information.
+ *   @meta: The metadata information.
+ */
+tydef[export] en:pl3:expr { lit, ident, enum, op1, op2, index, comp, call, elem, func, tern, enref, size, offset, parent, "arrlen", "getref", vinit, vget, eget, ereq };
+tydef[export] un:pl3:expr { pt:char id; pt:st:pl3:lit lit; pt:st:pl3:ident ident; pt:st:pl3:op1 op1; pt:st:pl3:op2 op2; pt:st:pl3:index index; pt:st:pl3:comp comp; pt:st:pl3:call call; pt:st:pl3:elem elem; pt:st:pl3:func func; pt:st:pl3:tern tern; pt:st:pl3:enref enref; pt:st:pl3:expr expr; pt:st:pl3:size size; pt:st:pl3:offset offset; pt:st:pl3:parent parent; pt:st:pl3:arrlen len; pt:st:pl3:vget vget; };
+tydef[export] st:pl3:expr {
+	en:pl3:expr tag;
+	un:pl3:expr data;
+
+	st:pl3:type type;
+	st:pl3:meta meta;
+};
+
+/**
+ * Create an expression.
+ *   @tag: The tag.
+ *   @data: Consumed. The data.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(en:pl3:expr tag, un:pl3:expr data, st:pl3:meta meta) pl3:expr_new = {
+	return mem:make(st:pl3:expr{ tag, data, pl3:type_unk, meta });
+};
+
+/**
+ * Delete an expression.
+ *   @expr: The expression.
+ */
+def[export] void(pt:st:pl3:expr expr) pl3:expr_delete = {
+	switch(expr->tag) {
+	case ev:pl3:expr:lit: pl3:lit_delete(expr->data.lit); break;
+	case ev:pl3:expr:ident: pl3:ident_delete(expr->data.ident); break;
+	case ev:pl3:expr:enum: mem:free(expr->data.id); break;
+	case ev:pl3:expr:op1: pl3:op1_delete(expr->data.op1); break;
+	case ev:pl3:expr:op2: pl3:op2_delete(expr->data.op2); break;
+	case ev:pl3:expr:index: pl3:index_delete(expr->data.index); break;
+	case ev:pl3:expr:comp: pl3:comp_delete(expr->data.comp); break;
+	case ev:pl3:expr:call: pl3:call_delete(expr->data.call); break;
+	case ev:pl3:expr:elem: pl3:elem_delete(expr->data.elem); break;
+	case ev:pl3:expr:func: pl3:func_delete(expr->data.func); break;
+	case ev:pl3:expr:tern: pl3:tern_delete(expr->data.tern); break;
+	case ev:pl3:expr:enref: pl3:enref_delete(expr->data.enref); break;
+	case ev:pl3:expr:size: pl3:size_delete(expr->data.size); break;
+	case ev:pl3:expr:offset: pl3:offset_delete(expr->data.offset); break;
+	case ev:pl3:expr:parent: pl3:parent_delete(expr->data.parent); break;
+	case ev:pl3:expr:arrlen: pl3:arrlen_delete(expr->data.len); break;
+	case ev:pl3:expr:getref: pl3:expr_delete(expr->data.expr); break;
+	case ev:pl3:expr:vinit: break;
+	case ev:pl3:expr:vget: pl3:vget_delete(expr->data.vget); break;
+	case ev:pl3:expr:eget: pl3:expr_delete(expr->data.expr); break;
+	case ev:pl3:expr:ereq: pl3:expr_delete(expr->data.expr); break;
+	}
+
+	pl3:type_delete(expr->type);
+	pl3:meta_delete(expr->meta);
+	mem:free(expr);
+};
+
+/**
+ * Erase an expression, deleting it if non-null.
+ *   @expr: The expression.
+ */
+def[export] void(pt:st:pl3:expr expr) pl3:expr_erase = {
+	if(expr != null)
+		pl3:expr_delete(expr);
+};
+
+
+/**
+ * Create a literal expression.
+ *   @lit: Consumed. The literal.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:lit lit, st:pl3:meta meta) pl3:expr_lit = {
+	return pl3:expr_new(ev:pl3:expr:lit, un:pl3:expr{ .lit = lit }, meta);
+};
+
+/**
+ * Create an identity expression.
+ *   @ident: Consumed. The identifier.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:ident ident, st:pl3:meta meta) pl3:expr_ident = {
+	return pl3:expr_new(ev:pl3:expr:ident, un:pl3:expr{ .ident = ident }, meta);
+};
+
+/**
+ * Create an enumerator expression.
+ *   @id: Consumed. The identifier.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:char id, st:pl3:meta meta) pl3:expr_enum = {
+	return pl3:expr_new(ev:pl3:expr:enum, un:pl3:expr{ .id = id }, meta);
+};
+
+/**
+ * Create a unary expression.
+ *   @op1: Consumed. The unary operation.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:op1 op1, st:pl3:meta meta) pl3:expr_op1 = {
+	return pl3:expr_new(ev:pl3:expr:op1, un:pl3:expr{ .op1 = op1 }, meta);
+};
+
+/**
+ * Create a binary expression.
+ *   @op2: Consumed. The binary operation.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:op2 op2, st:pl3:meta meta) pl3:expr_op2 = {
+	return pl3:expr_new(ev:pl3:expr:op2, un:pl3:expr{ .op2 = op2 }, meta);
+};
+
+/**
+ * Create an index expression.
+ *   @index: Consumed. The index operation.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:index index, st:pl3:meta meta) pl3:expr_index = {
+	return pl3:expr_new(ev:pl3:expr:index, un:pl3:expr{ .index = index }, meta);
+};
+
+/**
+ * Create a compound expression.
+ *   @comp: Consumed. The compound operation.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:comp comp, st:pl3:meta meta) pl3:expr_comp = {
+	return pl3:expr_new(ev:pl3:expr:comp, un:pl3:expr{ .comp = comp }, meta);
+};
+
+/**
+ * Create a call expression.
+ *   @call: Consumed. The call operation.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:call call, st:pl3:meta meta) pl3:expr_call = {
+	return pl3:expr_new(ev:pl3:expr:call, un:pl3:expr{ .call = call }, meta);
+};
+
+/**
+ * Create an element access expression.
+ *   @elem: Consumed. The element access.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:elem elem, st:pl3:meta meta) pl3:expr_elem = {
+	return pl3:expr_new(ev:pl3:expr:elem, un:pl3:expr{ .elem = elem }, meta);
+};
+
+/**
+ * Create a function expression.
+ *   @func: Consumed. The function.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:func func, st:pl3:meta meta) pl3:expr_func = {
+	return pl3:expr_new(ev:pl3:expr:func, un:pl3:expr{ .func = func }, meta);
+};
+
+/**
+ * Create a ternary expression.
+ *   @tern: Consumed. The ternary.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:tern tern, st:pl3:meta meta) pl3:expr_tern = {
+	return pl3:expr_new(ev:pl3:expr:tern, un:pl3:expr{ .tern = tern }, meta);
+};
+
+/**
+ * Create an enumerated reference expression.
+ *   @id: Consumed. The reference.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:enref ref, st:pl3:meta meta) pl3:expr_enref = {
+	return pl3:expr_new(ev:pl3:expr:enref, un:pl3:expr{ .enref = ref }, meta);
+};
+
+/**
+ * Create an argument list initialize expression.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(st:pl3:meta meta) pl3:expr_vinit = {
+	return pl3:expr_new(ev:pl3:expr:vinit, un:pl3:expr{ }, meta);
+};
+
+/**
+ * Create an argument list get expression.
+ *   @get: Consumed. The get.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:vget get, st:pl3:meta meta) pl3:expr_vget = {
+	return pl3:expr_new(ev:pl3:expr:vget, un:pl3:expr{ .vget = get }, meta);
+};
+
+/**
+ * Create a sizeof expression.
+ *   @size: Consumed. The sizeof.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:size size, st:pl3:meta meta) pl3:expr_size = {
+	return pl3:expr_new(ev:pl3:expr:size, un:pl3:expr{ .size = size }, meta);
+};
+
+/**
+ * Create an offsetof expression.
+ *   @offset: Consumed. The offsetof.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:offset offset, st:pl3:meta meta) pl3:expr_offset = {
+	return pl3:expr_new(ev:pl3:expr:offset, un:pl3:expr{ .offset = offset }, meta);
+};
+
+/**
+ * Create a getparent expression.
+ *   @parent: Consumed. The getparent.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:parent parent, st:pl3:meta meta) pl3:expr_parent = {
+	return pl3:expr_new(ev:pl3:expr:parent, un:pl3:expr{ .parent = parent }, meta);
+};
+
+/**
+ * Create a array length expression.
+ *   @arrlen: Consumed. The array length expression
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:arrlen len, st:pl3:meta meta) pl3:expr_arrlen = {
+	return pl3:expr_new(ev:pl3:expr:arrlen, un:pl3:expr{ .len = len }, meta);
+};
+
+/**
+ * Create a getref expression.
+ *   @expr: Consumed. The inner expression.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:expr expr, st:pl3:meta meta) pl3:expr_getref = {
+	return pl3:expr_new(ev:pl3:expr:getref, un:pl3:expr{ .expr = expr }, meta);
+};
+
+/**
+ * Create an error get expression.
+ *   @func: Consumed. The function.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:expr expr, st:pl3:meta meta) pl3:expr_eget = {
+	return pl3:expr_new(ev:pl3:expr:eget, un:pl3:expr{ .expr = expr }, meta);
+};
+
+/**
+ * Create an error require expression.
+ *   @func: Consumed. The function.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:expr expr, st:pl3:meta meta) pl3:expr_ereq = {
+	return pl3:expr_new(ev:pl3:expr:ereq, un:pl3:expr{ .expr = expr }, meta);
+};
+
+
+/**
+ * Buffer structure.
+ *   @arr: The array.
+ *   @sz: The size.
+ */
+tydef[export] st:pl3:buf {
+	pt:u8 arr;
+	u32 sz;
+};
+
+/**
+ * Create a data buffer.
+ *   @arr: Consumed. The array of bytes.
+ *   @sz: The size in bytes.
+ *   &returns: The buffer.
+ */
+def[export] pt:st:pl3:buf(pt:u8 arr, u32 sz) pl3:buf_new = {
+	return mem:make(st:pl3:buf{ arr, sz });
+};
+
+/**
+ * Delete a data buffer.
+ *   @buf; The buffer.
+ */
+def[export] void(pt:st:pl3:buf buf) pl3:buf_delete = {
+	mem:free(buf->arr);
+	mem:free(buf);
+};
+
+
+/**
+ * Literal structure.
+ *   @tag: The tag.
+ *   @data: The value data.
+ */
+tydef[export] en:pl3:lit { none, "null", "bool", u8v, i8v, u16v, i16v, u32v, i32v, u64v, i64v, int, ptr, str };
+tydef[export] un:pl3:lit { bool boolv; u8 u8v; i8 i8v; u16 u16v; i16 i16v; u32 u32v; i32 i32v; u64 u64v; i64 i64v; pt:st:m:int int; pt:st:pl3:buf buf; };
+tydef[export] st:pl3:lit {
+	en:pl3:lit tag;
+	un:pl3:lit data;
+};
+
+/**
+ * Create a literal.
+ *   @tag: The tag.
+ *   @data: The data.
+ *   &returns: The literal.
+ */
+def[export] pt:st:pl3:lit(en:pl3:lit tag, un:pl3:lit data) pl3:lit_new = {
+	return mem:make(st:pl3:lit{ tag, data });
+};
+
+/**
+ * Delete a literal.
+ *   @lit: The literal.
+ */
+def[export] void(pt:st:pl3:lit lit) pl3:lit_delete = {
+	switch(lit->tag) {
+	case ev:pl3:lit:none: break;
+	case ev:pl3:lit:null: break;
+	case ev:pl3:lit:int: m:int_unref(lit->data.int); break;
+	case ev:pl3:lit:ptr: m:int_unref(lit->data.int); break;
+	case ev:pl3:lit:str: pl3:buf_delete(lit->data.buf); break;
+	}
+
+	mem:free(lit);
+};
+
+/**
+ * Create a none literal.
+ *   &returns: The literal.
+ */
+def[export] pt:st:pl3:lit() pl3:lit_none = {
+	return pl3:lit_new(ev:pl3:lit:none, un:pl3:lit{});
+};
+
+/**
+ * Create a null literal.
+ *   &returns: The literal.
+ */
+def[export] pt:st:pl3:lit() pl3:lit_null = {
+	return pl3:lit_new(ev:pl3:lit:null, un:pl3:lit{});
+};
+
+/**
+ * Create a boolean literal.
+ *   @boolv: The initial value.
+ *   &returns: The literal.
+ */
+def[export] pt:st:pl3:lit(bool boolv) pl3:lit_bool = {
+	return pl3:lit_new(ev:pl3:lit:bool, un:pl3:lit{ .boolv = boolv });
+};
+
+/**
+ * Create an unsigned 8-bit literal
+ *   @u8v: The value.
+ *   &returns: The literal.
+ */
+def[export] pt:st:pl3:lit(u8 u8v) pl3:lit_u8 = {
+	return pl3:lit_new(ev:pl3:lit:u8v, un:pl3:lit{ .u8v = u8v });
+};
+
+/**
+ * Create an integer literal.
+ *   @int: The integer value.
+ *   &returns: The literal.
+ */
+def[export] pt:st:pl3:lit(pt:st:m:int int) pl3:lit_int = {
+	return pl3:lit_new(ev:pl3:lit:int, un:pl3:lit{ .int = int });
+};
+
+/**
+ * Create a string literal.
+ *   @buf: The string data buffer.
+ *   &returns: The literal.
+ */
+def[export] pt:st:pl3:lit(pt:st:pl3:buf buf) pl3:lit_str = {
+	return pl3:lit_new(ev:pl3:lit:str, un:pl3:lit{ .buf = buf });
+};
+
+
+/**
+ * Clear the literal, setting it to none.
+ *   @lit: The literal.
+ */
+def[export] void(pt:st:pl3:lit lit) pl3:lit_clear = {
+	switch(lit->tag) {
+	case ev:pl3:lit:none: break;
+	case ev:pl3:lit:int: m:int_unref(lit->data.int); break;
+	}
+
+	lit->tag = ev:pl3:lit:none;
+};
+
+
+/**
+ * Change a literal to an unsigned 8-bit integer.
+ *   @lit: The literal.
+ *   @u8v: The value.
+ */
+def[export] void(pt:st:pl3:lit lit, u8 u8v) pl3:lit_put_u8 = {
+	pl3:lit_clear(lit);
+	lit->tag = ev:pl3:lit:u8v;
+	lit->data.u8v = u8v;
+};
+
+/**
+ * Change a literal to a signed 8-bit integer.
+ *   @lit: The literal.
+ *   @i8v: The value.
+ */
+def[export] void(pt:st:pl3:lit lit, i8 i8v) pl3:lit_put_i8 = {
+	pl3:lit_clear(lit);
+	lit->tag = ev:pl3:lit:i8v;
+	lit->data.i8v = i8v;
+};
+
+/**
+ * Change a literal to an unsigned 16-bit integer.
+ *   @lit: The literal.
+ *   @u16v: The value.
+ */
+def[export] void(pt:st:pl3:lit lit, u16 u16v) pl3:lit_put_u16 = {
+	pl3:lit_clear(lit);
+	lit->tag = ev:pl3:lit:u16v;
+	lit->data.u16v = u16v;
+};
+
+/**
+ * Change a literal to a signed 16-bit integer.
+ *   @lit: The literal.
+ *   @i16v: The value.
+ */
+def[export] void(pt:st:pl3:lit lit, i16 i16v) pl3:lit_put_i16 = {
+	pl3:lit_clear(lit);
+	lit->tag = ev:pl3:lit:i16v;
+	lit->data.i16v = i16v;
+};
+
+/**
+ * Change a literal to an unsigned 32-bit integer.
+ *   @lit: The literal.
+ *   @u32v: The value.
+ */
+def[export] void(pt:st:pl3:lit lit, u32 u32v) pl3:lit_put_u32 = {
+	pl3:lit_clear(lit);
+	lit->tag = ev:pl3:lit:u32v;
+	lit->data.u32v = u32v;
+};
+
+/**
+ * Change a literal to a signed 32-bit integer.
+ *   @lit: The literal.
+ *   @i32v: The value.
+ */
+def[export] void(pt:st:pl3:lit lit, i32 i32v) pl3:lit_put_i32 = {
+	pl3:lit_clear(lit);
+	lit->tag = ev:pl3:lit:i32v;
+	lit->data.i32v = i32v;
+};
+
+/**
+ * Change a literal to an unsigned 64-bit integer.
+ *   @lit: The literal.
+ *   @u64v: The value.
+ */
+def[export] void(pt:st:pl3:lit lit, u64 u64v) pl3:lit_put_u64 = {
+	pl3:lit_clear(lit);
+	lit->tag = ev:pl3:lit:u64v;
+	lit->data.u64v = u64v;
+};
+
+/**
+ * Change a literal to a signed 64-bit integer.
+ *   @lit: The literal.
+ *   @i64v: The value.
+ */
+def[export] void(pt:st:pl3:lit lit, i64 i64v) pl3:lit_put_i64 = {
+	pl3:lit_clear(lit);
+	lit->tag = ev:pl3:lit:i64v;
+	lit->data.i64v = i64v;
+};
+
+
+/**
+ * Fill a literal with a given type.
+ *   @lit: The literal.
+ *   @type: The type.
+ */
+def[export] void(pt:st:pl3:lit lit, st:pl3:type type) pl3:lit_fill = {
+	switch(lit->tag) {
+	case ev:pl3:lit:int:
+		switch(pl3:type_root(type).tag) {
+		case ev:pl3:type:u8: pl3:lit_put_u8(lit, m:int_get_u8(lit->data.int)); break;
+		case ev:pl3:type:i8: pl3:lit_put_i8(lit, m:int_get_i8(lit->data.int)); break;
+		case ev:pl3:type:u16: pl3:lit_put_u16(lit, m:int_get_u16(lit->data.int)); break;
+		case ev:pl3:type:i16: pl3:lit_put_i16(lit, m:int_get_i16(lit->data.int)); break;
+		case ev:pl3:type:u32: pl3:lit_put_u32(lit, m:int_get_u32(lit->data.int)); break;
+		case ev:pl3:type:i32: pl3:lit_put_i32(lit, m:int_get_i32(lit->data.int)); break;
+		case ev:pl3:type:u64: pl3:lit_put_u64(lit, m:int_get_u64(lit->data.int)); break;
+		case ev:pl3:type:i64: pl3:lit_put_i64(lit, m:int_get_i64(lit->data.int)); break;
+		case ev:pl3:type:ptr: lit->tag = ev:pl3:lit:ptr; break;
+
+		case ev:pl3:type:name: {
+			var pt:st:pl3:name name = pl3:type_get_name(type);
+
+			if(name->decl->tag != ev:pl3:tydecl:enum)
+				fatal("FIXME lit_fill error");
+
+			pl3:lit_put_i32(lit, m:int_get_i32(lit->data.int)); // FIXME actual type
+		} break;
+
+		default: fatal("FIXME lit fill %u", pl3:type_root(type).tag);
+		}
+
+		break;
+
+	default:
+		fatal("FIXME lit fill2 %u", lit->tag);
+	}
+};
+
+
+/**
+ * Retrieve the type for a literal.
+ *   @lit: The literal.
+ *   &returns: The type.
+ */
+def[export] st:pl3:type(pt:st:pl3:lit lit) pl3:lit_type = {
+	switch(lit->tag) {
+	case ev:pl3:lit:none: return pl3:type_unk;
+	case ev:pl3:lit:null: return pl3:type_ptr(pl3:ptr_new(pl3:type_void, true));
+	case ev:pl3:lit:bool: return pl3:type_bool;
+	case ev:pl3:lit:u8v: return pl3:type_u8;
+	case ev:pl3:lit:i8v: return pl3:type_i8;
+	case ev:pl3:lit:u16v: return pl3:type_u16;
+	case ev:pl3:lit:i16v: return pl3:type_i16;
+	case ev:pl3:lit:u32v: return pl3:type_u32;
+	case ev:pl3:lit:i32v: return pl3:type_i32;
+	case ev:pl3:lit:u64v: return pl3:type_u64;
+	case ev:pl3:lit:i64v: return pl3:type_i64;
+	case ev:pl3:lit:int: return pl3:type_unk;
+	case ev:pl3:lit:ptr: return pl3:type_ptr(pl3:ptr_new(pl3:type_void, true));
+	case ev:pl3:lit:str: return pl3:type_ptr(pl3:ptr_new(pl3:type_u8, false));
+	default: fatal("FIXME");
+	}
+};
+
+
+/**
+ * Declaration and binding link structure.
+ *   @decl: The declaration.
+ *   @bind: The binding.
+ */
+tydef[export] st:pl3:link {
+	pt:st:pl3:decl decl;
+	pt:st:pl3:bind bind;
+};	
+
+/**
+ * Identifier structure.
+ *   @str: The string name.
+ *   @param: The parameter.
+ *   @decl: The declaration.
+ *   @bind: The binding.
+ */
+tydef[export] en:pl3:ident { unk, param, link, builtin };
+tydef[export] un:pl3:ident { pt:st:pl3:param param; st:pl3:link link; };
+tydef[export] st:pl3:ident {
+	pt:char str;
+	en:pl3:ident tag;
+	un:pl3:ident data;
+};
+
+/**
+ * Create an identifier.
+ *   @str: The identifier string.
+ *   &returns: The identifier.
+ */
+def[export] pt:st:pl3:ident(pt:char str) pl3:ident_new = {
+	return mem:make(st:pl3:ident{ str, ev:pl3:ident:unk });
+};
+
+/**
+ * Delete an identifier.
+ *   @ident: The identifier.
+ */
+def[export] void(pt:st:pl3:ident ident) pl3:ident_delete = {
+	mem:free(ident->str);
+	mem:free(ident);
+};
+
+/**
+ * Resolve the identifier to be a parameter.
+ *   @ident: The identifier.
+ *   @param: The parameter.
+ */
+def[export] void(pt:st:pl3:ident ident, pt:st:pl3:param param) pl3:ident_param = {
+	ident->tag = ev:pl3:ident:param;
+	ident->data.param = param;
+};
+
+/**
+ * Resolve the identifier to be a declaration/binding link.
+ *   @ident: The identifier.
+ *   @decl: The declaration.
+ *   @bind: The binding.
+ */
+def[export] void(pt:st:pl3:ident ident, pt:st:pl3:decl decl, pt:st:pl3:bind bind) pl3:ident_link = {
+	ident->tag = ev:pl3:ident:link;
+	ident->data.link.decl = decl;
+	ident->data.link.bind = bind;
+};
+
+
+/**
+ * One-operand structure.
+ *   @tag: The tag.
+ *   @in: The input expression.
+ */
+tydef[export] en:pl3:op1 { pos, neg, not, lnot, preinc, predec, postinc, postdec, deref, addr };
+tydef[export] st:pl3:op1 {
+	en:pl3:expr tag;
+	pt:st:pl3:expr in;
+};
+
+/**
+ * Create a unary operation.
+ *   @tag: The tag.
+ *   @in: Consumed. The input expression.
+ *   &returns: The binary operation.
+ */
+def[export] pt:st:pl3:op1(en:pl3:expr tag, pt:st:pl3:expr in) pl3:op1_new = {
+	return mem:make(st:pl3:op1{ tag, in });
+};
+
+/**
+ * Delete a unary operation.
+ *   @op2: The unary operation.
+ */
+def[export] void(pt:st:pl3:op1 op1) pl3:op1_delete = {
+	pl3:expr_delete(op1->in);
+	mem:free(op1);
+};
+
+
+/**
+ * Two-operand structure.
+ *   @tag: The tag.
+ *   @lhs, rhs: The left- and right-hand sides.
+ */
+tydef[export] en:pl3:op2 { assign, add, addeq, sub, subeq, mul, muleq, div, diveq, rem, remeq, and, andeq, or, oreq, xor, xoreq, shl, shleq, shr, shreq, land, lor, eq, ne, lt, lte, gt, gte };
+tydef[export] st:pl3:op2 {
+	en:pl3:expr tag;
+	pt:st:pl3:expr lhs, rhs;
+};
+
+/**
+ * Create a binary operation.
+ *   @tag: The tag.
+ *   @lhs: Consumed. The left-hand side.
+ *   @rhs: Consumed. The right-hand side.
+ *   &returns: The binary operation.
+ */
+def[export] pt:st:pl3:op2(en:pl3:expr tag, pt:st:pl3:expr lhs, pt:st:pl3:expr rhs) pl3:op2_new = {
+	return mem:make(st:pl3:op2{ tag, lhs, rhs });
+};
+
+/**
+ * Delete a binary operation.
+ *   @op2: The binary operation.
+ */
+def[export] void(pt:st:pl3:op2 op2) pl3:op2_delete = {
+	pl3:expr_delete(op2->lhs);
+	pl3:expr_delete(op2->rhs);
+	mem:free(op2);
+};
+
+/**
+ * Create an assignemnt operation.
+ *   @lhs: The left-hand side.
+ *   @rhs: The right-hand side.
+ *   &returns: The binary operation.
+ */
+def[export] pt:st:pl3:op2(pt:st:pl3:expr lhs, pt:st:pl3:expr rhs) pl3:op2_assign = {
+	return pl3:op2_new(ev:pl3:op2:assign, lhs, rhs);
+};
+
+/**
+ * Create an addition operation.
+ *   @lhs: The left-hand side.
+ *   @rhs: The right-hand side.
+ *   &returns: The binary operation.
+ */
+def[export] pt:st:pl3:op2(pt:st:pl3:expr lhs, pt:st:pl3:expr rhs) pl3:op2_add = {
+	return pl3:op2_new(ev:pl3:op2:add, lhs, rhs);
+};
+
+/**
+ * Create an subtraction operation.
+ *   @lhs: The left-hand side.
+ *   @rhs: The right-hand side.
+ *   &returns: The binary operation.
+ */
+def[export] pt:st:pl3:op2(pt:st:pl3:expr lhs, pt:st:pl3:expr rhs) pl3:op2_sub = {
+	return pl3:op2_new(ev:pl3:op2:sub, lhs, rhs);
+};
+
+/**
+ * Create an multiplication operation.
+ *   @lhs: The left-hand side.
+ *   @rhs: The right-hand side.
+ *   &returns: The binary operation.
+ */
+def[export] pt:st:pl3:op2(pt:st:pl3:expr lhs, pt:st:pl3:expr rhs) pl3:op2_mul = {
+	return pl3:op2_new(ev:pl3:op2:mul, lhs, rhs);
+};
+
+/**
+ * Create an division operation.
+ *   @lhs: The left-hand side.
+ *   @rhs: The right-hand side.
+ *   &returns: The binary operation.
+ */
+def[export] pt:st:pl3:op2(pt:st:pl3:expr lhs, pt:st:pl3:expr rhs) pl3:op2_div = {
+	return pl3:op2_new(ev:pl3:op2:div, lhs, rhs);
+};
+
+/**
+ * Create a remainder operation.
+ *   @lhs: The left-hand side.
+ *   @rhs: The right-hand side.
+ *   &returns: The binary operation.
+ */
+def[export] pt:st:pl3:op2(pt:st:pl3:expr lhs, pt:st:pl3:expr rhs) pl3:op2_rem = {
+	return pl3:op2_new(ev:pl3:op2:rem, lhs, rhs);
+};
+
+
+/**
+ * Determine if the tag is an assignment operation.
+ *   @tag: The tag.
+ *   &returns: True if an assignment operation.
+ */
+def[export] bool(en:pl3:op2 tag) pl3:op2_is_assign = {
+	switch(tag) {
+	case ev:pl3:op2:assign: return true;
+	case ev:pl3:op2:add: return false;
+	case ev:pl3:op2:addeq: return true;
+	case ev:pl3:op2:sub: return false;
+	case ev:pl3:op2:subeq: return true;
+	case ev:pl3:op2:mul: return false;
+	case ev:pl3:op2:muleq: return true;
+	case ev:pl3:op2:div: return false;
+	case ev:pl3:op2:diveq: return true;
+	case ev:pl3:op2:rem: return false;
+	case ev:pl3:op2:remeq: return true;
+	case ev:pl3:op2:and: return false;
+	case ev:pl3:op2:andeq: return true;
+	case ev:pl3:op2:or: return false;
+	case ev:pl3:op2:oreq: return true;
+	case ev:pl3:op2:xor: return false;
+	case ev:pl3:op2:xoreq: return true;
+	case ev:pl3:op2:shl: return false;
+	case ev:pl3:op2:shleq: return true;
+	case ev:pl3:op2:shr: return false;
+	case ev:pl3:op2:shreq: return true;
+	case ev:pl3:op2:land: return false;
+	case ev:pl3:op2:lor: return false;
+	case ev:pl3:op2:eq: return false;
+	case ev:pl3:op2:ne: return false;
+	case ev:pl3:op2:lt: return false;
+	case ev:pl3:op2:lte: return false;
+	case ev:pl3:op2:gt: return false;
+	case ev:pl3:op2:gte: return false;
+	}
+
+	unreachable();
+};
+
+/**
+ * Determine if the tag is an arithmetic operation.
+ *   @tag: The tag.
+ *   &returns: True if an arithmetic operation.
+ */
+def[export] bool(en:pl3:op2 tag) pl3:op2_is_arith = {
+	switch(tag) {
+	case ev:pl3:op2:assign: return false;
+	case ev:pl3:op2:add: return true;
+	case ev:pl3:op2:addeq: return false;
+	case ev:pl3:op2:sub: return true;
+	case ev:pl3:op2:subeq: return false;
+	case ev:pl3:op2:mul: return true;
+	case ev:pl3:op2:muleq: return false;
+	case ev:pl3:op2:div: return true;
+	case ev:pl3:op2:diveq: return false;
+	case ev:pl3:op2:rem: return true;
+	case ev:pl3:op2:remeq: return false;
+	case ev:pl3:op2:and: return true;
+	case ev:pl3:op2:andeq: return false;
+	case ev:pl3:op2:or: return true;
+	case ev:pl3:op2:oreq: return false;
+	case ev:pl3:op2:xor: return true;
+	case ev:pl3:op2:xoreq: return false;
+	case ev:pl3:op2:shl: return true;
+	case ev:pl3:op2:shleq: return false;
+	case ev:pl3:op2:shr: return true;
+	case ev:pl3:op2:shreq: return false;
+	case ev:pl3:op2:land: return false;
+	case ev:pl3:op2:lor: return false;
+	case ev:pl3:op2:eq: return false;
+	case ev:pl3:op2:ne: return false;
+	case ev:pl3:op2:lt: return false;
+	case ev:pl3:op2:lte: return false;
+	case ev:pl3:op2:gt: return false;
+	case ev:pl3:op2:gte: return false;
+	}
+
+	unreachable();
+};
+
+/**
+ * Determine if the tag is compound operator.
+ *   @tag: The tag.
+ *   &returns: True if a compound operation.
+ */
+def[export] bool(en:pl3:op2 tag) pl3:op2_is_comp = {
+	switch(tag) {
+	case ev:pl3:op2:assign: return false;
+	case ev:pl3:op2:add: return false;
+	case ev:pl3:op2:addeq: return true;
+	case ev:pl3:op2:sub: return false;
+	case ev:pl3:op2:subeq: return true;
+	case ev:pl3:op2:mul: return false;
+	case ev:pl3:op2:muleq: return true;
+	case ev:pl3:op2:div: return false;
+	case ev:pl3:op2:diveq: return true;
+	case ev:pl3:op2:rem: return false;
+	case ev:pl3:op2:remeq: return true;
+	case ev:pl3:op2:and: return false;
+	case ev:pl3:op2:andeq: return true;
+	case ev:pl3:op2:or: return false;
+	case ev:pl3:op2:oreq: return true;
+	case ev:pl3:op2:xor: return false;
+	case ev:pl3:op2:xoreq: return true;
+	case ev:pl3:op2:shl: return false;
+	case ev:pl3:op2:shleq: return true;
+	case ev:pl3:op2:shr: return false;
+	case ev:pl3:op2:shreq: return false;
+	case ev:pl3:op2:land: return false;
+	case ev:pl3:op2:lor: return false;
+	case ev:pl3:op2:eq: return false;
+	case ev:pl3:op2:ne: return false;
+	case ev:pl3:op2:lt: return false;
+	case ev:pl3:op2:lte: return false;
+	case ev:pl3:op2:gt: return false;
+	case ev:pl3:op2:gte: return false;
+	}
+
+	unreachable();
+};
+
+/**
+ * Determine if the tag is an comparison operation.
+ *   @tag: The tag.
+ *   &returns: True if an comparison operation.
+ */
+def[export] bool(en:pl3:op2 tag) pl3:op2_is_cmp = {
+	switch(tag) {
+	case ev:pl3:op2:assign: return false;
+	case ev:pl3:op2:add: return false;
+	case ev:pl3:op2:addeq: return false;
+	case ev:pl3:op2:sub: return false;
+	case ev:pl3:op2:subeq: return false;
+	case ev:pl3:op2:mul: return false;
+	case ev:pl3:op2:muleq: return false;
+	case ev:pl3:op2:div: return false;
+	case ev:pl3:op2:diveq: return false;
+	case ev:pl3:op2:rem: return false;
+	case ev:pl3:op2:remeq: return false;
+	case ev:pl3:op2:and: return false;
+	case ev:pl3:op2:andeq: return false;
+	case ev:pl3:op2:or: return false;
+	case ev:pl3:op2:oreq: return false;
+	case ev:pl3:op2:xor: return false;
+	case ev:pl3:op2:xoreq: return false;
+	case ev:pl3:op2:shl: return false;
+	case ev:pl3:op2:shleq: return false;
+	case ev:pl3:op2:shr: return false;
+	case ev:pl3:op2:shreq: return false;
+	case ev:pl3:op2:land: return false;
+	case ev:pl3:op2:lor: return false;
+	case ev:pl3:op2:eq: return true;
+	case ev:pl3:op2:ne: return true;
+	case ev:pl3:op2:lt: return true;
+	case ev:pl3:op2:lte: return true;
+	case ev:pl3:op2:gt: return true;
+	case ev:pl3:op2:gte: return true;
+	}
+
+	unreachable();
+};
+
+/**
+ * Determine if the tag is a logical operation.
+ *   @tag: The tag.
+ *   &returns: True if a logical operation.
+ */
+def[export] bool(en:pl3:op2 tag) pl3:op2_is_logic = {
+	switch(tag) {
+	case ev:pl3:op2:assign: return false;
+	case ev:pl3:op2:add: return false;
+	case ev:pl3:op2:addeq: return false;
+	case ev:pl3:op2:sub: return false;
+	case ev:pl3:op2:subeq: return false;
+	case ev:pl3:op2:mul: return false;
+	case ev:pl3:op2:muleq: return false;
+	case ev:pl3:op2:div: return false;
+	case ev:pl3:op2:diveq: return false;
+	case ev:pl3:op2:rem: return false;
+	case ev:pl3:op2:remeq: return false;
+	case ev:pl3:op2:and: return false;
+	case ev:pl3:op2:andeq: return false;
+	case ev:pl3:op2:or: return false;
+	case ev:pl3:op2:oreq: return false;
+	case ev:pl3:op2:xor: return false;
+	case ev:pl3:op2:xoreq: return false;
+	case ev:pl3:op2:shl: return false;
+	case ev:pl3:op2:shleq: return false;
+	case ev:pl3:op2:shr: return false;
+	case ev:pl3:op2:shreq: return false;
+	case ev:pl3:op2:land: return true;
+	case ev:pl3:op2:lor: return true;
+	case ev:pl3:op2:eq: return false;
+	case ev:pl3:op2:ne: return false;
+	case ev:pl3:op2:lt: return false;
+	case ev:pl3:op2:lte: return false;
+	case ev:pl3:op2:gt: return false;
+	case ev:pl3:op2:gte: return false;
+	}
+
+	unreachable();
+};
+
+
+/**
+ * Index operation.
+ *   @deref: The dereference flag.
+ *   @base, off: The base and offset.
+ */
+tydef[export] st:pl3:index {
+	bool deref;
+	pt:st:pl3:expr base, off;
+};
+
+/**
+ * Create an index operation.
+ *   @deref: The dereference flag.
+ *   @base: The base expression.
+ *   @off: The offset expression.
+ *   &returns: The index operation.
+ */
+def[export] pt:st:pl3:index(bool deref, pt:st:pl3:expr base, pt:st:pl3:expr off) pl3:index_new = {
+	return mem:make(st:pl3:index{ deref, base, off });
+};
+
+/**
+ * Delete an index operation.
+ *   @index: The index operation.
+ */
+def[export] void(pt:st:pl3:index index) pl3:index_delete = {
+	pl3:expr_delete(index->base);
+	pl3:expr_delete(index->off);
+	mem:free(index);
+};
+
+
+/**
+ * Function structure.
+ *   @sig: The function signature.
+ *   @block: The body block.
+ */
+tydef[export] st:pl3:func {
+	pt:st:pl3:sig sig;
+	st:pl3:block block;
+};
+
+/**
+ * Create a function.
+ *   @sig: Consumed. The function signature.
+ *   @block: Consumed. The block.
+ */
+def[export] pt:st:pl3:func(pt:st:pl3:sig sig, st:pl3:block block) pl3:func_new = {
+	return mem:make(st:pl3:func{ sig, block });
+};
+
+/**
+ * Delete a function.
+ *   @func: The function.
+ */
+def[export] void(pt:st:pl3:func func) pl3:func_delete = {
+	pl3:sig_delete(func->sig);
+	pl3:block_delete(func->block);
+	mem:free(func);
+};
+
+
+/**
+ * Call structure.
+ *   @deref: The derefence flag.
+ *   @func: The function.
+ *   @arg: The argument.
+ */
+tydef[export] st:pl3:call {
+	bool deref;
+	pt:st:pl3:expr func;
+	pt:st:pl3:arg arg;
+};
+
+/**
+ * Create a new call.
+ *   @deref: The dereference flag.
+ *   @func: Consumed. The function expression.
+ *   @arg: Consumed. The argument list.
+ *   &returns: The call.
+ */
+def[export] pt:st:pl3:call(bool deref, pt:st:pl3:expr func, pt:st:pl3:arg arg) pl3:call_new = {
+	return mem:make(st:pl3:call{ deref, func, arg });
+};
+
+/**
+ * Delete a call.
+ *   @call: The call.
+ */
+def[export] void(pt:st:pl3:call call) pl3:call_delete = {
+	pl3:expr_delete(call->func);
+	pl3:arg_clear(call->arg);
+	mem:free(call);
+};
+
+/**
+ * Count the number of arguments.
+ *   @call: The call.
+ *   &returns: The arugment list.
+ */
+def[export] u32(pt:st:pl3:call call) pl3:call_cnt = {
+	var u32 n = 0;
+	var pt:st:pl3:arg arg;
+
+	for(arg = call->arg; arg != null; arg = arg->next)
+		n++;
+	
+	return n;
+};
+
+
+/**
+ * Argument structure.
+ *   @expr: The expression.
+ *   @next: The next argument.
+ */
+tydef[export] st:pl3:arg {
+	pt:st:pl3:expr expr;
+	pt:st:pl3:arg next;
+};
+
+/**
+ * Create an argument.
+ *   @expr: Consumed. The expression.
+ */
+def[export] pt:st:pl3:arg(pt:st:pl3:expr expr) pl3:arg_new = {
+	return mem:make(st:pl3:arg{ expr, null });
+};
+
+/**
+ * Delete an argument.
+ *   @arg: The argument.
+ */
+def[export] void(pt:st:pl3:arg arg) pl3:arg_delete = {
+	pl3:expr_delete(arg->expr);
+	mem:free(arg);
+};
+
+/**
+ * Clear a list of arguments.
+ *   @arg: The argument list.
+ */
+def[export] void(pt:st:pl3:arg arg) pl3:arg_clear = {
+	var pt:st:pl3:arg tmp;
+
+	while(arg != null) {
+		arg = (tmp = arg)->next;
+		pl3:arg_delete(tmp);
+	}
+};
+
+
+/**
+ * Compound initializer.
+ *   @type: The type.
+ *   @list: The initializer elements.
+ */
+tydef[export] st:pl3:comp {
+	st:pl3:type type;
+	pt:st:pl3:list list;
+};
+
+/**
+ * Create a compound initailizer.
+ *   @type: The type.
+ *   @list: The initializer list.
+ *   &returns: The compound initializer.
+ */
+def[export] pt:st:pl3:comp(st:pl3:type type, pt:st:pl3:list list) pl3:comp_new = {
+	return mem:make(st:pl3:comp{ type, list });
+};
+
+/**
+ * Delete a compound initializer.
+ *   @comp: The compound initializer.
+ */
+def[export] void(pt:st:pl3:comp comp) pl3:comp_delete = {
+	pl3:type_delete(comp->type);
+	pl3:list_delete(comp->list);
+	mem:free(comp);
+};
+
+
+/**
+ * Element access structure.
+ *   @deref: The dereference flag.
+ *   @expr: The base expression.
+ *   @id: The member identifier.
+ *   @idx, off: The index and offset.
+ */
+tydef[export] st:pl3:elem {
+	bool deref;
+	pt:st:pl3:expr expr;
+	pt:char id;
+	u32 idx, off;
+};
+
+/**
+ * Create an element access.
+ *   @deref: The dereference flag.
+ *   @expr: The expression.
+ *   @id: Consumed. The member identifier.
+ *   &returns: The element access.
+ */
+def[export] pt:st:pl3:elem(bool deref, pt:st:pl3:expr expr, pt:char id) pl3:elem_new = {
+	return mem:make(st:pl3:elem{ deref, expr, id, 0, 0 });
+};
+
+/**
+ * Delete an element access.
+ *   @elem: The lement access.
+ */
+def[export] void(pt:st:pl3:elem elem) pl3:elem_delete = {
+	pl3:expr_delete(elem->expr);
+	mem:free(elem->id);
+	mem:free(elem);
+};
+
+
+/**
+ * Ternary expression structure.
+ *   @cond, ontrue, onfalse: The ternary expressions.
+ */
+tydef[export] st:pl3:tern {
+	pt:st:pl3:expr cond, ontrue, onfalse;
+};
+
+/**
+ * Create a ternary operator.
+ *   @cond: Consumed. The conditional expression.
+ *   @ontrue: Consumed. The ontrue expression.
+ *   @onfalse: Consumed. The onfalse expression.
+ *   &returns: The ternary opeator.
+ */
+def[export] pt:st:pl3:tern(pt:st:pl3:expr cond, pt:st:pl3:expr ontrue, pt:st:pl3:expr onfalse) pl3:tern_new = {
+	return mem:make(st:pl3:tern{ cond, ontrue, onfalse });
+};
+
+/**
+ * Delete a ternary operator.
+ *   @tern: The ternary.
+ */
+def[export] void(pt:st:pl3:tern tern) pl3:tern_delete = {
+	pl3:expr_delete(tern->cond);
+	pl3:expr_delete(tern->ontrue);
+	pl3:expr_delete(tern->onfalse);
+	mem:free(tern);
+};
+
+
+/**
+ * Sizeof structure.
+ *   @type: The type.
+ *   @expr: The expression.
+ */
+tydef[export] st:pl3:size {
+	st:pl3:type type;
+	pt:st:pl3:expr expr;
+};
+
+/**
+ * Create a sizeof.
+ *   @type: The type.
+ *   @expr: Optional. The expression.
+ *   &returns: The sizeof.
+ */
+def[export] pt:st:pl3:size(st:pl3:type type, pt:st:pl3:expr expr) pl3:size_new = {
+	return mem:make(st:pl3:size{ type, expr });
+};
+
+/**
+ * Delete a sizeof.
+ *   @size: The sizeof.
+ */
+def[export] void(pt:st:pl3:size size) pl3:size_delete = {
+	pl3:type_delete(size->type);
+	pl3:expr_erase(size->expr);
+	mem:free(size);
+};
+
+
+/**
+ * Offsetof structure.
+ *   @type: The type.
+ *   @id: The member identifier.
+ */
+tydef[export] st:pl3:offset {
+	st:pl3:type type;
+	pt:char id;
+	i32 val;
+};
+
+/**
+ * Create an offsetof.
+ *   @type: The type.
+ *   @id: The member identifier.
+ *   &returns: The offsetof.
+ */
+def[export] pt:st:pl3:offset(st:pl3:type type, pt:char id) pl3:offset_new = {
+	return mem:make(st:pl3:offset{ type, id, -1 });
+};
+
+/**
+ * Delete an offsetof.
+ *   @offset: The offsetof.
+ */
+def[export] void(pt:st:pl3:offset offset) pl3:offset_delete = {
+	pl3:type_delete(offset->type);
+	mem:free(offset->id);
+	mem:free(offset);
+};
+
+
+/**
+ * Getparent structure.
+ *   @expr: The expression.
+ *   @type: The type.
+ *   @id: The member identifier.
+ *   @off: The offset.
+ */
+tydef[export] st:pl3:parent {
+	pt:st:pl3:expr expr;
+	st:pl3:type type;
+	pt:char id;
+	i32 off;
+};
+
+/**
+ * Create a getparent.
+ *   @expr: The base expression.
+ *   @type: The type.
+ *   @id: The member identifier.
+ *   &returns: The offsetof.
+ */
+def[export] pt:st:pl3:parent(pt:st:pl3:expr expr, st:pl3:type type, pt:char id) pl3:parent_new = {
+	return mem:make(st:pl3:parent{ expr, type, id, -1 });
+};
+
+/**
+ * Delete a getparent.
+ *   @parent: The getparent.
+ */
+def[export] void(pt:st:pl3:parent parent) pl3:parent_delete = {
+	pl3:expr_delete(parent->expr);
+	pl3:type_delete(parent->type);
+	mem:free(parent->id);
+	mem:free(parent);
+};
+
+
+/**
+ * Array length.
+ *   @type: The type.
+ *   @expr: The expression.
+ *   @val: The length value.
+ */
+tydef[export] st:pl3:arrlen {
+	st:pl3:type type;
+	pt:st:pl3:expr expr;
+	i32 val;
+};
+
+/**
+ * Create a array length.
+ *   @type: The type.
+ *   @expr: Optional. The expression from which to derive the type.
+ *   &returns: The offsetof.
+ */
+def[export] pt:st:pl3:arrlen(st:pl3:type type, pt:st:pl3:expr expr) pl3:arrlen_new = {
+	return mem:make(st:pl3:arrlen{ type, expr, -1 });
+};
+
+/**
+ * Delete an array length.
+ *   @len: The array length.
+ */
+def[export] void(pt:st:pl3:arrlen len) pl3:arrlen_delete = {
+	pl3:type_delete(len->type);
+	pl3:expr_erase(len->expr);
+	mem:free(len);
+};
+
+
+/**
+ * Variable argument get.
+ *   @expr: The expression.
+ *   @type: The type.
+ */
+tydef[export] st:pl3:vget {
+	pt:st:pl3:expr expr;
+	st:pl3:type type;
+};
+
+/**
+ * Create a variable argument get.
+ *   @expr: The expression.
+ *   @type: The type.
+ *   &returns: The get.
+ */
+def[export] pt:st:pl3:vget(pt:st:pl3:expr expr, st:pl3:type type) pl3:vget_new = {
+	return mem:make(st:pl3:vget{ expr, type });
+};
+
+/**
+ * Delete a variable argument get.
+ *   @get: The get.
+ */
+def[export] void(pt:st:pl3:vget get) pl3:vget_delete = {
+	pl3:expr_delete(get->expr);
+	pl3:type_delete(get->type);
+	mem:free(get);
+};
