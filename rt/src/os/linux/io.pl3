@@ -84,7 +84,6 @@ def[export] st:io:file(i64 fd) io:raw_file = {
 def[export] e:str[u32](pt:void ptr, pt:void buf, u32 size) io:raw_read = {
 	var i64 ret, fd = i64{ptr};
 
-	mem:cnt++;
 	ret = os:read(fd, buf, u64{size});
 	if(ret < 0)
 		e:fmt("Read failed.");

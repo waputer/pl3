@@ -1999,8 +1999,9 @@ def[export] void(pt:pt:char args) run = {
 	{
 		mark = tm:usec();
 
-		for(iter = list; iter != null; iter = iter->next)
+		for(iter = list; iter != null; iter = iter->next) {
 			e:req(pl3:parse(iter->path, pl3:top_unit(top)));
+		}
 
 		rd = u32{tm:usec() - mark};
 		//print("parse %ums\n", rd / 1000);
@@ -2026,57 +2027,8 @@ def[export] void(pt:pt:char args) run = {
 	
 	pl3:top_delete(top);
 	list_clear(list);
-};
 
-def[export] e:str[void]() go2 = {
-	var pt:st:pl3:top top;
+	//print("tot   %ums\n", (rd + chk + gen) / 1000);
 
-	top = pl3:top_new();
-	onerr pl3:top_delete(top);
-
-	e:get(pl3:parse("foo.el", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/avl/avl.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/avl/test.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/io/accum.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/io/file.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/io/fmt.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/io/view.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/lex/ch.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/lex/parse.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/lex/rules.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/math/int.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/math/lim.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/mem/alloc.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/mem/buf.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/mem/std.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/os/linux/io.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/os/linux/linux.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/str/buf.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/str/fmt.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/str/std.pl3", pl3:top_unit(top)));
-
-	e:get(pl3:parse("../self/src/meta.el", pl3:top_unit(top)));
-
-	e:get(pl3:parse("../self/src/enum.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/expr.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/list.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/stmt.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/top.el", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/type.pl3", pl3:top_unit(top)));
-
-	e:get(pl3:parse("../self/src/check.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/elf.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/dwarf.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/llvm.pl3", pl3:top_unit(top)));
-
-	e:get(pl3:parse("../self/src/parse.pl3", pl3:top_unit(top)));
-
-	e:req(pl3:check_brief(top));
-	//e:req(pl3:check_brief(top));
-	e:req(pl3:llvm(top, "foo2.ll"));
-
-	print("mem: %d\n", mem:cnt);
-	pl3:top_delete(top);
-
-	print("mem: %d\n", mem:cnt);
+	mem:assert();
 };

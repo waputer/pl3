@@ -1,36 +1,3 @@
--include make.conf
-
-SRC = main.c
-
-CHDR = cimpl/src/common.h \
-       cimpl/src/config.h \
-       cimpl/src/defs.h \
-       cimpl/src/inc.h
-
-CSRC = cimpl/src/main.c \
-       cimpl/src/attr.c \
-       cimpl/src/builtin.c \
-       cimpl/src/check.c \
-       cimpl/src/expr.c \
-       cimpl/src/llvm.c \
-       cimpl/src/parse.c \
-       cimpl/src/scope.c \
-       cimpl/src/stmt.c \
-       cimpl/src/tag.c \
-       cimpl/src/top.c \
-       cimpl/src/type.c \
-       cimpl/src/value.c
-
-MSRC = misc/avl/avl.c \
-       misc/mdbg/mdbg.c \
-       misc/membuf/membuf.c \
-       misc/lex/lex.c \
-       misc/ifs/posix.c \
-       misc/ifs/ifs.c \
-       misc/isys/posix.c \
-       misc/isys/isys.c \
-       misc/bio/bio.c
-
 RT = rt/src/avl/avl.pl3 \
      rt/src/os/linux/linux.pl3 \
      rt/src/os/linux/io.pl3 \
@@ -61,91 +28,67 @@ SELF = self/src/check.pl3 \
        self/src/expr.pl3 \
        self/src/list.pl3 \
        self/src/llvm.pl3 \
-       self/src/meta.el \
+       self/src/meta.pl3 \
        self/src/parse.pl3 \
        self/src/stmt.pl3 \
-       self/src/top.el \
+       self/src/top.pl3 \
        self/src/type.pl3
 
-BIN = pl3-1.0.0-dev0
-CFLAGS = -O2 -fPIC -DTEST -I.
-LDFLAGS = -lgmp -lpthread
+VER     := 1.0.0-dev1
+PL3     := pl3
+BIN     := pl3-$(VER)
+CFLAGS  := -O2
+LDFLAGS :=
+LLC     := llc
+OPT     := opt
+OLVL    := -O0
 
-MOBJ = $(MSRC:.c=.o)
-MDEP = $(MSRC:.c=.d)
-MHDR = $(MSRC:.c=.h) misc/inline/inline.h misc/emech/emech.h
+all:
 
-COBJ = $(CSRC:.c=.o)
-CDEP = $(CSRC:.c=.d)
-CHDR = $(CSRC:.c=.h) cimpl/src/common.h cimpl/src/config.h cimpl/src/defs.h cimpl/src/inc.h
+-include make.conf
 
 # top level rules
 all: $(BIN)
 
-check: pl3-chk
-
-run: test
+check: pl3-check
 
 clean:
-	rm -f $(MOBJ) $(COBJ)
+	rm $(BIN)
 
-dist: $(BIN)-src.tar.xz
-
-.PHONY: all check dist clean
-
-# how to build the final binary
-$(BIN): $(COBJ) $(MOBJ)
-	gcc $(COBJ) $(MOBJ) $(LDFLAGS) -o $@
-
-# the helper libraries header
-misc.h: $(MHDR) Makefile
-	echo "#pragma once" > $@
-	tail -qn+2 $(MHDR) >> $@
-
-test: $(BIN) test/basic.pl3
-	./pl3_dev test/basic.pl3 $(RT) -o tmp.ll
-	llc -relocation-model=pic -filetype=obj tmp.ll -o tmp.o
-	gcc -O2 main.c tmp.o -o tmp
-	./tmp
-
-.PHONY: test
+dist: pl3-$(VER)-src.tar.xz
 
 # building the distribution
-$(BIN)-src.tar.xz: Makefile $(SRC) $(CSRC) $(CHDR) $(MSRC) $(MHDR) $(RT) $(SELF) LICENSE
-	rm -rf $(BIN)-src
-	mkdir $(BIN)-src
-	cp -a --parents $^ $(BIN)-src
-	tar -Jcf $@ $(BIN)-src
+pl3-$(VER)-src.tar.xz: Makefile main.c $(RT) $(SELF) LICENSE
+	rm -rf pl3-$(VER)-src
+	mkdir pl3-$(VER)-src
+	cp -a --parents $^ pl3-$(VER)-src
+	tar -Jcf $@ pl3-$(VER)-src
+	rm -rf pl3-$(VER)-src
 
-# rules for creating the checked compiler
+# main build rules
+$(BIN): pl3.o main.c
+	gcc $^ -o $@
+
+pl3.ll: $(RT) $(SELF) Makefile
+	$(PL3) $(RT) $(SELF) -o $@
+
+# rules for creating the self-built compiler
 pl3-self: pl3-self.o main.c
-	gcc -O0 $^ -o $@
+	gcc -O1 $^ -o $@
 
 pl3-self.ll: $(BIN) $(RT) $(SELF) Makefile
 	./$(BIN) $(RT) $(SELF) -o $@
 
-# rules for rechecking the compiler (compling itself, again)
-pl3-chk: pl3-chk.o main.c
-	gcc -O2 $^ -o $@
+# rules for creating the checked compiler
+pl3-check: pl3-check.o main.c
+	gcc -O1 $^ -o $@
 
-pl3-chk.ll: pl3-self $(RT) $(SELF) Makefile
+pl3-check.ll: pl3-self $(RT) $(SELF) Makefile
 	./pl3-self $(RT) $(SELF) -o $@
 
 # template rules
-%.o: %.c misc.h Makefile
-	gcc $(CFLAGS) -c $< -o $@
+%.ll.opt: %.ll
+	$(OPT) $(OLVL) $< -o $@
 
-%.o: %.ll
-	opt -O0 $< -S -o $<.opt
-	llc -O0 -relocation-model=pic -filetype=obj $<.opt -o $@
-
-
-.all: foo
-
-.run: foo
-	./foo
-
-foo: all foo.pl3 $(RT) main.c Makefile
-	./$(BIN) foo.pl3 $(RT) -o foo.ll
-	llc -O1 -relocation-model=pic -filetype=obj foo.ll -o foo.o
-	gcc $(CFLAGS) -O2 main.c foo.o -o foo
+%.o: %.ll.opt
+	$(LLC) $(OLVL) -filetype=obj -relocation-model=pic $< -o $@

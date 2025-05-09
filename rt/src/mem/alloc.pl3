@@ -49,6 +49,8 @@ def[export] void(pt:void ptr) mem:raw_free = {
  *   &returns: The memory pointer.
  */
 def[export] pt:void(u32 sz) mem:alloc = {
+	mem:cnt++;
+
 	return mem:sys_alloc(sz);
 };
 
@@ -91,6 +93,7 @@ def[export] pt:void(pt:void ptr, u32 sz) mem:realloc = {
  *   @ptr: The memory pointer.
  */
 def[export] void(pt:void ptr) mem:free = {
+	mem:cnt--;
 	return mem:sys_free(ptr);
 };
 
@@ -120,6 +123,7 @@ def[export] void() mem:assert = {
 	if(mem:cnt == 0)
 		return;
 
+/*
 	for(node = avl:root_first(&mem:root); node != null; node = avl:node_next(node)) {
 		var pt:pt:void trace = pt:void{node} + sizeof(st:avl:node);
 
@@ -140,6 +144,7 @@ def[export] void() mem:assert = {
 				print("  0x%p\n", trace[i]);
 		}
 	}
+	*/
 
 	fatal("Missing %u allocations", mem:cnt);
 };
