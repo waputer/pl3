@@ -18,7 +18,7 @@ tydef[public] st:pollfd {
 
 
 def[public,extern] i32() geterr;
-def[public,extern] i32() seterr;
+def[public,extern] void(i32) seterr;
 
 def[public,extern] void(i32) exit;
 def[public,extern] void() abort;

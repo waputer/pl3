@@ -99,6 +99,20 @@ def[export] void(pt:char dst, cpt:char src) str:copy = {
 };
 
 /**
+ * Copy a string with a max length.
+ *   @dst: The destination.
+ *   @src: The source.
+ *   @max: The maximum destination length including the null byte.
+ */
+def[export] void(pt:char dst, cpt:char src, u32 max) str:lcopy = {
+	var u32 len;
+
+	len = m:min_u32(str:len(src), max - 1);
+	mem:copy(dst, src, len);
+	dst[len] = '\0';
+};
+
+/**
  * Create a duplicate of a string.
  *   @str: The input string.
  *   &returns: The duplicated string. It must be freed with `mem:free`.
@@ -163,14 +177,14 @@ def[export] pt:char(cpt:char fmt, ...) str:fmt = {
  *   &returns: The string.
  */
 def[export] pt:char(cpt:char fmt, pt:ty:args args) str:fmtv = {
-	var st:io io;
+	var i32 desc;
 	var u32 sz = 64;
 	var pt:char str = mem:alloc(64);
 
-	io = io:mem_rdwr(&str, &sz);
-	io:fmtv(io, fmt, args);
-	io:wr_u8(io, 0);
-	io:close(io);
+	desc = io:mem_rdwr(&str, &sz);
+	io:fmtv(desc, fmt, args); /// FIXME e:ign
+	io:wr_ch(desc, '\0'); /// FIXME e:ign
+	io:close(desc);
 
 	return str;
 };

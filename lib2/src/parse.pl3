@@ -91,10 +91,10 @@ def ar[]:st:lex:map symbols = {
 	{ tok_andeq, "&="  },
 	{ tok_and,   "&&"  },
 	{ tok_or,    "||"  },
-	{ tok_shr,   ">>"  },
 	{ tok_shreq, ">>=" },
-	{ tok_shl,   "<<"  },
+	{ tok_shr,   ">>"  },
 	{ tok_shleq, "<<=" },
+	{ tok_shl,   "<<"  },
 	{ '=',       "="   },
 	{ ',',       ","   },
 	{ ';',       ";"   },
@@ -306,7 +306,7 @@ def[export] e:str[void](cpt:char path, pt:st:pl3:unit unit) pl3:parse = {
 	pl3:str_delete(ctx.path);
 };
 
-def[export] e:str[void](st:io:file file, cpt:char path, pt:st:pl3:unit unit) pl3:parse_file = {
+def[export] e:str[void](st:io file, cpt:char path, pt:st:pl3:unit unit) pl3:parse_file = {
 	var st:ctx ctx;
 
 	ctx.lex = e:get(lex:new(file, path, 256, true));
@@ -403,7 +403,7 @@ def e:str[pt:st:pl3:stmt](pt:st:ctx ctx) ctx_stmt = {
 		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
 			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
 
-		stmt = pl3:stmt_eret(e:get(ctx_expr(ctx)), meta);
+		stmt = pl3:stmt_eret(e:get(ctx_assign(ctx)), meta);
 		onerr pl3:stmt_delete(stmt);
 
 		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
@@ -427,7 +427,7 @@ def e:str[pt:st:pl3:stmt](pt:st:ctx ctx) ctx_stmt = {
 
 		if(e:get(lex:tok_try(ctx->lex, ')')) == null) {
 			for() {
-				*iter = pl3:arg_new(e:get(ctx_expr(ctx)));
+				*iter = pl3:arg_new(e:get(ctx_assign(ctx)));
 				iter = &(*iter)->next;
 
 				if(e:get(lex:tok_try(ctx->lex, ')')) != null)
@@ -766,7 +766,7 @@ def e:str[pt:st:pl3:bind](pt:st:ctx ctx, st:pl3:type type) ctx_bind = {
 			expr = pl3:expr_comp(pl3:comp_new(pl3:type_copy(type), list), meta);
 		}
 		else
-			expr = e:get(ctx_expr(ctx));
+			expr = e:get(ctx_assign(ctx));
 	}
 	else
 		expr = null;
@@ -781,7 +781,32 @@ def e:str[pt:st:pl3:bind](pt:st:ctx ctx, st:pl3:type type) ctx_bind = {
  *   &returns: The expression.
  */
 def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_expr = {
-	return ctx_assign(ctx);
+	return ctx_comma(ctx);
+};
+
+/**
+ * Parse a comma expression.
+ *   @ctx: The context.
+ *   &returns: The expression.
+ */
+def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_comma = {
+	var pt:st:pl3:expr lhs, rhs;
+
+	lhs = e:get(ctx_assign(ctx));
+
+	for() {
+		var st:pl3:meta meta;
+		var pt:st:lex:token tok;
+
+		if((tok = e:get(lex:tok_try(ctx->lex, ','))) == null)
+			return lhs;
+
+		meta = tok_meta(ctx, tok);
+		onerr pl3:meta_delete(meta);
+
+		rhs = e:get(ctx_assign(ctx));
+		lhs = pl3:expr_op2(pl3:op2_new(ev:pl3:op2:comma, lhs, rhs), meta);
+	}
 };
 
 /**
@@ -977,7 +1002,7 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_post = {
 
 			if(e:get(lex:tok_try(ctx->lex, ')')) == null) {
 				for() {
-					*iter = pl3:arg_new(e:get(ctx_expr(ctx)));
+					*iter = pl3:arg_new(e:get(ctx_assign(ctx)));
 					iter = &(*iter)->next;
 
 					if(e:get(lex:tok_try(ctx->lex, ')')) != null)
@@ -1000,7 +1025,7 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_post = {
 
 			if(e:get(lex:tok_try(ctx->lex, ')')) == null) {
 				for() {
-					*iter = pl3:arg_new(e:get(ctx_expr(ctx)));
+					*iter = pl3:arg_new(e:get(ctx_assign(ctx)));
 					iter = &(*iter)->next;
 
 					if(e:get(lex:tok_try(ctx->lex, ')')) != null)
@@ -1040,6 +1065,8 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_post = {
 };
 
 
+def[extern,export] fp64(cpt:char str) str_get_fp64; //FIXME
+
 /**
  * Parse a terminal expression.
  *   @ctx: The context.
@@ -1072,7 +1099,7 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_term = {
 	}
 	else if((tok = e:get(lex:tok_try(ctx->lex, tok_quote1))) != null) {
 		if(tok->sz != 1)
-			e:fmt("%C: Invalid character %s.", pl3:meta_call(&meta), tok->str);
+			e:fmt("%C: Invalid character '%s'.", pl3:meta_call(&meta), tok->str);
 
 		return pl3:expr_lit(pl3:lit_int(m:int_u32(u32{*cpt:u8{tok->data}})), meta);
 	}
@@ -1101,7 +1128,7 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_term = {
 		if(e:get(ctx_istype(ctx)))
 			size = pl3:size_new(e:get(ctx_type(ctx)), null);
 		else
-			size = pl3:size_new(pl3:type_unk, e:get(ctx_expr(ctx)));
+			size = pl3:size_new(pl3:type_unk, e:get(ctx_assign(ctx)));
 
 		onerr pl3:size_delete(size);
 
@@ -1119,7 +1146,7 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_term = {
 		if(e:get(ctx_istype(ctx)))
 			alen = pl3:arrlen_new(e:get(ctx_type(ctx)), null);
 		else
-			alen = pl3:arrlen_new(pl3:type_unk, e:get(ctx_expr(ctx)));
+			alen = pl3:arrlen_new(pl3:type_unk, e:get(ctx_assign(ctx)));
 
 		onerr pl3:arrlen_delete(alen);
 
@@ -1155,7 +1182,7 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_term = {
 		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
 			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
 
-		expr = e:get(ctx_expr(ctx));
+		expr = e:get(ctx_assign(ctx));
 		onerr pl3:expr_delete(expr);
 
 		if(e:get(lex:tok_try(ctx->lex, ',')) == null)
@@ -1179,7 +1206,7 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_term = {
 		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
 			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
 
-		expr = e:get(ctx_expr(ctx));
+		expr = e:get(ctx_assign(ctx));
 		onerr pl3:expr_delete(expr);
 
 		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
@@ -1203,7 +1230,7 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_term = {
 		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
 			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
 
-		expr = e:get(ctx_expr(ctx));
+		expr = e:get(ctx_assign(ctx));
 		onerr pl3:expr_delete(expr);
 
 		if(e:get(lex:tok_try(ctx->lex, ',')) == null)
@@ -1223,7 +1250,7 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_term = {
 		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
 			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
 
-		expr = e:get(ctx_expr(ctx));
+		expr = e:get(ctx_assign(ctx));
 		onerr pl3:expr_delete(expr);
 
 		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
@@ -1237,7 +1264,7 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_term = {
 		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
 			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
 
-		expr = e:get(ctx_expr(ctx));
+		expr = e:get(ctx_assign(ctx));
 		onerr pl3:expr_delete(expr);
 
 		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
@@ -1251,7 +1278,7 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_term = {
 		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
 			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
 
-		expr = e:get(ctx_expr(ctx));
+		expr = e:get(ctx_assign(ctx));
 		onerr pl3:expr_delete(expr);
 
 		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
@@ -1265,7 +1292,7 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_term = {
 		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
 			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
 
-		expr = e:get(ctx_expr(ctx));
+		expr = e:get(ctx_assign(ctx));
 		onerr pl3:expr_delete(expr);
 
 		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
@@ -1298,7 +1325,7 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_term = {
 		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
 			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
 
-		expr = e:get(ctx_expr(ctx));
+		expr = e:get(ctx_assign(ctx));
 		onerr pl3:expr_delete(expr);
 
 		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
@@ -1373,7 +1400,7 @@ def e:str[pt:st:pl3:list](pt:st:ctx ctx) ctx_list = {
 		if(e:get(lex:tok_peek(ctx->lex))->id == '{')
 			*iter = pl3:init_nest(e:get(ctx_list(ctx)), id, meta);
 		else
-			*iter = pl3:init_expr(e:get(ctx_expr(ctx)), id, meta);
+			*iter = pl3:init_expr(e:get(ctx_assign(ctx)), id, meta);
 
 		meta = pl3:meta_blank();
 		if(e:get(lex:tok_peek(ctx->lex))->id == '}')
@@ -2005,7 +2032,8 @@ def e:str[void]() build = {
 	 */
 
 	//e:get(pl3:parse("baz.pl3", pl3:top_unit(top)));
-	e:get(pl3:check_brief(top));
+	//e:get(pl3:check_brief(top));
+	e:get(pl3:check2(top));
 	e:get(pl3:llvm(top, "foo.ll"));
 
 	pl3:top_delete(top);

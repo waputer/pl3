@@ -725,7 +725,7 @@ def void(pt:st:m:int int, u32 val, u32 off) int_add = {
  *   @int: The big integer.
  *   &returns: The callback.
  */
-def[export] st:io:call(pt:st:m:int int) m:int_hex = {
+def[export] st:io1:call(pt:st:m:int int) m:int_hex = {
 	def e:str[void](st:io file, pt:void arg) func = {
 		var i32 i, k;
 		var u8 dig;
@@ -739,15 +739,15 @@ def[export] st:io:call(pt:st:m:int int) m:int_hex = {
 					continue;
 
 				skip = false;
-				io:wr_ch(file, (dig >= 10) ? ('A' + dig - 10) : ('0' + dig));
+				io1:wr_ch(file, (dig >= 10) ? ('A' + dig - 10) : ('0' + dig));
 			}
 		}
 
 		if(skip)
-			io:wr_ch(file, '0');
+			io1:wr_ch(file, '0');
 	};
 
-	return st:io:call{ &func, int };
+	return st:io1:call{ &func, int };
 };
 
 /**
@@ -755,7 +755,7 @@ def[export] st:io:call(pt:st:m:int int) m:int_hex = {
  *   @int: The big integer.
  *   &returns: The callback.
  */
-def[export] st:io:call(pt:st:m:int int) m:int_dec = {
+def[export] st:io1:call(pt:st:m:int int) m:int_dec = {
 	def e:str[void](st:io file, pt:void arg) func = {
 		var u32 i, dig;
 		var pt:char buf;
@@ -765,7 +765,7 @@ def[export] st:io:call(pt:st:m:int int) m:int_dec = {
 		i = 10 * int->len + 1;
 
 		if(int->neg)
-			io:wr_ch(file, '-');
+			io1:wr_ch(file, '-');
 
 		buf = mem:alloc(i);
 		i--; // FIXME: predecrement
@@ -777,12 +777,12 @@ def[export] st:io:call(pt:st:m:int int) m:int_dec = {
 			buf[i] = char{dig} + '0';
 		}
 
-		io:wr_buf(file, buf + i, str:len(buf + i));
+		io1:wr_buf(file, buf + i, str:len(buf + i));
 		mem:free(buf);
 		m:int_delete(int);
 	};
 
-	return st:io:call{ &func, int };
+	return st:io1:call{ &func, int };
 };
 
 def[export] bool(cpt:st:m:int int) m:int_is_zero = {

@@ -671,7 +671,7 @@ def[export] u32(st:pl3:type type, cpt:st:pl3:arch arch) pl3:type_size = {
  *   &returns: The callback.
  */
 def[export] st:io:call(cpt:st:pl3:type type) pl3:type_call = {
-	def e:str[void](st:io:file file, cpt:st:pl3:type type) func = {
+	def e:str[void](st:io file, cpt:st:pl3:type type) func = {
 		switch(type->tag) {
 		case ev:pl3:type:unk: e:get(io:fmt(file, "unk")); break;
 		case ev:pl3:type:void: e:get(io:fmt(file, "void")); break;
@@ -1605,7 +1605,7 @@ def[export] e:str[pt:st:pl3:stmt](pt:st:pl3:rd rd) pl3:stmt_read = {
 		var st:pl3:meta meta;
 
 		decl = e:get(pl3:tydecl_read(rd));
-		onerr pl3:decl_delete(decl);
+		onerr pl3:tydecl_delete(decl);
 
 		meta = e:get(pl3:meta_read(rd));
 		onerr pl3:meta_delete(meta);
@@ -1620,6 +1620,7 @@ def[export] e:str[pt:st:pl3:stmt](pt:st:pl3:rd rd) pl3:stmt_read = {
 	return null;
 };
 
+//FIXME location and all the others
 /**
  * Load AST data from the top-level.
  *   @top: The top-level.

@@ -105,6 +105,82 @@ def[export] e:str[u32](cpt:char str, u8 base) str:get_u32 = {
 };
 
 /**
+ * Get an signed, 64-bit integer.
+ *   @str: The string.
+ *   @base: The base. Set to zero to autodetect.
+ *   &returns: The value.
+ */
+def[export] e:str[i64](cpt:char str, u8 base) str:get_i64 = {
+	var u64 val;
+	var bool neg = false;
+
+	if(*str == '0') {
+		neg = true;
+		str++;
+	}
+
+	val = e:get(str:get_u64(str, base));
+	if(neg) {
+		if(val >= u64{-m:i64_min})
+			e:fmt("Value too small.");
+
+		return -i64{val};
+	}
+	else {
+		if(val >= u64{m:i64_max})
+			e:fmt("Value too large.");
+
+		return i64{val};
+	}
+};
+
+/**
+ * Get an unsigned, 64-bit integer.
+ *   @str: The string.
+ *   @base: The base. Set to zero to autodetect.
+ *   &returns: The value.
+ */
+def[export] e:str[u64](cpt:char str, u8 base) str:get_u64 = {
+	var i8 dig;
+	var u64 ret = 0;
+	var cpt:char orig = str;
+
+	if(base > 36)
+		e:fmt("Base too large.");
+
+	if((str[0] == '0') && (str[1] == '\0'))
+		return 0;
+
+	if(base == 0) {
+		if((str[0] == '0') && (str[1] == 'x')) {
+			base = 16;
+			str += 2;
+		}
+		else if((str[0] == '0') && (str[1] == 'b')) {
+			base = 2;
+			str += 2;
+		}
+		else if(str[0] == '0') {
+			base = 8;
+			str += 1;
+		}
+		else
+			base = 10;
+	}
+	
+	ret = 0;
+	while(*str != '\0') {
+		dig = getdig(*str++);
+		if((dig < 0) || (dig >= i8{base}))
+			e:fmt("Invalid number '%s'.", orig);
+
+		ret = u64{base} * ret + u64{dig};
+	}
+
+	return ret;
+};
+
+/**
  * Convert a single digit.
  *   @ch: The character.
  *   &returns: The digit, or negative if out of range.

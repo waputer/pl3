@@ -359,20 +359,20 @@ def[export] e:str[pt:st:pl3:lit](pt:st:pl3:rd rd) pl3:lit_read = {
 	var en:pl3:lit tag;
 	var un:pl3:lit data;
 
-	tag = en:pl3:lit{e:get(io1:rd_u8(rd->file))};
+	tag = en:pl3:lit{e:get(io:rd_u8(rd->file))};
 
 	switch(tag) {
 	case ev:pl3:lit:none: break;
 	case ev:pl3:lit:null: break;
-	case ev:pl3:lit:bool: data.boolv = (e:get(io1:rd_u8(rd->file)) > 0); break;
-	case ev:pl3:lit:u8v: data.u8v = e:get(io1:rd_u8(rd->file)); break;
-	case ev:pl3:lit:i8v: data.i8v = e:get(io1:rd_i8(rd->file)); break;
-	case ev:pl3:lit:u16v: data.u16v = e:get(io1:rd_u16(rd->file)); break;
-	case ev:pl3:lit:i16v: data.i16v = e:get(io1:rd_i16(rd->file)); break;
-	case ev:pl3:lit:u32v: data.u32v = e:get(io1:rd_u32(rd->file)); break;
-	case ev:pl3:lit:i32v: data.i32v = e:get(io1:rd_i32(rd->file)); break;
-	case ev:pl3:lit:u64v: data.u64v = e:get(io1:rd_u64(rd->file)); break;
-	case ev:pl3:lit:i64v: data.i64v = e:get(io1:rd_i64(rd->file)); break;
+	case ev:pl3:lit:bool: data.boolv = (e:get(io:rd_u8(rd->file)) > 0); break;
+	case ev:pl3:lit:u8v: data.u8v = e:get(io:rd_u8(rd->file)); break;
+	case ev:pl3:lit:i8v: data.i8v = e:get(io:rd_i8(rd->file)); break;
+	case ev:pl3:lit:u16v: data.u16v = e:get(io:rd_u16(rd->file)); break;
+	case ev:pl3:lit:i16v: data.i16v = e:get(io:rd_i16(rd->file)); break;
+	case ev:pl3:lit:u32v: data.u32v = e:get(io:rd_u32(rd->file)); break;
+	case ev:pl3:lit:i32v: data.i32v = e:get(io:rd_i32(rd->file)); break;
+	case ev:pl3:lit:u64v: data.u64v = e:get(io:rd_u64(rd->file)); break;
+	case ev:pl3:lit:i64v: data.i64v = e:get(io:rd_i64(rd->file)); break;
 	case ev:pl3:lit:int:
 	case ev:pl3:lit:fp32:
 	case ev:pl3:lit:fp64:
@@ -390,20 +390,20 @@ def[export] e:str[pt:st:pl3:lit](pt:st:pl3:rd rd) pl3:lit_read = {
  *   @wr: The writer.
  */
 def[export] e:str[void](pt:st:pl3:lit lit, pt:st:pl3:wr wr) pl3:lit_write = {
-	e:get(io1:wr_u8(wr->file, u8{lit->tag}));
+	e:get(io:wr_u8(wr->file, u8{lit->tag}));
 
 	switch(lit->tag) {
 	case ev:pl3:lit:none: break;
 	case ev:pl3:lit:null: break;
-	case ev:pl3:lit:bool: e:get(io1:wr_u8(wr->file, lit->data.boolv ? 1 : 0)); break;
-	case ev:pl3:lit:u8v: e:get(io1:wr_u8(wr->file, lit->data.u8v)); break;
-	case ev:pl3:lit:i8v: e:get(io1:wr_i8(wr->file, lit->data.i8v)); break;
-	case ev:pl3:lit:u16v: e:get(io1:wr_u16(wr->file, lit->data.u16v)); break;
-	case ev:pl3:lit:i16v: e:get(io1:wr_i16(wr->file, lit->data.i16v)); break;
-	case ev:pl3:lit:u32v: e:get(io1:wr_u32(wr->file, lit->data.u32v)); break;
-	case ev:pl3:lit:i32v: e:get(io1:wr_i32(wr->file, lit->data.i32v)); break;
-	case ev:pl3:lit:u64v: e:get(io1:wr_u64(wr->file, lit->data.u64v)); break;
-	case ev:pl3:lit:i64v: e:get(io1:wr_i64(wr->file, lit->data.i64v)); break;
+	case ev:pl3:lit:bool: e:get(io:wr_u8(wr->file, lit->data.boolv ? 1 : 0)); break;
+	case ev:pl3:lit:u8v: e:get(io:wr_u8(wr->file, lit->data.u8v)); break;
+	case ev:pl3:lit:i8v: e:get(io:wr_i8(wr->file, lit->data.i8v)); break;
+	case ev:pl3:lit:u16v: e:get(io:wr_u16(wr->file, lit->data.u16v)); break;
+	case ev:pl3:lit:i16v: e:get(io:wr_i16(wr->file, lit->data.i16v)); break;
+	case ev:pl3:lit:u32v: e:get(io:wr_u32(wr->file, lit->data.u32v)); break;
+	case ev:pl3:lit:i32v: e:get(io:wr_i32(wr->file, lit->data.i32v)); break;
+	case ev:pl3:lit:u64v: e:get(io:wr_u64(wr->file, lit->data.u64v)); break;
+	case ev:pl3:lit:i64v: e:get(io:wr_i64(wr->file, lit->data.i64v)); break;
 	case ev:pl3:lit:int:
 	case ev:pl3:lit:fp32:
 	case ev:pl3:lit:fp64:

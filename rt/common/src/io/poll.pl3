@@ -1,21 +1,24 @@
 /**
  * Poll events.
- *   @rd: Read.
- *   @wr: Write.
- *   @err: Error.
  */
-def[export] u16 io:poll:rd  = 0x0001,
-                io:poll:wr  = 0x0002,
-                io:poll:err = 0x0004;
+def[export] u16 io:poll:rd   = 0x0001, /// Read
+                io:poll:wr   = 0x0002, /// Write
+                io:poll:err  = 0x0004, /// Error
+		io:poll:rdy  = 0x0008, /// Ready or initialized
+		io:poll:term = 0x0010, /// Terminated or closed
+		io:poll:idle = 0x0020, /// Idle
+		io:poll:wake = 0x0040; /// Timer wakeup
 
 /**
  * Polling structure.
- *   @kd: The kernel descriptor.
- *   @req, got: The requesed and gotten events.
  */
 tydef[export] st:io:poll {
-	i32 kd;
-	u16 req, got;
+	i32 desc;     /// Descriptor
+	u32 req, got; /// Requested and gotten events
+};
+tydef[export] st:io1:poll {
+	i32 kd;       /// Descriptor
+	u16 req, got; /// Requested and gotten events
 };
 
 
@@ -26,22 +29,127 @@ tydef[export] st:io:poll {
  *   @to: The timeout in icroseconds.
  *   &returns: The number of active descriptors.
  */
-def[export] e:str[u32](pt:st:io:poll set, u32 cnt, i64 to) io:poll = {
+def[export] e:str[u32](pt:st:io1:poll set, u32 cnt, i64 to) io1:poll = {
 	return os:poll(set, cnt, to);
 };
 
 /**
  * Poll a single file descriptor.
- *   @kd: The kernel descriptor.
+ *   @desc: The descriptor.
  *   @req: The requested events.
- *   @to: The timeout in icroseconds.
+ *   @to: The timeout in microseconds.
  *   &returns: The received events or zero if timeout.
  */
-def[export] e:str[u16](i32 kd, u16 req, i64 to) io:poll1 = {
-	var st:io:poll poll = { kd, req, 0 };
+def[export] e:str[u16](i32 desc, u16 req, i64 to) io1:poll1 = {
+	var st:io1:poll poll = { desc, req, 0 };
 
-	if(e:get(io:poll(&poll, 1, to)) == 0)
+	if(e:get(io1:poll(&poll, 1, to)) == 0)
 		return 0;
 	
 	return poll.got;
 };
+
+
+/**
+ * Poll a set of descriptors.
+ *   @set: The polling set.
+ *   @cnt: The number in the polling set.
+ *   @to: The timeout in microseconds, zero to wakeup immediately, negative
+ *     for wait forever.
+ *   &returns: The number of woken descriptors.
+ */
+def[export] e:str[u32](pt:st:io:poll set, u32 cnt, i64 to) io:poll = {
+	def u32(i32 desc, i32 orig, u32 off, pt:st:io:poll poll, pt:st:io:proc proc, pt:i32 link, pt:i64 to) recurse = {
+		var u32 i, k, n;
+
+		if(!io:desc_user(desc))
+			return 0;
+
+		n = io2:desc_poll(desc, poll + off, proc + off, -1, to);
+		k = n;
+		for(i = 0; i < n; i++) {
+			link[off + i] = orig;
+			k += recurse(poll[off + i].desc, i32{off + i}, off + k, poll, proc, link, to);
+		}
+
+		return k;
+	};
+
+	var bool exp;
+	var u32 i, n, ret;
+	var i64 wake;
+	var pt:st:io:poll poll;
+	var pt:st:io:proc proc;
+	var pt:i32 link;
+
+	wake = (to >= 0) ? (tm:usec() + to) : -1;
+
+	for(;;) {
+		n = cnt;
+		for(i = 0; i < cnt; i++)
+			n += io:desc_cnt(set[i].desc);
+
+		poll = mem:alloc(n * sizeof(st:io:poll));
+		proc = mem:alloc(n * sizeof(st:io:proc));
+		link = mem:alloc(n * sizeof(u32));
+		onerr mem:free(poll);
+		onerr mem:free(proc);
+		onerr mem:free(link);
+
+		to = m:i64_max;
+
+		n = cnt;
+		for(i = 0; i < cnt; i++) {
+			poll[i] = st:io:poll{ set[i].desc, set[i].req, 0 };
+			link[i] = -1;
+			n += recurse(set[i].desc, i32{i}, n, poll, proc, link, &to);
+		}
+
+		to = i64{m:min_u64(u64{wake}, u64{to})};
+		to = (to >= 0) ? m:max_i64(to - tm:usec(), 0) : -1;
+		ret = e:get(os:poll2(poll, n, to));
+
+		for(i = (n - 1); i != -1; i--) {
+			poll[i].got |= io:mask(poll[i].desc) & poll[i].req; 
+			if(io:expired(poll[i].desc))
+				poll[i].got |= io:evt:wake & poll[i].req;
+
+			if(poll[i].got == 0)
+				continue;
+
+			if(link[i] >= 0)
+				poll[link[i]].got |= e:get(proc[i].func->(poll[i].desc, poll[i].got, proc[i].arg)) & poll[link[i]].req;
+		}
+
+		ret = 0;
+		for(i = 0; i < cnt; i++) {
+			set[i] = poll[i];
+			if(set[i].got != 0)
+				ret++;
+		}
+
+		mem:free(poll);
+		mem:free(proc);
+		mem:free(link);
+
+		if((ret > 0) || ((wake >= 0) && (tm:usec() > wake)))
+			return ret;
+	}
+};
+
+/**
+ * Poll a single descriptor.
+ *   @desc: The descriptor.
+ *   @req: The requested events.
+ *   @to: The timeout in microseconds, zero to wakeup immediately, negative
+ *     for wait forever.
+ *   &returns: The received events.
+ */
+def[export] e:str[u32](i32 desc, u32 req, i64 to) io:poll1 = {
+	var st:io:poll set = { desc, req, 0 };
+
+	e:get(io:poll(&set, 1, to));
+
+	return set.got;
+};
+

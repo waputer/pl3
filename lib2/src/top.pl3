@@ -57,7 +57,7 @@ def[export] pt:st:pl3:unit(pt:st:pl3:top top) pl3:top_unit = {
  *   @top: The top-level.
  *   @file: The output file.
  */
-def[export] e:str[void](pt:st:pl3:top top, st:io:file file) pl3:top_save = {
+def[export] e:str[void](pt:st:pl3:top top, st:io file) pl3:top_save = {
 	var pt:st:pl3:unit unit;
 
 	for(unit = top->unit; unit != null; unit = unit->next)
@@ -70,5 +70,5 @@ def[export] e:str[void](pt:st:pl3:top top, st:io:file file) pl3:top_save = {
  *   @top: The code unit.
  *   @file: The output file.
  */
-def[export] e:str[void](pt:st:pl3:unit unit, st:io:file file) pl3:unit_save = {
+def[export] e:str[void](pt:st:pl3:unit unit, st:io file) pl3:unit_save = {
 };

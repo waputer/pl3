@@ -1,4 +1,3 @@
-
 tydef[export] ty:pthread_t = u64;
 def[export,extern] i32(pt:ty:pthread_t, cpt:void, pt:ty:mt:thread:func, pt:void) pthread_create;
 def[export,extern] i32(ty:pthread_t, pt:pt:void) pthread_join;

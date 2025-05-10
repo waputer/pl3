@@ -12,7 +12,7 @@ def[export] void(pt:void dst, u32 sz) mem:zero = {
 };
 
 /**
- * Copy nono-verlapping buffeers.
+ * Copy non-overlapping buffers.
  *   @dst: The destination.
  *   @src: The source.
  *   @sz: The size in bytes.
@@ -31,6 +31,27 @@ def[export] void(pt:void dst, cpt:void src, u32 sz) mem:copy = {
 			dst8[i] = src8[i];
 	}
 };
+
+/**
+ * Copy memory, even if overlapping.
+ *   @dst: The destination.
+ *   @src: The source.
+ *   @sz: The size.
+ */
+def[export] void(pt:void dst, pt:void src, u32 sz) mem:move = {
+	var u32 i;
+
+	if(dst < src) {
+		for(i = 0; i < sz; i++)
+			pt:u8{dst}[i] = pt:u8{src}[i];
+	}
+	else {
+		for(i = sz - 1; i != -1; i--)
+			pt:u8{dst}[i] = pt:u8{src}[i];
+	}
+};
+
+
 
 
 /**
@@ -104,4 +125,168 @@ def[export] i8(cpt:void lhs, cpt:void rhs, u32 sz) mem:cmp = {
 	}
 
 	return 0;
+};
+
+
+/**
+ * Store unaligned memory.
+ *   @ptr: The source buffer.
+ *   @off: The offset.
+ *   @src: The destination buffer.
+ *   @sz: The store size.
+ */
+def[export] void(pt:void ptr, u32 off, cpt:void src, u32 sz) mem:st_buf = {
+	mem:copy(ptr + off, src, sz);
+};
+
+/**
+ * Store a signed 8-bit value.
+ *   @ptr; The pointer.
+ *   @off: The offset.
+ */
+def[export] void(pt:void ptr, u32 off, i8 val) mem:st_i8 = {
+	mem:st_buf(ptr, off, &val, sizeof(val));
+};
+
+/**
+ * Store a signed 16-bit value.
+ *   @ptr; The pointer.
+ *   @off: The offset.
+ */
+def[export] void(pt:void ptr, u32 off, i16 val) mem:st_i16 = {
+	mem:st_buf(ptr, off, &val, sizeof(val));
+};
+
+/**
+ * Store a signed 32-bit value.
+ *   @ptr; The pointer.
+ *   @off: The offset.
+ */
+def[export] void(pt:void ptr, u32 off, i32 val) mem:st_i32 = {
+	mem:st_buf(ptr, off, &val, sizeof(val));
+};
+
+/**
+ * Store a signed 64-bit value.
+ *   @ptr; The pointer.
+ *   @off: The offset.
+ */
+def[export] void(pt:void ptr, u32 off, i64 val) mem:st_i64 = {
+	mem:st_buf(ptr, off, &val, sizeof(val));
+};
+
+
+/**
+ * Load unaligned memory.
+ *   @ptr: The source buffer.
+ *   @off: The offset.
+ *   @dst: The destination buffer.
+ *   @sz: The load size.
+ */
+def[export] void(cpt:void ptr, u32 off, pt:void dst, u32 sz) mem:ld_buf = {
+	mem:copy(dst, ptr + off, sz);
+};
+
+/**
+ * Load an unsigned 8-bit value.
+ *   @ptr; The pointer.
+ *   @off: The offset.
+ */
+def[export] u8(cpt:void ptr, u32 off) mem:ld_u8 = {
+	var u8 val;
+
+	mem:ld_buf(ptr, off, &val, sizeof(val));
+
+	return val;
+};
+
+/**
+ * Load a signed 8-bit value.
+ *   @ptr; The pointer.
+ *   @off: The offset.
+ */
+def[export] i8(cpt:void ptr, u32 off) mem:ld_i8 = {
+	var i8 val;
+
+	mem:ld_buf(ptr, off, &val, sizeof(val));
+
+	return val;
+};
+
+/**
+ * Load an unsigned 16-bit value.
+ *   @ptr; The pointer.
+ *   @off: The offset.
+ */
+def[export] u16(cpt:void ptr, u32 off) mem:ld_u16 = {
+	var u16 val;
+
+	mem:ld_buf(ptr, off, &val, sizeof(val));
+
+	return val;
+};
+
+/**
+ * Load a signed 16-bit value.
+ *   @ptr; The pointer.
+ *   @off: The offset.
+ */
+def[export] i16(cpt:void ptr, u32 off) mem:ld_i16 = {
+	var i16 val;
+
+	mem:ld_buf(ptr, off, &val, sizeof(val));
+
+	return val;
+};
+
+/**
+ * Load an unsigned 32-bit value.
+ *   @ptr; The pointer.
+ *   @off: The offset.
+ */
+def[export] u32(cpt:void ptr, u32 off) mem:ld_u32 = {
+	var u32 val;
+
+	mem:ld_buf(ptr, off, &val, sizeof(val));
+
+	return val;
+};
+
+/**
+ * Load a signed 32-bit value.
+ *   @ptr; The pointer.
+ *   @off: The offset.
+ */
+def[export] i32(cpt:void ptr, u32 off) mem:ld_i32 = {
+	var i32 val;
+
+	mem:ld_buf(ptr, off, &val, sizeof(val));
+
+	return val;
+};
+
+/**
+ * Load an unsigned 64-bit value.
+ *   @ptr; The pointer.
+ *   @off: The offset.
+ */
+def[export] u64(cpt:void ptr, u32 off) mem:ld_u64 = {
+	var u64 val;
+
+	mem:ld_buf(ptr, off, &val, sizeof(val));
+
+	return val;
+};
+
+/**
+ * Load a signed 32-bit value.
+ *   @ptr; The pointer.
+ *   @off: The offset.
+ */
+def[export] i64(cpt:void ptr, u32 off) mem:ld_i64 = {
+	var i64 val;
+
+	mem:ld_buf(ptr, off, &val, sizeof(val));
+
+	return val;
 };

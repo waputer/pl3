@@ -4,6 +4,13 @@
  */
 var[export] u32 mem:cnt = 0;
 
+var ty:mt:once once = mt:once:init;
+var ty:mt:mutex lock;
+
+def void() fn_once = {
+	mt:mutex_init(&lock, null);
+};
+
 
 /**
  * Allocate memory.
@@ -11,7 +18,11 @@ var[export] u32 mem:cnt = 0;
  *   &returns: The memory pointer.
  */
 def[export] pt:void(u32 sz) mem:alloc = {
+	mt:once(&once, &fn_once);
+
+	mt:mutex_lock(&lock);
 	mem:cnt++;
+	mt:mutex_unlock(&lock);
 
 	return os:alloc(sz);
 };
@@ -60,7 +71,12 @@ def[export] pt:void(pt:void ptr, u32 sz) mem:realloc = {
  *   @ptr: The memory pointer.
  */
 def[export] void(pt:void ptr) mem:free = {
+	mt:once(&once, &fn_once);
+
+	mt:mutex_lock(&lock);
 	mem:cnt--;
+	mt:mutex_unlock(&lock);
+
 	os:free(ptr);
 };
 

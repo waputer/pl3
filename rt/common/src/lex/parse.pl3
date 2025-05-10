@@ -3,7 +3,7 @@ def[export] e:str[i16](st:io file) io:rd_byte0 = {
 	var u8 byte;
 	var u32 rd;
 
-	rd = e:get(io:read(file, &byte, 1));
+	rd = e:get(io1:read(file, &byte, 1));
 	return (rd == 0) ? -1 : i16{u16{byte}};
 };
 
@@ -140,8 +140,8 @@ def[export] e:str[pt:st:lex:parse](st:io file, cpt:char path, u32 init, bool tri
 def[export] e:str[pt:st:lex:parse](cpt:char path, u32 init, bool trim) lex:open = {
 	var st:io file;
 
-	file = e:get(io:open(path, io:mode:read));
-	onerr io:close(file);
+	file = e:get(io1:open(path, io:mode:read));
+	onerr io1:close(file);
 
 	return lex:new(file, path, init, trim);
 };
@@ -174,7 +174,7 @@ def[export] void(pt:st:lex:parse parse) lex:delete = {
  *   @parse: The parser.
  */
 def[export] void(pt:st:lex:parse parse) lex:close = {
-	io:close(parse->file);
+	io1:close(parse->file);
 	lex:delete(parse);
 };
 
@@ -266,21 +266,21 @@ def[export] e:str[i16](pt:st:lex:parse parse) lex:ch_pop = {
  *   &returns: The callback.
  */
 def[export] st:io:call(pt:st:lex:parse parse) lex:loc = {
-	def e:str[void](st:io file, pt:void arg) func = {
+	def e:str[void](i32 desc, pt:void arg) func = {
 		var pt:st:lex:parse parse = arg;
 
 		if((parse->tok == null) || (parse->tok->next == null))
-			io:fmt(file, "%s:%u:%u", parse->path, parse->lin + 1, parse->col + 1);
+			io:fmt(desc, "%s:%u:%u", parse->path, parse->lin + 1, parse->col + 1);
 		else
-			io:fmt(file, "%s:%u:%u", parse->tok->next->file, parse->tok->next->lin + 1, parse->tok->next->col + 1);
+			io:fmt(desc, "%s:%u:%u", parse->tok->next->file, parse->tok->next->lin + 1, parse->tok->next->col + 1);
 	};
 
 	return st:io:call{ &func, parse };
 };
 
-def[export] st:io:call(pt:st:lex:token tok) lex:tok_loc = {
-	def e:str[void](st:io file, cpt:st:lex:token tok) func = {
-		io:fmt(file, "%s:%u:%u", tok->file, tok->lin + 1, tok->col + 1);
+def[export] st:io1:call(pt:st:lex:token tok) lex:tok_loc = {
+	def e:str[void](i32 desc, cpt:st:lex:token tok) func = {
+		io:fmt(desc, "%s:%u:%u", tok->file, tok->lin + 1, tok->col + 1);
 	};
 
 	return st:io:call{ &func, tok};

@@ -1,14 +1,351 @@
 /**
  * Write formatted output to an I/O.
+ *   @desc: The I/O descriptor.
+ *   @fmt: The format string.
+ *   @...: The format arguments.
+ *   &returns: The number of bytes written.
+ */
+def[export] e:str[u32](i32 desc, cpt:char fmt, ...) io:fmt = {
+	var ty:args args = args:init();
+
+	return io:fmtv(desc, fmt, &args);
+};
+
+/**
+ * Write formatted output to an I/O.
+ *   @desc: The I/O descriptor.
+ *   @fmt: The format string.
+ *   @args: The format arguments.
+ *   &returns: The number of bytes written.
+ */
+def[export] e:str[u32](i32 desc, cpt:char fmt, pt:ty:args args) io:fmtv = {
+	var u32 wr = 0;
+
+	while(*fmt != '\0') {
+		if(*fmt == '%') {
+			fmt++;
+
+			if(*fmt == '{') {
+				fatal("FIXME stub");
+			}
+			else if(*fmt == '%') {
+				io:wr_ch(desc, '%');
+				fmt++;
+				wr++;
+			}
+			else {
+				var i32 align;
+				var bool neg = false;
+				var i32 wid = 0, prec = 3;
+				var char sz = '\0', pad = ' ';
+
+				while(*fmt == '-') {
+					neg = true;
+					fmt++;
+				}
+
+				if(*fmt == '0') {
+					pad = '0';
+					fmt++;
+				}
+
+				while((*fmt >= '0') && (*fmt <= '9')) {
+					wid = 10 * wid + i32{*fmt - '0'};
+					fmt++;
+				}
+
+				if(*fmt == '.') {
+					fmt++;
+					prec = 0;
+					while((*fmt >= '0') && (*fmt <= '9')) {
+						prec = 10 * prec + i32{*fmt - '0'};
+						fmt++;
+					}
+				}
+
+				if(*fmt == 'l')
+					sz = *fmt++;
+
+				if((*fmt == 'p') && (wid == 0))
+					wid = 16;
+
+				align = io:align(desc, (neg ? -wid : wid), pad);
+				onerr io:free(align); //FIXME bad scoping
+
+				switch(*fmt) {
+				case 'c':
+					e:get(io:wr_ch(align, args:get(args, char)));
+					break;
+
+				case 's': {
+					var cpt:char str = args:get(args, cpt:char);
+
+					e:get(io:wr_buf(align, str, str:len(str)));
+				} break;
+
+				case 'b':
+					io:fmt_u32(align, args:get(args, u32), 2);
+					break;
+
+				case 'x':
+				case 'X':
+					if(sz == 'l')
+						io:fmt_u64(align, args:get(args, u64), 16);
+					else
+						io:fmt_u32(align, args:get(args, u32), 16);
+
+					break;
+
+				case 'p':
+					io:fmt_u64(align, args:get(args, u64), 16); //FIXME not this, probably
+					break;
+
+				case 'f':
+					if(sz == 'l')
+						io:fmt_f64(align, args:get(args, fp64), prec, pad);
+					else
+						io:fmt_f32(align, args:get(args, fp32), prec, pad);
+
+					break;
+
+				case 'u':
+					if(sz == 'l')
+						io:fmt_u64(align, args:get(args, u64), 10);
+					else
+						io:fmt_u32(align, args:get(args, u32), 10);
+
+					break;
+
+				case 'd':
+					if(sz == 'l')
+						io:fmt_i64(align, args:get(args, i64), 10);
+					else
+						io:fmt_i32(align, args:get(args, i32), 10);
+
+					break;
+
+				case 'B': {
+					var pt:u8 src = args:get(args, pt:u8);
+					var u32 i, sz = args:get(args, u32);
+
+					while(sz-- > 0)
+						io:fmt(desc, "%02x", *src++);
+				} break;
+
+				case 'C':
+					var st:io:call call = args:get(args, st:io:call);
+					e:get(io:call_proc(call, align));
+					break;
+				}
+
+				io:free(align);
+				fmt++;
+			}
+		}
+		else {
+			var u32 n = 1;
+
+			while((fmt[n] != '%') && (fmt[n] != '\0'))
+				n++;
+
+			e:get(io:write(desc, fmt, n));
+			fmt += n;
+		}
+	}
+
+	return wr;
+};
+
+/**
+ * Format a unsigned, 32-bit integer to an I/O descriptor.
+ *   @desc: The I/O descriptor.
+ *   @val: The value to write.
+ *   @base: The base.
+ *   &returns: The number of bytes written.
+ */
+def[export] e:str[u32](i32 desc, u32 val, u8 base) io:fmt_u32 = {
+	var i32 k;
+	var ar[33]:char buf;
+	var u32 i = 32;
+
+	if((base < 2) || (base >= 36))
+		e:fmt("Invalid base.");
+
+	do {
+		buf[i--] = mkdig(u8{val % u32{base}}, base);
+		val /= u32{base};
+	} while(val != 0);
+
+	e:get(io:wr_buf(desc, *buf + i + 1, 32 - i));
+
+	return 32 - i;
+};
+
+/**
+ * Format a signed, 32-bit integer to an I/O descriptor.
+ *   @desc: The I/O descriptor.
+ *   @val: The value to write.
+ *   @base: The base.
+ *   &returns: The number of bytes written.
+ */
+def[export] e:str[u32](i32 desc, i32 val, u8 base) io:fmt_i32 = {
+	var u32 uint = u32{val}, add = 0;
+
+	if(val < 0) {
+		add = 1;
+		uint = u32{-val};
+		e:get(io:wr_ch(desc, '-'));
+	}
+	
+	return e:get(io:fmt_u32(desc, uint, base)) + add;
+};
+
+/**
+ * Format a unsigned, 64-bit integer to an I/O descriptor.
+ *   @desc: The I/O descriptor.
+ *   @val: The value to write.
+ *   @base: The base.
+ *   &returns: The number of bytes written.
+ */
+def[export] e:str[u32](i32 desc, u64 val, u8 base) io:fmt_u64 = {
+	var i32 k;
+	var ar[65]:char buf;
+	var u32 i = 64;
+
+	if((base < 2) || (base >= 36))
+		fatal("Invalid base.");
+
+	do {
+		buf[i--] = mkdig(u8{val % u64{base}}, base);
+		val /= u64{base};
+	} while(val != 0);
+
+	io:wr_buf(desc, *buf + i + 1, 64 - i);
+
+	return 64 - i;
+};
+
+
+/**
+ * Format a signed, 64-bit integer to an I/O descriptor.
+ *   @desc: The I/O descriptor.
+ *   @val: The value to write.
+ *   @base: The base.
+ *   &returns: The number of bytes written.
+ */
+def[export] e:str[u32](i32 desc, i64 val, u8 base) io:fmt_i64 = {
+	var u32 add = 0;
+	var u64 uint = u64{val};
+
+	if(val < 0) {
+		add = 1;
+		uint = u64{-val};
+		e:get(io:wr_ch(desc, '-'));
+	}
+	
+	return e:get(io:fmt_u64(desc, uint, base)) + add;
+};
+
+/**
+ * Write a 32-bit float to an I/O.
+ *   @desc: The I/O descriptor.
+ *   @val: The value to write.
+ *   @base: The base.
+ *   @prec: The precision.
+ *   @pad: The padding character.
+ */
+def[export] e:str[u32](i32 desc, fp32 val, i32 prec, char pad) io:fmt_f32 = {
+	var u32 i;
+	var i32 n, e;
+	var ar[10]:char dig;
+
+	if(!(val == val)) //FIXME func
+		return io:fmt(desc, "NaN");
+
+	if(val < 0) {
+		e:get(io:wr_ch(desc, '-'));
+		return io:fmt_f32(desc, -val, prec, pad);
+	}
+
+	if(val == 0.0) {
+		dig[0] = '\0';
+		e = 0;
+	}
+	else
+		e = str:dig_fp32(*dig, val);
+
+	i = 0;
+	n = ((e > 0) ? (e - 1) : -1);
+	if(n == -1)
+		e:get(io:wr_ch(desc, '0'));
+
+	while(n >= -prec) {
+		if(n == -1)
+			e:get(io:wr_ch(desc, '.'));
+
+		if(n > e)
+			e:get(io:wr_ch(desc, '0'));
+		else if(dig[i] != '\0')
+			e:get(io:wr_ch(desc, dig[i++]));
+		else
+			e:get(io:wr_ch(desc, '0'));
+
+		n--;
+	}
+
+	return 0; //FIXME actual number of bytes written
+};
+
+/**
+ * Write a 64-bit float to an I/O.
+ *   @desc: The I/O descriptor.
+ *   @val: The value to write.
+ *   @base: The base.
+ *   @prec: The precision.
+ *   @pad: The padding character.
+ */
+def[export] e:str[u32](i32 desc, fp64 val, i32 prec, char pad) io:fmt_f64 = {
+	var u32 i;
+	var i32 n, e;
+	var ar[20]:char dig;
+
+	if(!(val == val)) //FIXME func
+		return io:fmt(desc, "NaN");
+
+	if(val < 1.0e-3)
+		return e:get(io:fmt(desc, "0.0"));
+
+	e = str:dig_fp64(*dig, val);
+
+	i = 0;
+	n = ((e > 0) ? (e - 1) : 0);
+	while(n >= -3) {
+		if(n == -1)
+			e:get(io:wr_ch(desc, '.'));
+
+		if(n > e)
+			e:get(io:wr_ch(desc, '0'));
+		else
+			e:get(io:wr_ch(desc, dig[i++]));
+
+		n--;
+	}
+
+	return 0; //FIXME actual number of bytes written
+};
+
+
+/**
+ * Write formatted output to an I/O.
  *   @io: The I/O.
  *   @fmt: The format string.
  *   @...: The format arguments.
  *   &returns: The number of bytes written.
  */
-def[export] e:str[u32](st:io io, cpt:char fmt, ...) io:fmt = {
+def[export] e:str[u32](st:io io, cpt:char fmt, ...) io1:fmt = {
 	var ty:args args = args:init();
 
-	return io:fmtv(io, fmt, &args);
+	return io1:fmtv(io, fmt, &args);
 };
 
 /**
@@ -18,10 +355,10 @@ def[export] e:str[u32](st:io io, cpt:char fmt, ...) io:fmt = {
  *   @args: The format arguments.
  *   &returns: The number of bytes written.
  */
-def[export] e:str[u32](st:io io, cpt:char fmt, pt:ty:args args) io:fmtv = {
-	var u32 wr;
+def[export] e:str[u32](st:io io, cpt:char fmt, pt:ty:args args) io1:fmtv = {
+	var u32 wr = 0;
 
-	while(*fmt != 0/*FIXME*/) {
+	while(*fmt != '\0') {
 		if(*fmt == '%') {
 			fmt++;
 
@@ -29,7 +366,7 @@ def[export] e:str[u32](st:io io, cpt:char fmt, pt:ty:args args) io:fmtv = {
 				fatal("FIXME stub");
 			}
 			else if(*fmt == '%') {
-				io:wr_ch(io, '%');
+				io1:wr_ch(io, '%');
 				fmt++;
 				wr++;
 			}	
@@ -41,6 +378,11 @@ def[export] e:str[u32](st:io io, cpt:char fmt, pt:ty:args args) io:fmtv = {
 
 				while(*fmt == '-') {
 					neg = true;
+					fmt++;
+				}
+
+				if(*fmt == '0') {
+					pad = '0';
 					fmt++;
 				}
 
@@ -62,67 +404,77 @@ def[export] e:str[u32](st:io io, cpt:char fmt, pt:ty:args args) io:fmtv = {
 					sz = *fmt++;
 
 				wid = (neg ? -wid : wid);
-				align = io:align(io, wid);
-				//onerr io:close(wrap); FIXME scoped
+				align = io1:align(io, wid);
+				//onerr io1:close(wrap); FIXME scoped
 
 				switch(*fmt) {
 				case 'c':
-					io:wr_ch(align, args:get(args, char));
+					io1:wr_ch(align, args:get(args, char));
 					break;
 
 				case 's':
-					io:fmt_str(align, args:get(args, cpt:char), wid);
+					io1:fmt_str(align, args:get(args, cpt:char), wid);
 					break;
 
 				case 'b':
-					io:fmt_u32(align, args:get(args, u32), 2, wid, pad);
+					io1:fmt_u32(align, args:get(args, u32), 2, wid, pad);
 					break;
 
 				case 'x':
+				case 'X':
 					if(sz == 'l')
-						io:fmt_u64(align, args:get(args, u64), 16, wid);
+						io1:fmt_u64(align, args:get(args, u64), 16, wid);
 					else
-						io:fmt_u32(align, args:get(args, u32), 16, wid, pad);
+						io1:fmt_u32(align, args:get(args, u32), 16, wid, pad);
 
 					break;
 
 				case 'p':
-					io:fmt_u64(align, args:get(args, u64), 16, 16); //FIXME not this, probably
+					io1:fmt_u64(align, args:get(args, u64), 16, 16); //FIXME not this, probably
 					break;
 
 				case 'f':
 					if(sz == 'l')
-						io:fmt_f64(align, args:get(args, fp64), prec, pad);
+						io1:fmt_f64(align, args:get(args, fp64), prec, pad);
 					else
-						io:fmt_f32(align, args:get(args, fp32), prec, pad);
+						io1:fmt_f32(align, args:get(args, fp32), prec, pad);
 
 					break;
 
 				case 'u':
 					if(sz == 'l')
-						io:fmt_u64(align, args:get(args, u64), 10, wid);
+						io1:fmt_u64(align, args:get(args, u64), 10, wid);
 					else
-						io:fmt_u32(align, args:get(args, u32), 10, wid, pad);
+						io1:fmt_u32(align, args:get(args, u32), 10, wid, pad);
 
 					break;
 
 				case 'd':
 					if(sz == 'l')
-						io:fmt_i64(align, args:get(args, i64), 10, wid);
+						io1:fmt_i64(align, args:get(args, i64), 10, wid);
 					else
-						io:fmt_i32(align, args:get(args, i32), 10, wid, pad);
+						io1:fmt_i32(align, args:get(args, i32), 10, wid, pad);
 
 					break;
 
+				case 'B': {
+					var pt:u8 src = args:get(args, pt:u8);
+					var u32 i, sz = args:get(args, u32);
+
+					while(sz-- > 0)
+						io1:fmt(io, "%02x", *src++);
+
+				} break;
+
 				case 'C':
-					io:fmt_call(align, args:get(args, st:io:call), wid);
+					io1:fmt_call(align, args:get(args, st:io1:call), wid);
 					break;
 
 				default:
 					fatal("Invalid format specifier %%%c.", *fmt);
 				}
 
-				io:close(align);
+				io1:close(align);
 				fmt++;
 			}
 		}
@@ -132,7 +484,7 @@ def[export] e:str[u32](st:io io, cpt:char fmt, pt:ty:args args) io:fmtv = {
 			while((fmt[n] != '%') && (fmt[n] != '\0'))
 				n++;
 
-			io:write(io, fmt, n);
+			io1:write(io, fmt, n);
 			fmt += n;
 		}
 	}
@@ -147,21 +499,21 @@ def[export] e:str[u32](st:io io, cpt:char fmt, pt:ty:args args) io:fmtv = {
  *   @str: The string.
  *   &returns: The number of bytes written.
  */
-def[export] e:str[u32](st:io io, cpt:char str, i32 wid) io:fmt_str = {
+def[export] e:str[u32](st:io io, cpt:char str, i32 wid) io1:fmt_str = {
 	var u32 i, len = str:len(str), ret = len;
 
 	if(wid > i32{len}) {
 		ret = u32{wid};
 		for(i = 0; i < (u32{wid} - len); i++)
-			e:get(io:wr_ch(io, ' '));
+			e:get(io1:wr_ch(io, ' '));
 	}
 
-	e:get(io:wr_buf(io, str, len));
+	e:get(io1:wr_buf(io, str, len));
 
 	if(-wid > i32{len}) {
 		ret = u32{-wid};
 		for(i = 0; i < (u32{-wid} - len); i++)
-			e:get(io:wr_ch(io, ' '));
+			e:get(io1:wr_ch(io, ' '));
 	}
 
 	return ret;
@@ -176,7 +528,7 @@ def[export] e:str[u32](st:io io, cpt:char str, i32 wid) io:fmt_str = {
  *   @pad: The pad character.
  *   &returns: The number of bytes written.
  */
-def[export] e:str[u32](st:io io, u32 val, u8 base, i32 wid, char pad) io:fmt_u32 = {
+def[export] e:str[u32](st:io io, u32 val, u8 base, i32 wid, char pad) io1:fmt_u32 = {
 	var ar[33]:char buf;
 	var i32 k;
 	var u32 i = 32;
@@ -191,14 +543,14 @@ def[export] e:str[u32](st:io io, u32 val, u8 base, i32 wid, char pad) io:fmt_u32
 
 	if(wid > 0) {
 		for(k = 32 - i32{i}; k < wid; k++)
-			io:wr_ch(io, pad);
+			io1:wr_ch(io, pad);
 	}
 
-	io:wr_buf(io, *buf + i + 1, 32 - i);
+	io1:wr_buf(io, *buf + i + 1, 32 - i);
 
 	if(wid < 0) {
 		for(k = 32 - i32{i}; k < -wid; k++)
-			io:wr_ch(io, pad);
+			io1:wr_ch(io, pad);
 	}
 
 	return 32 - i;
@@ -213,7 +565,7 @@ def[export] e:str[u32](st:io io, u32 val, u8 base, i32 wid, char pad) io:fmt_u32
  *   @pad: The pad character.
  *   &returns: The number of bytes written.
  */
-def[export] e:str[u32](st:io io, i32 val, u8 base, i32 wid, char pad) io:fmt_i32 = {
+def[export] e:str[u32](st:io io, i32 val, u8 base, i32 wid, char pad) io1:fmt_i32 = {
 	var i32 k;
 	var u32 t, i = 33;
 	var bool neg = false;
@@ -239,14 +591,14 @@ def[export] e:str[u32](st:io io, i32 val, u8 base, i32 wid, char pad) io:fmt_i32
 
 	if(wid > 0) {
 		for(k = 33 - i32{i}; k < wid; k++)
-			io:wr_ch(io, pad);
+			io1:wr_ch(io, pad);
 	}
 
-	io:wr_buf(io, *buf + i + 1, 33 - i);
+	io1:wr_buf(io, *buf + i + 1, 33 - i);
 
 	if(wid < 0) {
 		for(k = 33 - i32{i}; k < -wid; k++)
-			io:wr_ch(io, pad);
+			io1:wr_ch(io, pad);
 	}
 
 	return 33 - i;
@@ -260,7 +612,7 @@ def[export] e:str[u32](st:io io, i32 val, u8 base, i32 wid, char pad) io:fmt_i32
  *   @wid: The width.
  *   &returns: The nubmer of byts written.
  */
-def[export] e:str[u32](st:io io, u64 val, u8 base, i32 wid) io:fmt_u64 = {
+def[export] e:str[u32](st:io io, u64 val, u8 base, i32 wid) io1:fmt_u64 = {
 	var ar[65]:char buf;
 	var i32 k;
 	var u32 i = 64;
@@ -274,9 +626,9 @@ def[export] e:str[u32](st:io io, u64 val, u8 base, i32 wid) io:fmt_u64 = {
 	} while(val != 0);
 
 	for(k = 64 - i32{i}; k < i32{wid}; k++)
-		io:wr_ch(io, '0');
+		io1:wr_ch(io, '0');
 
-	io:wr_buf(io, *buf + i + 1, 64 - i);
+	io1:wr_buf(io, *buf + i + 1, 64 - i);
 
 	return 64 - i;
 };
@@ -288,19 +640,19 @@ def[export] e:str[u32](st:io io, u64 val, u8 base, i32 wid) io:fmt_u64 = {
  *   @base: The base.
  *   @wid: The width.
  */
-def[export] e:str[u32](st:io io, i64 val, u8 base, i32 wid) io:fmt_i64 = {
+def[export] e:str[u32](st:io io, i64 val, u8 base, i32 wid) io1:fmt_i64 = {
 	var u32 wr = 0;
 
 	if(val < 0) {
 		val = -val;
 		wr = 1;
-		e:get(io:wr_ch(io, '-'));
+		e:get(io1:wr_ch(io, '-'));
 
 		if(wid > 0)
 			wid--;
 	}
 
-	return wr + e:get(io:fmt_u64(io, u64{val}, base, wid));
+	return wr + e:get(io1:fmt_u64(io, u64{val}, base, wid));
 };
 
 /**
@@ -311,14 +663,17 @@ def[export] e:str[u32](st:io io, i64 val, u8 base, i32 wid) io:fmt_i64 = {
  *   @prec: The precision.
  *   @pad: The padding character.
  */
-def[export] e:str[u32](st:io io, fp32 val, i32 prec, char pad) io:fmt_f32 = {
+def[export] e:str[u32](st:io io, fp32 val, i32 prec, char pad) io1:fmt_f32 = {
 	var u32 i;
 	var i32 n, e;
 	var ar[10]:char dig;
 
+	if(!(val == val)) //FIXME func
+		return io1:fmt(io, "NaN");
+
 	if(val < 0) {
-		e:get(io:wr_ch(io, '-'));
-		return io:fmt_f32(io, -val, prec, pad);
+		e:get(io1:wr_ch(io, '-'));
+		return io1:fmt_f32(io, -val, prec, pad);
 	}
 
 	if(val == 0.0) {
@@ -331,18 +686,18 @@ def[export] e:str[u32](st:io io, fp32 val, i32 prec, char pad) io:fmt_f32 = {
 	i = 0;
 	n = ((e > 0) ? (e - 1) : -1);
 	if(n == -1)
-		e:get(io:wr_ch(io, '0'));
+		e:get(io1:wr_ch(io, '0'));
 
 	while(n >= -prec) {
 		if(n == -1)
-			e:get(io:wr_ch(io, '.'));
+			e:get(io1:wr_ch(io, '.'));
 
 		if(n > e)
-			e:get(io:wr_ch(io, '0'));
+			e:get(io1:wr_ch(io, '0'));
 		else if(dig[i] != '\0')
-			e:get(io:wr_ch(io, dig[i++]));
+			e:get(io1:wr_ch(io, dig[i++]));
 		else
-			e:get(io:wr_ch(io, '0'));
+			e:get(io1:wr_ch(io, '0'));
 
 		n--;
 	}
@@ -358,13 +713,16 @@ def[export] e:str[u32](st:io io, fp32 val, i32 prec, char pad) io:fmt_f32 = {
  *   @prec: The precision.
  *   @pad: The padding character.
  */
-def[export] e:str[u32](st:io io, fp64 val, i32 prec, char pad) io:fmt_f64 = {
+def[export] e:str[u32](st:io io, fp64 val, i32 prec, char pad) io1:fmt_f64 = {
 	var u32 i;
 	var i32 n, e;
 	var ar[20]:char dig;
 
+	if(!(val == val)) //FIXME func
+		return io1:fmt(io, "NaN");
+
 	if(val < 1.0e-3)
-		return e:get(io:fmt(io, "0.0"));
+		return e:get(io1:fmt(io, "0.0"));
 
 	e = str:dig_fp64(*dig, val);
 
@@ -372,12 +730,12 @@ def[export] e:str[u32](st:io io, fp64 val, i32 prec, char pad) io:fmt_f64 = {
 	n = ((e > 0) ? (e - 1) : 0);
 	while(n >= -3) {
 		if(n == -1)
-			e:get(io:wr_ch(io, '.'));
+			e:get(io1:wr_ch(io, '.'));
 
 		if(n > e)
-			e:get(io:wr_ch(io, '0'));
+			e:get(io1:wr_ch(io, '0'));
 		else
-			e:get(io:wr_ch(io, dig[i++]));
+			e:get(io1:wr_ch(io, dig[i++]));
 
 		n--;
 	}
@@ -391,16 +749,16 @@ def[export] e:str[u32](st:io io, fp64 val, i32 prec, char pad) io:fmt_f64 = {
  *   @call: The call.
  *   @wid: The width.
  */
-def[export] e:str[void](st:io io, st:io:call call, i32 wid) io:fmt_call = {
-	return io:call_proc(call, io);
+def[export] e:str[void](st:io io, st:io1:call call, i32 wid) io1:fmt_call = {
+	return io1:call_proc(call, io);
 };
 
 
 def[export] void(cpt:char fmt, ...) print = {
 	var ty:args args = args:init();
 
-	//e:ign(io:fmtv(io:stdout, fmt, &args)); FIXME
-	io:fmtv(io:stdout, fmt, &args);
+	//e:ign(io1:fmtv(io:stdout, fmt, &args)); FIXME
+	io1:fmtv(io:stdout, fmt, &args);
 };
 
 
@@ -413,9 +771,9 @@ def[export] void(cpt:char fmt, ...) fatal = {
 
 	fatal_term = true;
 
-	//e:ign(io:fmtv(io:stderr, fmt, &args)); FIXME
-	io:fmtv(io:stderr, fmt, &args);
-	io:wr_ch(io:stderr, '\n');
+	//e:ign(io1:fmtv(io:stderr, fmt, &args)); FIXME
+	io1:fmtv(io:stderr, fmt, &args);
+	io1:wr_ch(io:stderr, '\n');
 	os:abort();
 };
 

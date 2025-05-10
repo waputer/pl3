@@ -120,8 +120,8 @@ def[export] void(pt:st:pl3:loc loc) pl3:loc_delete = {
  *   &returns: The callback.
  */
 def[export] st:io:call(cpt:st:pl3:loc loc) pl3:loc_call = {
-	def e:str[void](st:io io, pt:st:pl3:loc loc) func = { //FIXME here too, cpt
-		io:fmt(io, "%s:%u:%u", loc->file->buf, loc->lin + 1, loc->col + 1);
+	def e:str[void](i32 desc, pt:st:pl3:loc loc) func = { //FIXME here too, cpt
+		io:fmt(desc, "%s:%u:%u", loc->file->buf, loc->lin + 1, loc->col + 1);
 	};
 
 	return st:io:call{ &func, pt:void{loc} }; //FIXME: pt:void cast rules, uhg

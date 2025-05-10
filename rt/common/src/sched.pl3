@@ -332,11 +332,11 @@ def[export] void(pt:st:sched sched, i32 fd) sched:poll_rem = {
  */
 def[export] e:str[void](pt:st:sched sched, i64 usec) sched:poll_wait = {
 	var u32 i;
-	var pt:st:io:poll set;
+	var pt:st:io1:poll set;
 	var pt:st:sched:poll poll;
 	var pt:st:avl:node node;
 
-	set = mem:alloc(sched->poll.cnt * sizeof(st:io:poll));
+	set = mem:alloc(sched->poll.cnt * sizeof(st:io1:poll));
 	onerr mem:free(set);
 
 	node = avl:root_first(&sched->poll);
@@ -362,6 +362,26 @@ def[export] e:str[void](pt:st:sched sched, i64 usec) sched:poll_wait = {
 	}
 
 	mem:free(set);
+};
+
+
+/**
+ * Callback structure.
+ */
+tydef[export] st:sched:call {
+	pt:ty:sched:func func; /// Callback function
+	pt:void arg;           /// Argument passed to function
+};
+
+
+/**
+ * Function for chaining a callback.
+ *   @kd: THe kernel descriptor.
+ *   @got: The received events.
+ *   @call: The chained callback.
+ */
+def[export] void(i32 kd, u16 got, pt:st:sched:call call) sched:fn_chain = {
+	call->func->(call->arg);
 };
 
 

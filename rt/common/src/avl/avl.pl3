@@ -57,6 +57,18 @@ def void(pt:st:avl:node node, i32 off, pt:ty:avl:delete delete) node_delete = { 
 	delete->(pt:void{node} - off);
 };
 
+/**
+ * Clear a tree, resetting to its default state.
+ *   @root: The tree root.
+ *   @off: The offset to the reference.
+ *   @delete: The deletion callback.
+ */
+def[export] void(pt:st:avl:root root, i32 off, pt:ty:avl:delete delete) avl:root_clear = {
+	node_delete(root->node, off, delete);
+	root->cnt = 0;
+	root->node = null;
+};
+
 
 /**
  * Retrieve the first node from an AVL tree root.

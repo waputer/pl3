@@ -68,7 +68,7 @@ def[export] e:str[u32](i32 kd, pt:void dst, u32 sz) os:read = {
 	while((ret < 0) && (geterr() == EINTR));
 
 	if(ret < 0)
-		e:fmt("Write failed. %s (%d).", strerror(geterr()));
+		e:fmt("Read failed. %s (%d).", strerror(geterr()));
 
 	return u32{ret};
 };
@@ -99,14 +99,14 @@ def[export] e:str[u32](i32 kd, cpt:void src, u32 sz) os:write = {
  *   @whence: The reference from which to seek.
  *   @off: The offset in bytes.
  */
-def[export] e:str[u64](i32 kd, u8 whence, i64 off) os:seek = {
+def[export] e:str[u64](i32 kd, en:io:seek whence, i64 off) os:seek = {
 	var i32 map;
 	var i64 ret;
 
 	switch(whence) {
-	case io:seek:set: map = SEEK_SET; break;
-	case io:seek:cur: map = SEEK_CUR; break;
-	case io:seek:end: map = SEEK_END; break;
+	case ev:io:seek:set: map = SEEK_SET; break;
+	case ev:io:seek:cur: map = SEEK_CUR; break;
+	case ev:io:seek:end: map = SEEK_END; break;
 	default: e:fmt("Invalid seek type.");
 	}
 
@@ -155,7 +155,7 @@ def[export] e:str[i32](u32 init) os:event = {
  *   @to: The timeout in icroseconds.
  *   &returns: The number of active descriptors.
  */
-def[export] e:str[u32](pt:st:io:poll set, u32 cnt, i64 to) os:poll = {
+def[export] e:str[u32](pt:st:io1:poll set, u32 cnt, i64 to) os:poll = {
 	var u32 i;
 	var i32 ret;
 	var pt:st:pollfd fds;
@@ -164,7 +164,7 @@ def[export] e:str[u32](pt:st:io:poll set, u32 cnt, i64 to) os:poll = {
 	onerr mem:free(fds);
 
 	for(i = 0; i < cnt; i++) {
-		fds[i].fd = set[i].kd;
+		fds[i].fd = io:desc_user(set[i].kd) ? -1 : set[i].kd;
 		fds[i].events = msk2evt(set[i].req);
 	}
 
@@ -178,6 +178,35 @@ def[export] e:str[u32](pt:st:io:poll set, u32 cnt, i64 to) os:poll = {
 	for(i = 0; i < cnt; i++) {
 		if(fds[i].revents != 0)
 			set[i].got = evt2msk(fds[i].revents);
+	}
+
+	mem:free(fds);
+
+	return u32{i};
+};
+def[export] e:str[u32](pt:st:io:poll set, u32 cnt, i64 to) os:poll2 = {
+	var u32 i;
+	var i32 ret;
+	var pt:st:pollfd fds;
+
+	fds = mem:alloc(cnt * sizeof(st:pollfd));
+	onerr mem:free(fds);
+
+	for(i = 0; i < cnt; i++) {
+		fds[i].fd = io:desc_user(set[i].desc) ? -1 : set[i].desc;
+		fds[i].events = msk2evt2(set[i].req);
+	}
+
+	do
+		ret = poll(fds, i32{cnt}, timeout(to));
+	while((ret == -1) && (geterr() == EINTR));
+
+	if(ret < 0)
+		e:fmt("Failed to poll. %s (%d).", strerror(geterr()), geterr());
+
+	for(i = 0; i < cnt; i++) {
+		if(fds[i].revents != 0)
+			set[i].got = evt2msk2(fds[i].revents);
 	}
 
 	mem:free(fds);
@@ -205,6 +234,20 @@ def u16(u16 evt) evt2msk = {
 
 	return mask;
 };
+def u32(u16 evt) evt2msk2 = {
+	var u32 mask = 0;
+
+	if((evt & POLLIN) != 0)
+		mask |= io:evt:rd;
+
+	if((evt & POLLOUT) != 0)
+		mask |= io:evt:wr;
+
+	if((evt & (POLLERR | POLLHUP)) != 0)
+		mask |= io:evt:err;
+
+	return mask;
+};
 
 /**
  * Convert an I/O mask to event bits.
@@ -221,6 +264,20 @@ def u16(u16 msk) msk2evt = {
 		evt |= POLLOUT;
 
 	if((msk & io:poll:err) != 0)
+		evt |= POLLERR | POLLHUP;
+
+	return evt;
+};
+def u16(u32 msk) msk2evt2 = {
+	var u16 evt = 0;
+
+	if((msk & io:evt:rd) != 0)
+		evt |= POLLIN;
+
+	if((msk & io:evt:wr) != 0)
+		evt |= POLLOUT;
+
+	if((msk & io:evt:err) != 0)
 		evt |= POLLERR | POLLHUP;
 
 	return evt;

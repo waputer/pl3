@@ -1,4 +1,3 @@
-
 /**
  * Base I/O identifiers.
  *   @close: Close (cleanup) the object.
@@ -9,7 +8,7 @@ def[export] u32 io:id:close = 0;
  * Close an I/O.
  *   @io: The I/O.
  */
-def[export] e:str[void](st:io io) io:close = {
+def[export] e:str[void](st:io io) io1:close = {
 	e:get(io.func->(io.ref, io:id:close, null));
 };
 
@@ -43,7 +42,7 @@ tydef[export] st:io:read {
  *   @sz: The buffer size in bytes.
  *   &returns: The total read in bytes (may be less than `sz`).
  */
-def[export] e:str[u32](st:io io, pt:void dst, u32 sz) io:read = {
+def[export] e:str[u32](st:io io, pt:void dst, u32 sz) io1:read = {
 	var st:io:read data = { dst, sz, 0 };
 
 	e:get(io.func->(io.ref, io:id:read, &data));
@@ -68,7 +67,7 @@ tydef[export] st:io:write {
  *   @sz: The buffer size in bytes.
  *   &returns: The total written in bytes (may be less than `sz`).
  */
-def[export] e:str[u32](st:io io, cpt:void src, u32 sz) io:write = {
+def[export] e:str[u32](st:io io, cpt:void src, u32 sz) io1:write = {
 	var st:io:write data = { src, sz, 0 };
 
 	e:get(io.func->(io.ref, io:id:write, &data));
@@ -77,32 +76,38 @@ def[export] e:str[u32](st:io io, cpt:void src, u32 sz) io:write = {
 };
 
 
+/**
+ * Seek structure.
+ */
 tydef[export] st:io:seek {
-	u8 whence;
-	i64 off;
+	en:io:seek tag; /// Seek tag
+	i64 off;        /// The offset
 };
 
 /**
- * Seek values
- *   @set: Relative from the beginning
- *   @cur: Relative from the current position.
- *   @end: Relative from the end.
+ * Seek enumerator.
  */
-def[export] u8 io:seek:set = 0,
-               io:seek:cur = 1,
-               io:seek:end = 2;
+tydef[export] en:io:seek {
+	set, /// Offset from the start
+	cur, /// Relative from the current position
+	end  /// Offset from the end
+};
 
-def[export] e:str[void](st:io io, u8 whence, i64 off) io:seek = {
+def[export] e:str[void](st:io io, en:io:seek whence, i64 off) io1:seek = {
 	var st:io:seek data = { whence, off };
 
 	e:get(io.func->(io.ref, io:id:seek, &data));
+};
+
+def[export] e:str[void](st:io io, i64 off) io1:seek:set = {
+	return io1:seek(io, ev:io:seek:set, off);
 };
 
 tydef[export] st:io:tell {
 	u64 off;
 };
 
-def[export] e:str[u64](st:io io) io:tell = {
+def[export] e:str[u64](st:io io) io1:tell = {
 	var st:io:tell data = { 0 };
 
 	e:get(io.func->(io.ref, io:id:tell, &data));

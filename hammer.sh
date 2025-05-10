@@ -2,7 +2,7 @@
 
 ## 
 # Hammer build system
-#   version 1.0.0dev1
+#   version 1.0.0dev2
 ##
 
 TMP=".hammer.c"
@@ -62,8 +62,10 @@ void unreachable() __attribute__((noreturn));
 void os_init(void);
 int os_exec(struct cmd_t *cmd);
 int os_wait(void);
+void os_kill(int);
 int64_t os_mtime(const char *path);
 void os_mkdir(const char *path);
+void os_unlink(const char *path);
 void mk_eval(struct rt_ctx_t *ctx, const char *path, bool strict);
 void mk_trim(FILE *file, int *ch);
 char *mk_str(FILE *file, int *ch);
@@ -1506,20 +1508,24 @@ continue;
 }
 struct target_t *target;
 struct target_iter_t iter;
-int64_t min = INT64_MAX - 1, max = INT64_MIN + 1;
+int64_t tm, min = INT64_MAX - 1, max = INT64_MIN + 1;
 iter = target_iter(rule->gens);
 while((target = target_next(&iter)) != NULL) {
 if(target->flags & FLAG_SPEC)
 min = INT64_MIN, max = INT64_MAX;
-if(target_mtime(target) < min)
-min = target_mtime(target);
+tm = target_mtime(target);
+if(tm < min)
+min = tm;
 }
 iter = target_iter(rule->deps);
 while((target = target_next(&iter)) != NULL) {
 if(target->flags & FLAG_SPEC)
 continue;
-if(target_mtime(target) > max)
-max = target_mtime(target);
+tm = target_mtime(target);
+if(tm < 0)
+fatal("Cannot build rule, missing '%s'.", target->path);
+else if(tm > max)
+max = tm;
 }
 iter = target_iter(rule->gens);
 if((max > min) || ctx->opt->force) {
@@ -1952,7 +1958,7 @@ while(ch_var(ch = exp_adv(exp)));
 id = buf_done(&buf);
 switch(obj.tag) {
 case rt_null_v:
-fatal("FIXME exp_var null call");
+exp_err(exp, "Cannot call function on null value.");
 case rt_val_v: {
 uint32_t cnt;
 struct bind_t *bind;
@@ -2013,7 +2019,9 @@ return exp_bind(exp);
 void exp_flat(struct exp_t *exp, struct rt_obj_t obj)
 {
 struct val_t *val, *orig;
-if(obj.tag != rt_val_v)
+if(obj.tag == rt_null_v)
+return;
+else if(obj.tag != rt_val_v)
 exp_err(exp, "Cannot convert non-value to a string.");
 val = orig = obj.data.val;
 while(val != NULL) {
@@ -2026,11 +2034,7 @@ val_clear(orig);
 }
 struct rt_obj_t exp_bind(struct exp_t *exp)
 {
-char *id;
-const char *str;
-struct buf_t buf;
-struct bind_t *bind;
-str = exp->str;
+const char *str = exp->str;
 if(*str == '@') {
 struct target_inst_t *inst;
 struct val_t *val = NULL, **iter = &val;
@@ -2083,17 +2087,27 @@ iter = &(*iter)->next;
 exp_adv(exp);
 return rt_obj_val(val);
 }
+else {
+char *id;
+struct buf_t buf;
+struct bind_t *bind;
+bool opt = false;
+if(*str == '?') {
+opt = true;
+str++;
+}
 buf = buf_new(32);
 do
 buf_ch(&buf, *str++);
 while(ch_var(*str));
 id = buf_done(&buf);
 bind = env_get(exp->env, id);
-if(bind == NULL)
+if((bind == NULL) && !opt)
 exp_err(exp, "Unknown variable '%s'.", id);
 exp->str = str;
 free(id);
-return rt_obj_dup(bind->obj);
+return bind ? rt_obj_dup(bind->obj) : rt_obj_null();
+}
 }
 struct loc_t exp_loc(struct exp_t *exp)
 {
@@ -2291,7 +2305,21 @@ void ctrl_wait(struct ctrl_t *ctrl)
 {
 uint32_t i;
 int pid;
+struct target_t *target;
+struct target_iter_t iter;
 pid = os_wait();
+if(pid < 0) {
+for(i = 0; i < ctrl->cnt; i++) {
+if(ctrl->job[i].pid < 0)
+continue;
+iter = target_iter(ctrl->job[i].rule->gens);
+while((target = target_next(&iter)) != NULL) {
+if((target->flags & FLAG_SPEC) == 0)
+os_unlink(target->path);
+}
+}
+exit(1);
+}
 for(i = 0; i < ctrl->cnt; i++) {
 if(ctrl->job[i].pid == pid)
 break;
@@ -3188,21 +3216,31 @@ free(args);
 }
 return pid;
 }
+void os_kill(int pid)
+{
+kill(pid, SIGKILL);
+}
 int os_wait(void)
 {
 int pid, stat;
 for(;;) {
 pid = wait(&stat);
-if(WIFSIGNALED(stat))
-fatal("Command failed with signal '%d'.", WTERMSIG(stat));
+if(WIFSIGNALED(stat)) {
+print("Command failed with signal '%d'.\n", WTERMSIG(stat));
+return -1;
+}
 if(pid >= 0)
 break;
-if(errno != EINTR)
-fatal("Failed to wait. %s.", strerror(errno));
+if(errno != EINTR) {
+print("Failed to wait. %s.\n", strerror(errno));
+return -1;
+}
 }
 stat = WEXITSTATUS(stat);
-if(stat != 0)
-fatal("Command terminated with status %d.", stat);
+if(stat != 0) {
+print("Command terminated with status %d.\n", stat);
+return -1;
+}
 return pid;
 }
 int64_t os_mtime(const char *path)
@@ -3215,4 +3253,8 @@ return 1000000 * info.st_mtim.tv_sec + info.st_mtim.tv_nsec / 1000;
 void os_mkdir(const char *path)
 {
 mkdir(path, 0777);
+}
+void os_unlink(const char *path)
+{
+unlink(path);
 }

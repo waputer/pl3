@@ -54,7 +54,7 @@ def[export] e:str[pt:st:pl3:enum](pt:st:pl3:rd rd) pl3:enum_read = {
 
 	onerr pl3:enval_clear(val);
 
-	while(e:get(io1:rd_u8(rd->file)) > 0) {
+	while(e:get(io:rd_u8(rd->file)) > 0) {
 		*ival = e:get(pl3:enval_read(rd));
 		ival = &(*ival)->next;
 	}
@@ -71,11 +71,11 @@ def[export] e:str[void](pt:st:pl3:enum enum, pt:st:pl3:wr wr) pl3:enum_write = {
 	var pt:st:pl3:enval val;
 
 	for(val = enum->val; val != null; val = val->next) {
-		e:get(io1:wr_u8(wr->file, 1));
+		e:get(io:wr_u8(wr->file, 1));
 		e:get(pl3:enval_write(val, wr));
 	}
 
-	e:get(io1:wr_u8(wr->file, 0));
+	e:get(io:wr_u8(wr->file, 0));
 };
 
 
@@ -136,19 +136,19 @@ def[export] void(pt:st:pl3:enval val) pl3:enval_clear = {
  *   @wr: The writer.
  */
 def[export] e:str[void](pt:st:pl3:enval val, pt:st:pl3:wr wr) pl3:enval_write = {
-	io1:wr_str32(wr->file, val->id);
+	io:wr_str32(wr->file, val->id);
 
-	io1:wr_u8(wr->file, 0);
+	io:wr_u8(wr->file, 0);
 	if(val->expr != null) {
 		//fatal("FIXME stub enval_write\n");
 	}
 	/* FIXME this
 	if(val->expr != null) {
-		io1:wr_u8(wr->file, 1);
+		io:wr_u8(wr->file, 1);
 		fatal("FIXME stub enval_write\n");
 	}
 	else
-		io1:wr_u8(wr->file, 0);
+		io:wr_u8(wr->file, 0);
 	*/
 	pl3:meta_write(val->meta, wr);
 };
@@ -162,10 +162,10 @@ def[export] e:str[pt:st:pl3:enval](pt:st:pl3:rd rd) pl3:enval_read = {
 	var pt:char id;
 	var pt:st:pl3:expr expr;
 
-	id = e:get(io1:rd_str32(rd->file));
+	id = e:get(io:rd_str32(rd->file));
 	onerr mem:free(id);
 
-	if(e:get(io1:rd_u8(rd->file)) > 0)
+	if(e:get(io:rd_u8(rd->file)) > 0)
 		fatal("FIXME stub enval_read\n");
 	else
 		expr = null;

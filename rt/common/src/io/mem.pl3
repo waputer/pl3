@@ -16,7 +16,50 @@ tydef st:buf {
  *   @sz: Ref. The size pointer.
  *   &returns: The I/O.
  */
-def[export] st:io(pt:pt:void data, pt:u32 sz) io:mem_rdwr = {
+def[export] i32(pt:pt:void data, pt:u32 sz) io:mem_rdwr = {
+	def e:str[void](u64 msg, pt:void param, pt:st:buf buf) func = {
+		switch(msg) {
+		case io:msg:read:
+			fatal("FIXME stub");
+
+		case io:msg:write: {
+			var pt:st:io:write wr = param;
+
+			if((buf->idx + wr->sz) > buf->cap) {
+				buf->cap = 2 * (buf->idx + wr->sz);
+				*buf->data = mem:realloc(*buf->data, buf->cap);
+			}
+
+			mem:copy(*buf->data + buf->idx, wr->src, wr->sz);
+
+			buf->idx += wr->sz;
+			if(buf->idx > *buf->sz)
+				*buf->sz = buf->idx;
+
+			wr->tot = wr->sz;
+		} break;
+
+		case io:msg:close:
+			mem:free(buf);
+			break;
+
+		default:
+			fatal("Unsupported I/O message.");
+		}
+	};
+
+	var u32 cap;
+
+	if(*data == null) {
+		*data = mem:alloc(cap = 64);
+		*sz = 0;
+	}
+	else
+		cap = *sz;
+
+	return io:make(&func, mem:make(st:buf{ data, sz, 0, *sz }));
+};
+def[export] st:io(pt:pt:void data, pt:u32 sz) io1:mem_rdwr = {
 	def e:str[void](pt:st:buf buf, u32 id, pt:void arg) func = {
 		switch(id) {
 		case io:id:read:

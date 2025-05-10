@@ -1,5 +1,5 @@
 // FIXME i dont' know if this is ever really appropriate
-def[export] st:io:call io:call_null = { null, null };
+def[export] st:io1:call io:call_null = { null, null };
 
 // FIXME bad
 def[export,extern] fp64(fp32 v) cast_fp32tofp64;
@@ -62,25 +62,25 @@ def[export] e:str[void](pt:st:pl3:top top, cpt:char path) pl3:llvm = {
 	var pt:st:pl3:decl decl;
 	var pt:st:pl3:func func;
 
-	file = e:get(io:open(path, 0644 | io:mode:create | io:mode:trunc | io:mode:write));
+	file = e:get(io1:open(path, 0644 | io:mode:create | io:mode:trunc | io:mode:write));
 	ctx_init(&ctx, file);
 	onerr ctx_done(&ctx);
 
-	e:get(io:fmt(file, "target triple = \"x86_64-pc-linux-gnu\"\n"));
+	e:get(io1:fmt(file, "target triple = \"x86_64-pc-linux-gnu\"\n"));
 
-	e:get(io:fmt(ctx.ext, "!llvm.module.flags = !{!0}\n"));
-	e:get(io:fmt(ctx.ext, "!%u = !{i32 2, !\"Debug Info Version\", i32 3}\n", map_get(&ctx.dbgs, top)));
+	e:get(io1:fmt(ctx.ext, "!llvm.module.flags = !{!0}\n"));
+	e:get(io1:fmt(ctx.ext, "!%u = !{i32 2, !\"Debug Info Version\", i32 3}\n", map_get(&ctx.dbgs, top)));
 
 	// TODO just a bunch of varargs stuff
-	e:get(io:fmt(file, "%%\"$args\" = type { i32, i32, i8*, i8* }\n"));
-	e:get(io:fmt(file, "declare void @_getarg(i8*, i32, i8*)\n"));
-	e:get(io:fmt(file, "declare void @llvm.va_start(i8*)\n"));
+	e:get(io1:fmt(file, "%%\"$args\" = type { i32, i32, i8*, i8* }\n"));
+	e:get(io1:fmt(file, "declare void @_getarg(i8*, i32, i8*)\n"));
+	e:get(io1:fmt(file, "declare void @llvm.va_start(i8*)\n"));
 
 	// TODO syscall function kinda sucks
-	e:get(io:fmt(ctx.ext, "define internal i64 @$syscall(i64, i64, i64, i64, i64, i64, i64, ...) local_unnamed_addr #0 {\n"));
-	e:get(io:fmt(ctx.ext, "\t%%8 = tail call i64 asm sideeffect \"syscall\", \"={ax},{ax},{di},{si},{dx},{r10},{r8},{r9},~{rcx},~{r11},~{memory},~{dirflag},~{fpsr},~{flags}\"(i64 %%0, i64 %%1, i64 %%2, i64 %%3, i64 %%4, i64 %%5, i64 %%6) #1\n"));
-	e:get(io:fmt(ctx.ext, "\tret i64 %%8\n"));
-	e:get(io:fmt(ctx.ext, "}\n"));
+	e:get(io1:fmt(ctx.ext, "define internal i64 @$syscall(i64, i64, i64, i64, i64, i64, i64, ...) local_unnamed_addr #0 {\n"));
+	e:get(io1:fmt(ctx.ext, "\t%%8 = tail call i64 asm sideeffect \"syscall\", \"={ax},{ax},{di},{si},{dx},{r10},{r8},{r9},~{rcx},~{r11},~{memory},~{dirflag},~{fpsr},~{flags}\"(i64 %%0, i64 %%1, i64 %%2, i64 %%3, i64 %%4, i64 %%5, i64 %%6) #1\n"));
+	e:get(io1:fmt(ctx.ext, "\tret i64 %%8\n"));
+	e:get(io1:fmt(ctx.ext, "}\n"));
 
 							st:pinfo{ &ctx };
 	for(unit = top->unit; unit != null; unit = unit->next) {
@@ -96,14 +96,14 @@ def[export] e:str[void](pt:st:pl3:top top, cpt:char path) pl3:llvm = {
 								continue;
 
 							var pt:st:pl3:sig sig = decl->type.data.sig;
-							var st:io:call param = call_pinfo(getref(st:pinfo{ &ctx, sig->param, sig->vlist })); //FIXME ugly
+							var st:io1:call param = call_pinfo(getref(st:pinfo{ &ctx, sig->param, sig->vlist })); //FIXME ugly
 
 							def e:str[void](st:io file, cpt:void arg) proc = {
-								e:get(io:fmt(file, "@\"%s\"", arg));
+								e:get(io1:fmt(file, "@\"%s\"", arg));
 							};
 
-							e:get(io:fmt(ctx.file, "declare %C @\"%s\"(%C)\n", call_type(&sig->ret), bind->id, param));
-							ref_put(&ctx, bind, st:io:call{ &proc, bind->id });
+							e:get(io1:fmt(ctx.file, "declare %C @\"%s\"(%C)\n", call_type(&sig->ret), bind->id, param));
+							ref_put(&ctx, bind, st:io1:call{ &proc, bind->id });
 							continue;
 						}
 
@@ -173,7 +173,7 @@ def void(pt:st:ctx ctx, st:io file) ctx_init = {
 	ctx->defer = null;
 	ctx->file = file;
 	ctx->ext_buf = null;
-	ctx->ext = io:mem_rdwr(&ctx->ext_buf, &ctx->ext_sz);
+	ctx->ext = io1:mem_rdwr(&ctx->ext_buf, &ctx->ext_sz);
 	ctx->idefer = &ctx->defer;
 	ctx->binds = map_new();
 	ctx->types = map_new();
@@ -196,11 +196,11 @@ def void(pt:st:ctx ctx) ctx_done = {
 		mem:free(defer);
 	}
 
-	io:close(ctx->ext);
-	io:write(ctx->file, ctx->ext_buf, ctx->ext_sz);
+	io1:close(ctx->ext);
+	io1:write(ctx->file, ctx->ext_buf, ctx->ext_sz);
 	mem:free(ctx->ext_buf);
 
-	io:close(ctx->file);
+	io1:close(ctx->file);
 	map_delete(ctx->binds);
 	map_delete(ctx->types);
 	map_delete(ctx->decls);
@@ -247,20 +247,20 @@ def e:str[void](pt:st:ctx ctx, pt:st:pl3:tydecl decl) emit_tydecl = {
 
 		map_get(&ctx->decls, decl);
 		id = map_get(&ctx->types, decl);
-		e:get(io:fmt(ctx->file, "%%\"$s%u\" = type {", id));
+		e:get(io1:fmt(ctx->file, "%%\"$s%u\" = type {", id));
 
 		for(memb = agg->memb; memb != null; memb = memb->next) {
 			for(field = memb->field; field != null; field = field->next) {
-				var st:io:call type = call_tyinfo(getref(st:tyinfo{ ctx, memb->type }));
+				var st:io1:call type = call_tyinfo(getref(st:tyinfo{ ctx, memb->type }));
 
-				e:get(io:fmt(ctx->file, "%C", type));
+				e:get(io1:fmt(ctx->file, "%C", type));
 
 				if((field->next != null) || (memb->next != null))
-					e:get(io:fmt(ctx->file, ", "));
+					e:get(io1:fmt(ctx->file, ", "));
 			}
 		}
 
-		e:get(io:fmt(ctx->file, "}\n"));
+		e:get(io1:fmt(ctx->file, "}\n"));
 	} break;
 
 	case ev:pl3:tydecl:union:
@@ -294,9 +294,9 @@ def e:str[void](pt:st:ctx ctx, pt:st:pl3:decl decl) ctx_top = {
 				ctx->idefer = &(*ctx->idefer)->next;
 
 				//if((decl->flags & pl3:decl:exp) != 0)
-					//e:get(io:fmt(ctx->file, "@\"%s\" = dso_local alias %C, %C* %C\n", bind->id, sig, sig, id));
+					//e:get(io1:fmt(ctx->file, "@\"%s\" = dso_local alias %C, %C* %C\n", bind->id, sig, sig, id));
 				//else if((decl->flags & pl3:decl:pub) != 0)
-					//e:get(io:fmt(ctx->file, "@\"%s\" = hidden alias %C, %C* %C\n", bind->id, sig, sig, id));
+					//e:get(io1:fmt(ctx->file, "@\"%s\" = hidden alias %C, %C* %C\n", bind->id, sig, sig, id));
 
 				if((decl->flags & pl3:decl:exp) != 0)
 					ref_put(ctx, func, ref_external(ctx, bind));
@@ -305,14 +305,14 @@ def e:str[void](pt:st:ctx ctx, pt:st:pl3:decl decl) ctx_top = {
 			}
 			else {
 				var pt:st:pl3:sig sig = decl->type.data.sig;
-				var st:io:call param = call_pinfo(getref(st:pinfo{ ctx, sig->param, sig->vlist })); //FIXME ugly
+				var st:io1:call param = call_pinfo(getref(st:pinfo{ ctx, sig->param, sig->vlist })); //FIXME ugly
 
 				def e:str[void](st:io file, cpt:void arg) proc = {
-					e:get(io:fmt(file, "@\"%s\"", arg));
+					e:get(io1:fmt(file, "@\"%s\"", arg));
 				};
 				
-				e:get(io:fmt(ctx->file, "declare %C @\"%s\"(%C)\n", call_type(&sig->ret), bind->id, param));
-				ref_put(ctx, bind, st:io:call{ &proc, bind->id });
+				e:get(io1:fmt(ctx->file, "declare %C @\"%s\"(%C)\n", call_type(&sig->ret), bind->id, param));
+				ref_put(ctx, bind, st:io1:call{ &proc, bind->id });
 			}
 		}
 		else {
@@ -320,7 +320,7 @@ def e:str[void](pt:st:ctx ctx, pt:st:pl3:decl decl) ctx_top = {
 				var st:env env;
 				var st:map map;
 				var st:scope scope;
-				var st:io:call calc;
+				var st:io1:call calc;
 
 				map = map_new();
 				onerr map_delete(map);
@@ -336,25 +336,25 @@ def e:str[void](pt:st:ctx ctx, pt:st:pl3:decl decl) ctx_top = {
 					ref_external(ctx, bind);
 
 				if((decl->flags & pl3:decl:exp) != 0)
-					e:get(io:fmt(ctx->file, "%C = global %C %C, !dbg %C\n", ref_bind(ctx, bind), call_type(&decl->type), calc, dbg_bind(ctx, bind, decl)));
+					e:get(io1:fmt(ctx->file, "%C = global %C %C, !dbg %C\n", ref_bind(ctx, bind), call_type(&decl->type), calc, dbg_bind(ctx, bind, decl)));
 				else
-					e:get(io:fmt(ctx->file, "%C = internal global %C %C, !dbg %C\n", ref_bind(ctx, bind), call_type(&decl->type), calc, dbg_bind(ctx, bind, decl)));
+					e:get(io1:fmt(ctx->file, "%C = internal global %C %C, !dbg %C\n", ref_bind(ctx, bind), call_type(&decl->type), calc, dbg_bind(ctx, bind, decl)));
 
 				map_delete(map);
 				scope_delete(scope);
 			}
 			else {
 				if((decl->flags & pl3:decl:ext) != 0) {
-					e:get(io:fmt(ctx->file, "@\"%s\" = external global %C\n", bind->id, call_type(&decl->type)));
+					e:get(io1:fmt(ctx->file, "@\"%s\" = external global %C\n", bind->id, call_type(&decl->type)));
 					ref_external(ctx, bind);
-					//e:get(io:fmt(ctx->file, "%C = external alias %C, %C* @\"%s\"\n", ref_bind(ctx, bind), call_type(&decl->type), call_type(&decl->type), bind->id));
+					//e:get(io1:fmt(ctx->file, "%C = external alias %C, %C* @\"%s\"\n", ref_bind(ctx, bind), call_type(&decl->type), call_type(&decl->type), bind->id));
 				}
 				else if((decl->flags & pl3:decl:exp) != 0) {
-					e:get(io:fmt(ctx->file, "@\"%s\" = external global %C zeroinitializer, !dbg %C\n", bind->id, call_type(&decl->type), dbg_bind(ctx, bind, decl)));
+					e:get(io1:fmt(ctx->file, "@\"%s\" = external global %C zeroinitializer, !dbg %C\n", bind->id, call_type(&decl->type), dbg_bind(ctx, bind, decl)));
 					ref_external(ctx, bind);
 				}
 				else
-					e:get(io:fmt(ctx->file, "%C = internal global %C zeroinitializer, !dbg %C\n", ref_bind(ctx, bind), call_type(&decl->type), dbg_bind(ctx, bind, decl)));
+					e:get(io1:fmt(ctx->file, "%C = internal global %C zeroinitializer, !dbg %C\n", ref_bind(ctx, bind), call_type(&decl->type), dbg_bind(ctx, bind, decl)));
 			}
 		}
 	}
@@ -374,16 +374,16 @@ def e:str[void](pt:st:ctx ctx, pt:st:pl3:func func, pt:st:pl3:decl decl) ctx_fun
 	var pt:st:pl3:param param;
 	var pt:void vars_buf, code_buf;
 	var u32 vars_sz, code_sz;
-	var st:io:call sig, name;
+	var st:io1:call sig, name;
 
 	sig = call_sig(func->sig);
 	name = ref_uniq(ctx, func);
 
 	vars_buf = code_buf = null;
-	ctx->vars = io:mem_rdwr(&vars_buf, &vars_sz);
-	ctx->code = io:mem_rdwr(&code_buf, &code_sz);
-	//onerr { io:close(ctx->vars); mem:free(vars_buf); }
-	//onerr { io:close(ctx->code); mem:free(code_buf); }
+	ctx->vars = io1:mem_rdwr(&vars_buf, &vars_sz);
+	ctx->code = io1:mem_rdwr(&code_buf, &code_sz);
+	//onerr { io1:close(ctx->vars); mem:free(vars_buf); }
+	//onerr { io1:close(ctx->code); mem:free(code_buf); }
 
 	map = map_new();
 	onerr map_delete(map);
@@ -395,7 +395,7 @@ def e:str[void](pt:st:ctx ctx, pt:st:pl3:func func, pt:st:pl3:decl decl) ctx_fun
 
 	i = 0;
 	for(param = func->sig->param; param != null; param = param->next) {
-		var st:io:call mem, type;
+		var st:io1:call mem, type;
 
 		if(param->id == null)
 			continue;
@@ -403,8 +403,8 @@ def e:str[void](pt:st:ctx ctx, pt:st:pl3:func func, pt:st:pl3:decl decl) ctx_fun
 		mem = call_local(map_get(&map, param));
 		type = call_tyinfo(getref(st:tyinfo{ ctx, param->type }));
 
-		e:get(io:fmt(ctx->vars, "\t%C = alloca %C\n", mem, type));
-		e:get(io:fmt(ctx->code, "\tstore %C %%a%u, %C* %C\n", type, i++, type, mem));
+		e:get(io1:fmt(ctx->vars, "\t%C = alloca %C\n", mem, type));
+		e:get(io1:fmt(ctx->code, "\tstore %C %%a%u, %C* %C\n", type, i++, type, mem));
 	}
 
 	ctx->sig = func->sig;
@@ -412,32 +412,32 @@ def e:str[void](pt:st:ctx ctx, pt:st:pl3:func func, pt:st:pl3:decl decl) ctx_fun
 	ctx->lab = 0;
 	e:get(ctx_block(ctx, &env, func->block));
 
-	io:close(ctx->vars);
-	io:close(ctx->code);
+	io1:close(ctx->vars);
+	io1:close(ctx->code);
 
 	//if(pt:void{name.func} != pt:void{&ext_proc}) FIXME< find out why
 	//this causes a memory leak
 	if((decl->flags & pl3:decl:exp) == 0)
-		e:get(io:fmt(ctx->file, "define internal %C %C(%C) {\n", call_type(&func->sig->ret), name, call_pinfo(getref(st:pinfo{ ctx, func->sig->param, func->sig->vlist }))));
+		e:get(io1:fmt(ctx->file, "define internal %C %C(%C) {\n", call_type(&func->sig->ret), name, call_pinfo(getref(st:pinfo{ ctx, func->sig->param, func->sig->vlist }))));
 	else
-		e:get(io:fmt(ctx->file, "define %C %C(%C) {\n", call_type(&func->sig->ret), name, call_pinfo(getref(st:pinfo{ ctx, func->sig->param, func->sig->vlist }))));
+		e:get(io1:fmt(ctx->file, "define %C %C(%C) {\n", call_type(&func->sig->ret), name, call_pinfo(getref(st:pinfo{ ctx, func->sig->param, func->sig->vlist }))));
 
-	e:get(io:write(ctx->file, vars_buf, vars_sz));
-	e:get(io:write(ctx->file, code_buf, code_sz));
+	e:get(io1:write(ctx->file, vars_buf, vars_sz));
+	e:get(io1:write(ctx->file, code_buf, code_sz));
 
 	var pt:st:pl3:err err;
 	if((err = pl3:type_get_err(func->sig->ret)) != null) {
 		if(pl3:type_is_void(err->suc)) 
-			e:get(io:fmt(ctx->file, "\tret %C zeroinitializer\n", call_type(&err->fail)));
+			e:get(io1:fmt(ctx->file, "\tret %C zeroinitializer\n", call_type(&err->fail)));
 		else
-			e:get(io:fmt(ctx->file, "\tunreachable\n"));
+			e:get(io1:fmt(ctx->file, "\tunreachable\n"));
 	}
 	else if(pl3:type_is_void(func->sig->ret))
-		e:get(io:fmt(ctx->file, "\tret void\n"));
+		e:get(io1:fmt(ctx->file, "\tret void\n"));
 	else
-		e:get(io:fmt(ctx->file, "\tunreachable\n"));
+		e:get(io1:fmt(ctx->file, "\tunreachable\n"));
 
-	e:get(io:fmt(ctx->file, "}\n"));
+	e:get(io1:fmt(ctx->file, "}\n"));
 
 	mem:free(vars_buf);
 	mem:free(code_buf);
@@ -504,16 +504,16 @@ def e:str[void](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:stmt stmt) ctx_stmt = {
 		}
 		else {
 			for(bind = decl->bind; bind != null; bind = bind->next) {
-				var st:io:call id = call_local(map_get(env->map, bind));
-				var st:io:call type = call_tyinfo(getref(st:tyinfo{ ctx, decl->type }));
+				var st:io1:call id = call_local(map_get(env->map, bind));
+				var st:io1:call type = call_tyinfo(getref(st:tyinfo{ ctx, decl->type }));
 
-				e:get(io:fmt(ctx->vars, "\t%C = alloca %C\n", id, type));
+				e:get(io1:fmt(ctx->vars, "\t%C = alloca %C\n", id, type));
 
 				if(bind->expr != null) {
-					var st:io:call val;
+					var st:io1:call val;
 
 					val = e:get(ctx_expr(ctx, env, bind->expr));
-					e:get(io:fmt(ctx->code, "\tstore %C %C, %C* %C\n", type, val, type, id));
+					e:get(io1:fmt(ctx->code, "\tstore %C %C, %C* %C\n", type, val, type, id));
 				}
 			}
 		}
@@ -529,38 +529,38 @@ def e:str[void](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:stmt stmt) ctx_stmt = {
 		err = pl3:type_get_err(ctx->sig->ret);
 
 		if(stmt->data.expr != null) {
-			var st:io:call val, type;
+			var st:io1:call val, type;
 
 			val = e:get(ctx_expr(ctx, env, stmt->data.expr));
 			type = call_tyinfo(getref(st:tyinfo{ ctx, ctx->sig->ret }));
 
 			if(err != null) {
 				if(pl3:type_get_err(stmt->data.expr->type) == null) {
-					var st:io:call ret, vty, ety;
+					var st:io1:call ret, vty, ety;
 					vty = call_tyinfo(getref(st:tyinfo{ ctx, err->suc }));
 					ety = call_tyinfo(getref(st:tyinfo{ ctx, err->fail }));
 					ret = gen_tmp(ctx);
-					e:get(io:fmt(ctx->code, "\t%C = insertvalue %C { %C undef, %C zeroinitializer }, %C %C, 0\n", ret, type, vty, ety, vty, val, pl3:meta_call(&stmt->meta)));
-					e:get(io:fmt(ctx->code, "\tret %C %C\n", type, ret));
+					e:get(io1:fmt(ctx->code, "\t%C = insertvalue %C { %C undef, %C zeroinitializer }, %C %C, 0\n", ret, type, vty, ety, vty, val, pl3:meta_call(&stmt->meta)));
+					e:get(io1:fmt(ctx->code, "\tret %C %C\n", type, ret));
 				}
 				else
-					e:get(io:fmt(ctx->code, "\tret %C %C\n", type, val));
+					e:get(io1:fmt(ctx->code, "\tret %C %C\n", type, val));
 			}
 			else if(pl3:type_is_void(stmt->data.expr->type))
-				e:get(io:fmt(ctx->code, "\tret void\n"));
+				e:get(io1:fmt(ctx->code, "\tret void\n"));
 			else
-				e:get(io:fmt(ctx->code, "\tret %C %C\n", type, val));
+				e:get(io1:fmt(ctx->code, "\tret %C %C\n", type, val));
 		}
 		else {
 			if(err != null) {
-				var st:io:call ety;
+				var st:io1:call ety;
 
 				ety = call_tyinfo(getref(st:tyinfo{ ctx, err->fail }));
 
-				e:get(io:fmt(ctx->code, "\tret %C zeroinitializer\n", ety));
+				e:get(io1:fmt(ctx->code, "\tret %C zeroinitializer\n", ety));
 			}
 			else
-				e:get(io:fmt(ctx->code, "\tret void\n"));
+				e:get(io1:fmt(ctx->code, "\tret void\n"));
 		}
 	} break;
 
@@ -569,7 +569,7 @@ def e:str[void](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:stmt stmt) ctx_stmt = {
 		break;
 
 	case ev:pl3:stmt:cond: {
-		var st:io:call eval;
+		var st:io1:call eval;
 		var u32 ontrue, onfalse, after;
 		var pt:st:pl3:cond cond = stmt->data.cond;
 
@@ -579,21 +579,21 @@ def e:str[void](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:stmt stmt) ctx_stmt = {
 
 		eval = e:get(ctx_expr(ctx, env, cond->eval));	
 
-		e:get(io:fmt(ctx->code, "\tbr i1 %C, label %%l%u, label %%l%u\n", e:get(mk_bool(ctx, eval)), ontrue, onfalse));
+		e:get(io1:fmt(ctx->code, "\tbr i1 %C, label %%l%u, label %%l%u\n", e:get(mk_bool(ctx, eval)), ontrue, onfalse));
 
 		if(cond->ontrue != null) {
-			e:get(io:fmt(ctx->code, "l%u:\n", ontrue));
+			e:get(io1:fmt(ctx->code, "l%u:\n", ontrue));
 			e:get(ctx_stmt(ctx, env, cond->ontrue));
-			e:get(io:fmt(ctx->code, "\tbr label %%l%u\n", after));
+			e:get(io1:fmt(ctx->code, "\tbr label %%l%u\n", after));
 		}
 
 		if(cond->onfalse != null) {
-			e:get(io:fmt(ctx->code, "l%u:\n", onfalse));
+			e:get(io1:fmt(ctx->code, "l%u:\n", onfalse));
 			e:get(ctx_stmt(ctx, env, cond->onfalse));
-			e:get(io:fmt(ctx->code, "\tbr label %%l%u\n", after));
+			e:get(io1:fmt(ctx->code, "\tbr label %%l%u\n", after));
 		}
 
-		e:get(io:fmt(ctx->code, "l%u:\n", after));
+		e:get(io1:fmt(ctx->code, "l%u:\n", after));
 	} break;
 
 	case ev:pl3:stmt:loop: {
@@ -610,8 +610,8 @@ def e:str[void](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:stmt stmt) ctx_stmt = {
 		end = ctx->lab++;
 
 		if(loop->post) {
-			e:get(io:fmt(ctx->code, "\tbr label %%l%u\n", begin));
-			e:get(io:fmt(ctx->code, "l%u:\n", begin));
+			e:get(io1:fmt(ctx->code, "\tbr label %%l%u\n", begin));
+			e:get(io1:fmt(ctx->code, "l%u:\n", begin));
 
 			flow = st:flow{ end, begin, env->flow };
 			nest = st:env{ env->map, &flow, env->scope };
@@ -622,50 +622,50 @@ def e:str[void](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:stmt stmt) ctx_stmt = {
 
 			if(loop->eval != null) {
 				var u32 body;
-				var st:io:call eval;
+				var st:io1:call eval;
 
 				body = ctx->lab++;
 				eval = e:get(ctx_expr(ctx, env, loop->eval));
-				e:get(io:fmt(ctx->code, "\tbr i1 %C, label %%l%u, label %%l%u\n", e:get(mk_bool(ctx, eval)), begin, end));
+				e:get(io1:fmt(ctx->code, "\tbr i1 %C, label %%l%u, label %%l%u\n", e:get(mk_bool(ctx, eval)), begin, end));
 			}
 			else
-				e:get(io:fmt(ctx->code, "\tbr label %%l%u\n", begin));
+				e:get(io1:fmt(ctx->code, "\tbr label %%l%u\n", begin));
 
-			e:get(io:fmt(ctx->code, "l%u:\n", end));
+			e:get(io1:fmt(ctx->code, "l%u:\n", end));
 		}
 		else {
-			e:get(io:fmt(ctx->code, "\tbr label %%l%u\n", begin));
-			e:get(io:fmt(ctx->code, "l%u:\n", begin));
+			e:get(io1:fmt(ctx->code, "\tbr label %%l%u\n", begin));
+			e:get(io1:fmt(ctx->code, "l%u:\n", begin));
 
 			if(loop->eval != null) {
 				var u32 body;
-				var st:io:call eval;
+				var st:io1:call eval;
 
 				body = ctx->lab++;
 				eval = e:get(ctx_expr(ctx, env, loop->eval));
-				e:get(io:fmt(ctx->code, "\tbr i1 %C, label %%l%u, label %%l%u\n", e:get(mk_bool(ctx, eval)), body, end));
-				e:get(io:fmt(ctx->code, "l%u:\n", body));
+				e:get(io1:fmt(ctx->code, "\tbr i1 %C, label %%l%u, label %%l%u\n", e:get(mk_bool(ctx, eval)), body, end));
+				e:get(io1:fmt(ctx->code, "l%u:\n", body));
 			}
 
 			flow = st:flow{ end, inc, env->flow };
 			nest = st:env{ env->map, &flow, env->scope };
 			e:get(ctx_stmt(ctx, &nest, loop->body));
 
-			e:get(io:fmt(ctx->code, "\tbr label %%l%u\n", inc));
-			e:get(io:fmt(ctx->code, "l%u:\n", inc));
+			e:get(io1:fmt(ctx->code, "\tbr label %%l%u\n", inc));
+			e:get(io1:fmt(ctx->code, "l%u:\n", inc));
 
 			if(loop->inc != null)
 				e:get(ctx_expr(ctx, env, loop->inc));
 
-			e:get(io:fmt(ctx->code, "\tbr label %%l%u\n", begin));
-			e:get(io:fmt(ctx->code, "l%u:\n", end));
+			e:get(io1:fmt(ctx->code, "\tbr label %%l%u\n", begin));
+			e:get(io1:fmt(ctx->code, "l%u:\n", end));
 		}
 	} break;
 
 	case ev:pl3:stmt:sw: {
 		var pt:st:pl3:cas cas;
 		var u32 after, other;
-		var st:io:call type, eval;
+		var st:io1:call type, eval;
 		var st:env nest;
 		var st:flow flow;
 		var pt:st:pl3:sw sw = stmt->data.sw;
@@ -680,25 +680,25 @@ def e:str[void](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:stmt stmt) ctx_stmt = {
 		type = call_tyinfo(getref(st:tyinfo{ ctx, sw->eval->type }));
 		eval = e:get(ctx_expr(ctx, env, sw->eval));
 
-		e:get(io:fmt(ctx->code, "  switch %C %C, label %%%c%u [ ", type, eval, char{(sw->dflt != null) ? 'c' : 'l'}, other)); // TODO This feels stupid
+		e:get(io1:fmt(ctx->code, "  switch %C %C, label %%%c%u [ ", type, eval, char{(sw->dflt != null) ? 'c' : 'l'}, other)); // TODO This feels stupid
 
 		for(cas = sw->cas; cas != null; cas = cas->next) {
-			var st:io:call type, val, calc;
+			var st:io1:call type, val, calc;
 
 			type = call_tyinfo(getref(st:tyinfo{ ctx, cas->expr->type }));
 			calc = calc_expr(getref(st:calc{ ctx, env, cas->expr }));
-			e:get(io:fmt(ctx->code, "%C %C, label %%c%u ", type, calc, map_get(&ctx->cases, cas)));
+			e:get(io1:fmt(ctx->code, "%C %C, label %%c%u ", type, calc, map_get(&ctx->cases, cas)));
 		}
 
-		e:get(io:fmt(ctx->code, "]\n"));
-		e:get(io:fmt(ctx->code, "l%u:\n", ctx->lab++));
+		e:get(io1:fmt(ctx->code, "]\n"));
+		e:get(io1:fmt(ctx->code, "l%u:\n", ctx->lab++));
 
 		flow = st:flow{ after, after, env->flow };
 		nest = st:env{ env->map, &flow, env->scope };
 		e:get(ctx_stmt(ctx, &nest, sw->stmt));
 
-		e:get(io:fmt(ctx->code, "  br label %%l%u\n", after));
-		e:get(io:fmt(ctx->code, "l%u:\n", after));
+		e:get(io1:fmt(ctx->code, "  br label %%l%u\n", after));
+		e:get(io1:fmt(ctx->code, "l%u:\n", after));
 	} break;
 
 	case ev:pl3:stmt:cas: {
@@ -709,8 +709,8 @@ def e:str[void](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:stmt stmt) ctx_stmt = {
 		if(lab < 0)
 			e:fmt("Internal error. Cannot find case label.");
 
-		e:get(io:fmt(ctx->code, "  br label %%c%u\n", u32{lab}));
-		e:get(io:fmt(ctx->code, "c%u:\n", u32{lab}));
+		e:get(io1:fmt(ctx->code, "  br label %%c%u\n", u32{lab}));
+		e:get(io1:fmt(ctx->code, "c%u:\n", u32{lab}));
 	} break;
 
 	case ev:pl3:stmt:dflt: {
@@ -720,8 +720,8 @@ def e:str[void](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:stmt stmt) ctx_stmt = {
 		if(lab < 0)
 			e:fmt("Internal error. Cannot find case label.");
 
-		e:get(io:fmt(ctx->code, "  br label %%c%u\n", u32{lab}));
-		e:get(io:fmt(ctx->code, "c%u:\n", u32{lab}));
+		e:get(io1:fmt(ctx->code, "  br label %%c%u\n", u32{lab}));
+		e:get(io1:fmt(ctx->code, "c%u:\n", u32{lab}));
 	} break;
 
 	case ev:pl3:stmt:brk:
@@ -741,13 +741,13 @@ def e:str[void](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:stmt stmt) ctx_stmt = {
 			e:fmt("Internal error. Invalid %s.", name);
 
 		lab = (stmt->tag == ev:pl3:stmt:brk) ? flow->brk : flow->cont;
-		e:get(io:fmt(ctx->code, "  br label %%l%u\n", lab));
-		e:get(io:fmt(ctx->code, "l%u:\n", ctx->lab++));
+		e:get(io1:fmt(ctx->code, "  br label %%l%u\n", lab));
+		e:get(io1:fmt(ctx->code, "l%u:\n", ctx->lab++));
 	} break;
 
 	case ev:pl3:stmt:eret: {
 		var pt:st:pl3:err err;
-		var st:io:call val;
+		var st:io1:call val;
 
 		err = pl3:type_get_err(ctx->sig->ret);
 		if(err == null)
@@ -756,19 +756,19 @@ def e:str[void](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:stmt stmt) ctx_stmt = {
 		val = e:get(ctx_expr(ctx, env, stmt->data.expr));
 
 		if(pl3:type_is_void(err->suc)) {
-			var st:io:call type;
+			var st:io1:call type;
 
 			type = call_tyinfo(getref(st:tyinfo{ ctx, err->fail }));
 			e:get(scope_emit(env->scope, ctx, env));
-			e:get(io:fmt(ctx->code, "\tret %C %C\n", type, val));
+			e:get(io1:fmt(ctx->code, "\tret %C %C\n", type, val));
 		}
 		else {
-			var st:io:call ret;
+			var st:io1:call ret;
 
 			ret = gen_tmp(ctx);
-			e:get(io:fmt(ctx->code, "\t%C = insertvalue %C undef, %C %C, 1\n", ret, call_type(&ctx->sig->ret), call_type(&err->fail), val));
+			e:get(io1:fmt(ctx->code, "\t%C = insertvalue %C undef, %C %C, 1\n", ret, call_type(&ctx->sig->ret), call_type(&err->fail), val));
 			e:get(scope_emit(env->scope, ctx, env));
-			e:get(io:fmt(ctx->code, "\tret %C %C\n", call_type(&ctx->sig->ret), ret));
+			e:get(io1:fmt(ctx->code, "\tret %C %C\n", call_type(&ctx->sig->ret), ret));
 		}
 	} break;
 
@@ -788,12 +788,12 @@ def e:str[void](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:stmt stmt) ctx_stmt = {
  *   @expr: The expression.
  *   &returns: The result.
  */
-def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_expr = {
-	var st:io:call type = call_type(&expr->type);
+def e:str[st:io1:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_expr = {
+	var st:io1:call type = call_type(&expr->type);
 
 	switch(expr->tag) {
 	case ev:pl3:expr:lit: {
-		var st:io:call tmp = gen_tmp(ctx);
+		var st:io1:call tmp = gen_tmp(ctx);
 		var pt:st:pl3:lit lit = expr->data.lit;
 
 		if(lit->tag == ev:pl3:lit:str) {
@@ -824,26 +824,26 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 			str = str:buf_done(&buf);
 			onerr mem:free(str);
 
-			e:get(io:fmt(ctx->ext, "@s%u = internal local_unnamed_addr constant [%u x i8] c\"%s\", align 1\n", num, sz, str));
-			e:get(io:fmt(ctx->code, "\t%C = getelementptr inbounds [%u x i8], [%u x i8]* @s%u, i64 0, i64 0\n", tmp, sz, sz, num));
+			e:get(io1:fmt(ctx->ext, "@s%u = internal local_unnamed_addr constant [%u x i8] c\"%s\", align 1\n", num, sz, str));
+			e:get(io1:fmt(ctx->code, "\t%C = getelementptr inbounds [%u x i8], [%u x i8]* @s%u, i64 0, i64 0\n", tmp, sz, sz, num));
 
 			mem:free(str);
 		}
 		else {
-			e:get(io:fmt(ctx->code, "\t%C = bitcast %C %C to %C\n", tmp, type, gen_lit(lit), type));
+			e:get(io1:fmt(ctx->code, "\t%C = bitcast %C %C to %C\n", tmp, type, gen_lit(lit), type));
 		}
 	
 		return tmp;
 	} break;
 
 	case ev:pl3:expr:ident: {
-		var st:io:call mem, ret, tmp;
+		var st:io1:call mem, ret, tmp;
 		var pt:st:pl3:ident ident = expr->data.ident;
 
 		ret = gen_tmp(ctx);
 		mem = e:get(ctx_left(ctx, env, expr));
 
-		e:get(io:fmt(ctx->code, "\t%C = load %C, %C* %C\n", ret, type, type, mem));
+		e:get(io1:fmt(ctx->code, "\t%C = load %C, %C* %C\n", ret, type, type, mem));
 
 		return ret;
 	} break;
@@ -853,26 +853,26 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 
 		switch(op1->tag) {
 		case ev:pl3:op1:deref: {
-			var st:io:call in, tmp, ret;
+			var st:io1:call in, tmp, ret;
 
 			if(pl3:type_is_ptr(op1->in->type)) {
 				in = e:get(ctx_expr(ctx, env, op1->in));
 
 				tmp = gen_tmp(ctx);
 				ret = gen_tmp(ctx);
-				e:get(io:fmt(ctx->code, "\t%C = bitcast %C %C to %C*\n", tmp, call_type(&op1->in->type), in, call_type(&expr->type)));
-				e:get(io:fmt(ctx->code, "\t%C = load %C, %C* %C\n", ret, call_type(&expr->type), call_type(&expr->type), tmp));
+				e:get(io1:fmt(ctx->code, "\t%C = bitcast %C %C to %C*\n", tmp, call_type(&op1->in->type), in, call_type(&expr->type)));
+				e:get(io1:fmt(ctx->code, "\t%C = load %C, %C* %C\n", ret, call_type(&expr->type), call_type(&expr->type), tmp));
 			}
 			else if(pl3:type_is_arr(op1->in->type)) {
 				in = e:get(ctx_left(ctx, env, op1->in));
 
 				//ret = gen_tmp(ctx);
-				//e:get(io:fmt(ctx->code, "\t%C = getelementptr %C, %C* %C, i32 0, i32 0\n", ret, call_type(&op1->in->type), call_type(&op1->in->type), in));
+				//e:get(io1:fmt(ctx->code, "\t%C = getelementptr %C, %C* %C, i32 0, i32 0\n", ret, call_type(&op1->in->type), call_type(&op1->in->type), in));
 
 				tmp = gen_tmp(ctx);
 				ret = gen_tmp(ctx);
-				e:get(io:fmt(ctx->code, "\t%C = getelementptr %C, %C* %C, i32 0, i32 0\n", tmp, call_type(&op1->in->type), call_type(&op1->in->type), in));
-				e:get(io:fmt(ctx->code, "\t%C = bitcast %C* %C to i8*\n", ret, call_type(&op1->in->type.data.arr->type), tmp));
+				e:get(io1:fmt(ctx->code, "\t%C = getelementptr %C, %C* %C, i32 0, i32 0\n", tmp, call_type(&op1->in->type), call_type(&op1->in->type), in));
+				e:get(io1:fmt(ctx->code, "\t%C = bitcast %C* %C to i8*\n", ret, call_type(&op1->in->type.data.arr->type), tmp));
 			}
 			else
 				e:fmt("Internal error. Invalid dereference.");
@@ -881,12 +881,12 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 		} break;
 
 		case ev:pl3:op1:addr: {
-			var st:io:call val, ret;
+			var st:io1:call val, ret;
 
 			val = e:get(ctx_left(ctx, env, op1->in));
 
 			ret = gen_tmp(ctx);
-			e:get(io:fmt(ctx->code, "\t%C = bitcast %C* %C to i8*\n", ret, call_type(&op1->in->type), val));
+			e:get(io1:fmt(ctx->code, "\t%C = bitcast %C* %C to i8*\n", ret, call_type(&op1->in->type), val));
 
 			return ret;
 		} break;
@@ -896,7 +896,7 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 		case ev:pl3:op1:postinc:
 		case ev:pl3:op1:postdec: {
 			var bool inc, post;
-			var st:io:call ptr, in, out, type;
+			var st:io1:call ptr, in, out, type;
 
 			inc = ((op1->tag == ev:pl3:op1:postinc) || (op1->tag == ev:pl3:op1:preinc));
 			post = ((op1->tag == ev:pl3:op1:postinc) || (op1->tag == ev:pl3:op1:postdec));
@@ -906,29 +906,29 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 
 			in = gen_tmp(ctx);
 			out = gen_tmp(ctx);
-			e:get(io:fmt(ctx->code, "\t%C = load %C, %C* %C\n", in, type, type, ptr));
+			e:get(io1:fmt(ctx->code, "\t%C = load %C, %C* %C\n", in, type, type, ptr));
 
 			if(pl3:type_is_int(expr->type))
-				e:get(io:fmt(ctx->code, "\t%C = add %C %C, %d", out, type, in, i32{inc ? 1 : -1}));
+				e:get(io1:fmt(ctx->code, "\t%C = add %C %C, %d", out, type, in, i32{inc ? 1 : -1}));
 			else if(pl3:type_is_fp(expr->type))
 				fatal("FIXME stub float");
 			else if(pl3:type_is_ptr(expr->type))
-				e:get(io:fmt(ctx->code, "\t%C = getelementptr i8, i8* %C, i32 %d", out, in, i32{inc ? 1 : -1}));
+				e:get(io1:fmt(ctx->code, "\t%C = getelementptr i8, i8* %C, i32 %d", out, in, i32{inc ? 1 : -1} * i32{pl3:type_size(expr->type.data.ptr->type, &pl3:arch_x64)}));
 			else
 				e:fmt("%C: Invalid increment/decrement.", pl3:meta_call(&expr->meta));
 
-			e:get(io:fmt(ctx->code, "\tstore %C %C, %C* %C\n", type, out, type, ptr));
+			e:get(io1:fmt(ctx->code, "\tstore %C %C, %C* %C\n", type, out, type, ptr));
 
 			return post ? in : out;
 		} break;
 
 		case ev:pl3:op1:lnot: {
-			var st:io:call in, ret;
+			var st:io1:call in, ret;
 
 			in = e:get(ctx_expr(ctx, env, op1->in));
 
 			ret = gen_tmp(ctx);
-			e:get(io:fmt(ctx->code, "\t%C = xor i8 %C, 1\n", ret, in));
+			e:get(io1:fmt(ctx->code, "\t%C = xor i8 %C, 1\n", ret, in));
 
 			return ret;
 		} break;
@@ -937,28 +937,28 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 			return e:get(ctx_expr(ctx, env, expr->data.op1->in));
 
 		case ev:pl3:op1:neg: {
-			var st:io:call res, in;
+			var st:io1:call res, in;
 			var pt:st:pl3:op1 op1 = expr->data.op1;
 
 			in = e:get(ctx_expr(ctx, env, expr->data.op1->in));
 			res = gen_tmp(ctx);
 			type = call_tyinfo(getref(st:tyinfo{ ctx, expr->type }));
 			if(pl3:type_is_fp(expr->type))
-				e:get(io:fmt(ctx->code, "\t%C = fsub %C 0.0, %C\n", res, type, in));
+				e:get(io1:fmt(ctx->code, "\t%C = fsub %C 0.0, %C\n", res, type, in));
 			else
-				e:get(io:fmt(ctx->code, "\t%C = sub %C 0, %C\n", res, type, in));
+				e:get(io1:fmt(ctx->code, "\t%C = sub %C 0, %C\n", res, type, in));
 
 			return res;
 		} break;
 
 		case ev:pl3:op1:not: {
-			var st:io:call res, in;
+			var st:io1:call res, in;
 			var pt:st:pl3:op1 op1 = expr->data.op1;
 
 			in = e:get(ctx_expr(ctx, env, expr->data.op1->in));
 			res = gen_tmp(ctx);
 			type = call_tyinfo(getref(st:tyinfo{ ctx, expr->type }));
-			e:get(io:fmt(ctx->code, "\t%C = xor %C -1, %C\n", res, type, in));
+			e:get(io1:fmt(ctx->code, "\t%C = xor %C -1, %C\n", res, type, in));
 
 			return res;
 		} break;
@@ -970,18 +970,18 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 
 	case ev:pl3:expr:op2: {
 		var pt:st:pl3:op2 op2 = expr->data.op2;
-		var st:io:call res, lhs, rhs;
+		var st:io1:call res, lhs, rhs;
 
 		if(op2->tag == ev:pl3:op2:assign) {
 			lhs = e:get(ctx_left(ctx, env, op2->lhs));
 			rhs = e:get(ctx_expr(ctx, env, op2->rhs));
 			res = rhs;
-			e:get(io:fmt(ctx->code, "\tstore %C %C, %C* %C\n", type, rhs, type, lhs));
+			e:get(io1:fmt(ctx->code, "\tstore %C %C, %C* %C\n", type, rhs, type, lhs));
 		}
 		else if(pl3:op2_is_assign(op2->tag)) {
 			var cpt:char op;
 			var bool sign = pl3:type_is_signed(op2->lhs->type);
-			var st:io:call ret, ptr, lhs, rhs, type;
+			var st:io1:call ret, ptr, lhs, rhs, type;
 
 			type = call_type(&expr->type);
 			ptr = e:get(ctx_left(ctx, env, op2->lhs));
@@ -990,25 +990,25 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 			lhs = gen_tmp(ctx);
 			ret = gen_tmp(ctx);
 
-			e:get(io:fmt(ctx->code, "\t%C = load %C, %C* %C\n", lhs, type, type, ptr));
+			e:get(io1:fmt(ctx->code, "\t%C = load %C, %C* %C\n", lhs, type, type, ptr));
 
 			if(pl3:type_is_ptr(op2->lhs->type) && pl3:type_is_int(op2->rhs->type)) {
 				var u32 sz;
-				var st:io:call off;
+				var st:io1:call off;
 				var st:pl3:type sub = op2->lhs->type.data.ptr->type;
 
 				if(op2->tag == ev:pl3:op2:subeq) {
-					var st:io:call tmp;
+					var st:io1:call tmp;
 
 					tmp = gen_tmp(ctx);
-					e:get(io:fmt(ctx->code, "\t%C = sub %C 0, %C\n", tmp, call_type(&op2->rhs->type), rhs));
+					e:get(io1:fmt(ctx->code, "\t%C = sub %C 0, %C\n", tmp, call_type(&op2->rhs->type), rhs));
 					rhs = tmp;
 				}
 
 				sz = pl3:type_is_void(sub) ? 1 : pl3:type_size(sub, &pl3:arch_x64);
 				off = gen_tmp(ctx);
-				e:get(io:fmt(ctx->code, "\t%C = mul %C %C, %u\n", off, call_type(&op2->rhs->type), rhs, sz));
-				e:get(io:fmt(ctx->code, "\t%C = getelementptr i8, i8* %C, %C %C\n", ret, lhs, call_type(&op2->rhs->type), off));
+				e:get(io1:fmt(ctx->code, "\t%C = mul %C %C, %u\n", off, call_type(&op2->rhs->type), rhs, sz));
+				e:get(io1:fmt(ctx->code, "\t%C = getelementptr i8, i8* %C, %C %C\n", ret, lhs, call_type(&op2->rhs->type), off));
 			}
 			else if(pl3:type_is_fp(op2->lhs->type)) {
 				switch(op2->tag) {
@@ -1020,7 +1020,7 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 				default: fatal("FIXME stub op2 fp");
 				}
 
-				e:get(io:fmt(ctx->code, "\t%C = %s %C %C, %C\n", ret, op, type, lhs, rhs));
+				e:get(io1:fmt(ctx->code, "\t%C = %s %C %C, %C\n", ret, op, type, lhs, rhs));
 			}
 			else {
 				switch(op2->tag) {
@@ -1032,14 +1032,31 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 				case ev:pl3:op2:andeq: op = "and"; break;
 				case ev:pl3:op2:oreq: op = "or"; break;
 				case ev:pl3:op2:xoreq: op = "xor"; break;
-				case ev:pl3:op2:shl: op = "shl"; break;
-				case ev:pl3:op2:shr: op = (sign ? "ashr" : "lshr"); break;
+				case ev:pl3:op2:shleq: op = "shl"; break;
+				case ev:pl3:op2:shreq: op = (sign ? "ashr" : "lshr"); break;
 				}
 
-				e:get(io:fmt(ctx->code, "\t%C = %s %C %C, %C\n", ret, op, type, lhs, rhs));
+				if((op2->tag == ev:pl3:op2:shleq) || (op2->tag == ev:pl3:op2:shreq)) {
+					if(pl3:type_size(op2->lhs->type, &pl3:arch_x64) < pl3:type_size(op2->rhs->type, &pl3:arch_x64)) {
+						var st:io1:call tmp;
+
+						tmp = gen_tmp(ctx);
+						e:get(io1:fmt(ctx->code, "\t%C = trunc %C %C to %C\n", tmp, call_type(&op2->rhs->type), rhs, call_type(&op2->lhs->type)));
+						rhs = tmp;
+					}
+					else if(pl3:type_size(op2->lhs->type, &pl3:arch_x64) > pl3:type_size(op2->rhs->type, &pl3:arch_x64)) {
+						var st:io1:call tmp;
+
+						tmp = gen_tmp(ctx);
+						e:get(io1:fmt(ctx->code, "\t%C = sext %C %C to %C\n", tmp, call_type(&op2->rhs->type), rhs, call_type(&op2->lhs->type)));
+						rhs = tmp;
+					}
+				}
+
+				e:get(io1:fmt(ctx->code, "\t%C = %s %C %C, %C\n", ret, op, type, lhs, rhs));
 			}
 
-			e:get(io:fmt(ctx->code, "\tstore %C %C, %C* %C\n", type, ret, type, ptr));
+			e:get(io1:fmt(ctx->code, "\tstore %C %C, %C* %C\n", type, ret, type, ptr));
 
 			return ret;
 		}
@@ -1052,21 +1069,21 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 
 			if(pl3:type_is_ptr(op2->lhs->type) && pl3:type_is_int(op2->rhs->type)) {
 				var u32 sz;
-				var st:io:call off;
+				var st:io1:call off;
 				var st:pl3:type sub = op2->lhs->type.data.ptr->type;
 
 				if(op2->tag == ev:pl3:op2:sub) {
-					var st:io:call tmp;
+					var st:io1:call tmp;
 
 					tmp = gen_tmp(ctx);
-					e:get(io:fmt(ctx->code, "\t%C = sub %C 0, %C\n", tmp, call_type(&op2->rhs->type), rhs));
+					e:get(io1:fmt(ctx->code, "\t%C = sub %C 0, %C\n", tmp, call_type(&op2->rhs->type), rhs));
 					rhs = tmp;
 				}
 
 				off = gen_tmp(ctx);
 				sz = pl3:type_is_void(sub) ? 1 : pl3:type_size(sub, &pl3:arch_x64);
-				e:get(io:fmt(ctx->code, "\t%C = mul %C %C, %u\n", off, call_type(&op2->rhs->type), rhs, sz));
-				e:get(io:fmt(ctx->code, "\t%C = getelementptr i8, i8* %C, %C %C\n", res, lhs, call_type(&op2->rhs->type), off));
+				e:get(io1:fmt(ctx->code, "\t%C = mul %C %C, %u\n", off, call_type(&op2->rhs->type), rhs, sz));
+				e:get(io1:fmt(ctx->code, "\t%C = getelementptr i8, i8* %C, %C %C\n", res, lhs, call_type(&op2->rhs->type), off));
 			}
 			else if(pl3:type_is_fp(op2->lhs->type)) {
 				switch(op2->tag) {
@@ -1078,7 +1095,7 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 				default: fatal("FIXME stub op2 fp");
 				}
 
-				e:get(io:fmt(ctx->code, "\t%C = %s %C %C, %C\n", res, op, type, lhs, rhs));
+				e:get(io1:fmt(ctx->code, "\t%C = %s %C %C, %C\n", res, op, type, lhs, rhs));
 			}
 			else {
 				var bool ptr, sign;
@@ -1087,14 +1104,14 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 				sign = pl3:type_is_signed(op2->lhs->type);
 
 				if(ptr) {
-					var st:io:call tmp;
+					var st:io1:call tmp;
 
 					tmp = gen_tmp(ctx);
-					e:get(io:fmt(ctx->code, "\t%C = ptrtoint i8* %C to i64\n", tmp, lhs));
+					e:get(io1:fmt(ctx->code, "\t%C = ptrtoint i8* %C to i64\n", tmp, lhs));
 					lhs = tmp;
 
 					tmp = gen_tmp(ctx);
-					e:get(io:fmt(ctx->code, "\t%C = ptrtoint i8* %C to i64\n", tmp, rhs));
+					e:get(io1:fmt(ctx->code, "\t%C = ptrtoint i8* %C to i64\n", tmp, rhs));
 					rhs = tmp;
 
 					type = io:call_str("i64");
@@ -1115,28 +1132,28 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 
 				if((op2->tag == ev:pl3:op2:shl) || (op2->tag == ev:pl3:op2:shr)) {
 					if(pl3:type_size(op2->lhs->type, &pl3:arch_x64) < pl3:type_size(op2->rhs->type, &pl3:arch_x64)) {
-						var st:io:call tmp;
+						var st:io1:call tmp;
 
 						tmp = gen_tmp(ctx);
-						e:get(io:fmt(ctx->code, "\t%C = trunc %C %C to %C\n", tmp, call_type(&op2->rhs->type), rhs, call_type(&op2->lhs->type)));
+						e:get(io1:fmt(ctx->code, "\t%C = trunc %C %C to %C\n", tmp, call_type(&op2->rhs->type), rhs, call_type(&op2->lhs->type)));
 						rhs = tmp;
 					}
 					else if(pl3:type_size(op2->lhs->type, &pl3:arch_x64) > pl3:type_size(op2->rhs->type, &pl3:arch_x64)) {
-						var st:io:call tmp;
+						var st:io1:call tmp;
 
 						tmp = gen_tmp(ctx);
-						e:get(io:fmt(ctx->code, "\t%C = sext %C %C to %C\n", tmp, call_type(&op2->rhs->type), rhs, call_type(&op2->lhs->type)));
+						e:get(io1:fmt(ctx->code, "\t%C = sext %C %C to %C\n", tmp, call_type(&op2->rhs->type), rhs, call_type(&op2->lhs->type)));
 						rhs = tmp;
 					}
 				}
 
-				e:get(io:fmt(ctx->code, "\t%C = %s %C %C, %C\n", res, op, type, lhs, rhs));
+				e:get(io1:fmt(ctx->code, "\t%C = %s %C %C, %C\n", res, op, type, lhs, rhs));
 
 				if(ptr) {
-					var st:io:call tmp;
+					var st:io1:call tmp;
 
 					tmp = gen_tmp(ctx);
-					e:get(io:fmt(ctx->code, "\t%C = inttoptr i64 %C to i8*\n", tmp, res));
+					e:get(io1:fmt(ctx->code, "\t%C = inttoptr i64 %C to i8*\n", tmp, res));
 					res = tmp;
 				}
 			}
@@ -1144,7 +1161,7 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 		else if(pl3:op2_is_cmp(op2->tag)) {
 			var cpt:char op;
 			var char pre;
-			var st:io:call tmp, type;
+			var st:io1:call tmp, type;
 
 			lhs = e:get(ctx_expr(ctx, env, op2->lhs));
 			rhs = e:get(ctx_expr(ctx, env, op2->rhs));
@@ -1181,12 +1198,12 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 
 			type = call_tyinfo(getref(st:tyinfo{ ctx, op2->lhs->type }));
 			tmp = gen_tmp(ctx);
-			e:get(io:fmt(ctx->code, "\t%C = %ccmp %s %C %C, %C\n", tmp, pre, op, type, lhs, rhs));
-			e:get(io:fmt(ctx->code, "\t%C = zext i1 %C to i8\n", res, tmp));
+			e:get(io1:fmt(ctx->code, "\t%C = %ccmp %s %C %C, %C\n", tmp, pre, op, type, lhs, rhs));
+			e:get(io1:fmt(ctx->code, "\t%C = zext i1 %C to i8\n", res, tmp));
 		}
 		else if((op2->tag == ev:pl3:op2:land) || (op2->tag == ev:pl3:op2:lor)) {
 			var u32 enter, before, mid, after;
-			var st:io:call tmp, lhs, rhs, ret;
+			var st:io1:call tmp, lhs, rhs, ret;
 
 			enter = ctx->lab++;
 			before = ctx->lab++;
@@ -1195,35 +1212,40 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 
 			tmp = e:get(ctx_expr(ctx, env, op2->lhs));
 
-			e:get(io:fmt(ctx->code, "  br label %%l%u\n", enter));
-			e:get(io:fmt(ctx->code, "l%u:\n", enter));
+			e:get(io1:fmt(ctx->code, "  br label %%l%u\n", enter));
+			e:get(io1:fmt(ctx->code, "l%u:\n", enter));
 
 			lhs = gen_tmp(ctx);
-			e:get(io:fmt(ctx->code, "\t%C = bitcast i8 %C to i8\n", lhs, tmp));
+			e:get(io1:fmt(ctx->code, "\t%C = bitcast i8 %C to i8\n", lhs, tmp));
 			
 			if(op2->tag == ev:pl3:op2:land)
-				e:get(io:fmt(ctx->code, "  br i1 %C, label %%l%u, label %%l%u\n", e:get(mk_bool(ctx, lhs)), before, after));
+				e:get(io1:fmt(ctx->code, "  br i1 %C, label %%l%u, label %%l%u\n", e:get(mk_bool(ctx, lhs)), before, after));
 			else
-				e:get(io:fmt(ctx->code, "  br i1 %C, label %%l%u, label %%l%u\n", e:get(mk_bool(ctx, lhs)), after, before));
+				e:get(io1:fmt(ctx->code, "  br i1 %C, label %%l%u, label %%l%u\n", e:get(mk_bool(ctx, lhs)), after, before));
 
-			e:get(io:fmt(ctx->code, "l%u:\n", before));
+			e:get(io1:fmt(ctx->code, "l%u:\n", before));
 			tmp = e:get(ctx_expr(ctx, env, op2->rhs));
-			e:get(io:fmt(ctx->code, "  br label %%l%u\n", mid));
-			e:get(io:fmt(ctx->code, "l%u:\n", mid));
+			e:get(io1:fmt(ctx->code, "  br label %%l%u\n", mid));
+			e:get(io1:fmt(ctx->code, "l%u:\n", mid));
 
 			rhs = gen_tmp(ctx);
-			e:get(io:fmt(ctx->code, "  %C = bitcast i8 %C to i8\n", rhs, tmp));
+			e:get(io1:fmt(ctx->code, "  %C = bitcast i8 %C to i8\n", rhs, tmp));
 
-			e:get(io:fmt(ctx->code, "  br label %%l%u\n", after));
-			e:get(io:fmt(ctx->code, "l%u:\n", after));
+			e:get(io1:fmt(ctx->code, "  br label %%l%u\n", after));
+			e:get(io1:fmt(ctx->code, "l%u:\n", after));
 
 			ret = gen_tmp(ctx);
 			if(op2->tag == ev:pl3:op2:land)
-				e:get(io:fmt(ctx->code, "  %C = phi i8 [ 0, %%l%u ], [ %C, %%l%u ]\n", ret, enter, rhs, mid));
+				e:get(io1:fmt(ctx->code, "  %C = phi i8 [ 0, %%l%u ], [ %C, %%l%u ]\n", ret, enter, rhs, mid));
 			else
-				e:get(io:fmt(ctx->code, "  %C = phi i8 [ 1, %%l%u ], [ %C, %%l%u ]\n", ret, enter, rhs, mid));
+				e:get(io1:fmt(ctx->code, "  %C = phi i8 [ 1, %%l%u ], [ %C, %%l%u ]\n", ret, enter, rhs, mid));
 
 			return ret;
+		}
+		else if(op2->tag == ev:pl3:op2:comma) {
+			e:get(ctx_expr(ctx, env, op2->lhs));
+
+			return e:get(ctx_expr(ctx, env, op2->rhs));
 		}
 		else
 			fatal("FIXME stub op2 %d", op2->tag);
@@ -1233,38 +1255,38 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 
 	case ev:pl3:expr:index: {
 		var pt:st:pl3:arr arr;
-		var st:io:call base, off;
+		var st:io1:call base, off;
 		var pt:st:pl3:index index = expr->data.index;
 
 		base = e:get(ctx_expr(ctx, env, index->base));
 		off = e:get(ctx_expr(ctx, env, index->off));
 
 		if(pl3:type_is_ptr(index->base->type)) {
-			var st:io:call type, ptr, cast, ret;
+			var st:io1:call type, ptr, cast, ret;
 
 			type = call_tyinfo(getref(st:tyinfo{ ctx, index->base->type.data.ptr->type }));
 			ptr = gen_tmp(ctx);
 			cast = gen_tmp(ctx);
 			ret = gen_tmp(ctx);
 
-			e:get(io:fmt(ctx->code, "\t%C = bitcast %C %C to %C*\n", ptr, call_type(&index->base->type), base, type));
-			e:get(io:fmt(ctx->code, "\t%C = getelementptr %C, %C* %C, %C %C\n", cast, type, type, ptr, call_type(&index->off->type), off));
-			e:get(io:fmt(ctx->code, "\t%C = load %C, %C* %C\n", ret, type, type, cast));
+			e:get(io1:fmt(ctx->code, "\t%C = bitcast %C %C to %C*\n", ptr, call_type(&index->base->type), base, type));
+			e:get(io1:fmt(ctx->code, "\t%C = getelementptr %C, %C* %C, %C %C\n", cast, type, type, ptr, call_type(&index->off->type), off));
+			e:get(io1:fmt(ctx->code, "\t%C = load %C, %C* %C\n", ret, type, type, cast));
 
 			return ret;
 		}
 		else if((arr = pl3:type_get_arr(index->base->type)) != null) {
-			var st:io:call tmp, ptr, ret, type;
+			var st:io1:call tmp, ptr, ret, type;
 
 			tmp = gen_tmp(ctx);
 			ptr = gen_tmp(ctx);
 			ret = gen_tmp(ctx);
 			type = call_type(&index->base->type);
 
-			e:get(io:fmt(ctx->vars, "\t%C = alloca %C\n", tmp, type));
-			e:get(io:fmt(ctx->code, "\tstore %C %C, %C* %C\n", type, base, type, tmp));
-			e:get(io:fmt(ctx->code, "\t%C = getelementptr %C, %C* %C, i32 0, %C %C\n", ptr, type, type, tmp, call_type(&index->off->type), off));
-			e:get(io:fmt(ctx->code, "\t%C = load %C, %C* %C\n", ret, call_type(&expr->type), call_type(&expr->type), ptr));
+			e:get(io1:fmt(ctx->vars, "\t%C = alloca %C\n", tmp, type));
+			e:get(io1:fmt(ctx->code, "\tstore %C %C, %C* %C\n", type, base, type, tmp));
+			e:get(io1:fmt(ctx->code, "\t%C = getelementptr %C, %C* %C, i32 0, %C %C\n", ptr, type, type, tmp, call_type(&index->off->type), off));
+			e:get(io1:fmt(ctx->code, "\t%C = load %C, %C* %C\n", ret, call_type(&expr->type), call_type(&expr->type), ptr));
 
 			return ret;
 		}
@@ -1286,7 +1308,7 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 		else if((arr = pl3:type_get_arr(comp->type)) != null)
 			return e:get(emit_arr(ctx, env, tag, arr, list));
 		else {
-			var st:io:call val;
+			var st:io1:call val;
 			var pt:st:pl3:expr src;
 
 			assert((list->init != null) && (list->init->next == null) && (list->init->tag == ev:pl3:init:expr));
@@ -1296,19 +1318,19 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 
 			if(pl3:type_is_int(src->type) && pl3:type_is_int(comp->type)) {
 				if(pl3:type_size(src->type, &pl3:arch_x64) > pl3:type_size(comp->type, &pl3:arch_x64)) {
-					var st:io:call ret;
+					var st:io1:call ret;
 
 					ret = gen_tmp(ctx);
-					e:get(io:fmt(ctx->code, "\t%C = trunc %C %C to %C\n", ret, call_type(&src->type), val, call_type(&comp->type)));
+					e:get(io1:fmt(ctx->code, "\t%C = trunc %C %C to %C\n", ret, call_type(&src->type), val, call_type(&comp->type)));
 
 					return ret;
 				}
 				else if(pl3:type_size(src->type, &pl3:arch_x64) < pl3:type_size(comp->type, &pl3:arch_x64)) {
-					var st:io:call ret;
+					var st:io1:call ret;
 
 					ret = gen_tmp(ctx);
 					// TODO char type implied
-					e:get(io:fmt(ctx->code, "\t%C = %cext %C %C to %C\n", ret, char{pl3:type_is_signed(src->type) ? 's' : 'z'}, call_type(&src->type), val, call_type(&comp->type)));
+					e:get(io1:fmt(ctx->code, "\t%C = %cext %C %C to %C\n", ret, char{pl3:type_is_signed(src->type) ? 's' : 'z'}, call_type(&src->type), val, call_type(&comp->type)));
 
 					return ret;
 				}
@@ -1316,50 +1338,50 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 					return val;
 			}
 			else if(pl3:type_is_ptr(src->type) && pl3:type_is_int(comp->type)) {
-				var st:io:call ret, src_type, dst_type;
+				var st:io1:call ret, src_type, dst_type;
 
 				ret = gen_tmp(ctx);
 				src_type = call_tyinfo(getref(st:tyinfo{ ctx, src->type }));
 				dst_type = call_tyinfo(getref(st:tyinfo{ ctx, comp->type }));
-				e:get(io:fmt(ctx->code, "\t%C = ptrtoint %C %C to %C\n", ret, src_type, val, dst_type));
+				e:get(io1:fmt(ctx->code, "\t%C = ptrtoint %C %C to %C\n", ret, src_type, val, dst_type));
 
 				return ret;
 			}
 			else if(pl3:type_is_int(src->type) && pl3:type_is_ptr(comp->type)) {
-				var st:io:call ret, src_type, dst_type;
+				var st:io1:call ret, src_type, dst_type;
 
 				ret = gen_tmp(ctx);
 				src_type = call_tyinfo(getref(st:tyinfo{ ctx, src->type }));
 				dst_type = call_tyinfo(getref(st:tyinfo{ ctx, comp->type }));
-				e:get(io:fmt(ctx->code, "\t%C = inttoptr %C %C to %C\n", ret, src_type, val, dst_type));
+				e:get(io1:fmt(ctx->code, "\t%C = inttoptr %C %C to %C\n", ret, src_type, val, dst_type));
 
 				return ret;
 			}
 			else if(pl3:type_is_ptr(src->type) && pl3:type_is_ptr(comp->type))
 				return val;
 			else if(pl3:type_is_int(src->type) && pl3:type_is_fp(comp->type)) {
-				var st:io:call ret, src_type, dst_type;
+				var st:io1:call ret, src_type, dst_type;
 
 				ret = gen_tmp(ctx);
 				src_type = call_tyinfo(getref(st:tyinfo{ ctx, src->type }));
 				dst_type = call_tyinfo(getref(st:tyinfo{ ctx, comp->type }));
-				e:get(io:fmt(ctx->code, "\t%C = %citofp %C %C to %C\n", ret, pl3:type_is_signed(src->type) ? 's' : 'u', src_type, val, dst_type));
+				e:get(io1:fmt(ctx->code, "\t%C = %citofp %C %C to %C\n", ret, pl3:type_is_signed(src->type) ? 's' : 'u', src_type, val, dst_type));
 
 				return ret;
 			}
 			else if(pl3:type_is_fp(src->type) && pl3:type_is_int(comp->type)) {
-				var st:io:call ret, src_type, dst_type;
+				var st:io1:call ret, src_type, dst_type;
 
 				ret = gen_tmp(ctx);
 				src_type = call_tyinfo(getref(st:tyinfo{ ctx, src->type }));
 				dst_type = call_tyinfo(getref(st:tyinfo{ ctx, comp->type }));
-				e:get(io:fmt(ctx->code, "\t%C = fpto%ci %C %C to %C\n", ret, pl3:type_is_signed(comp->type) ? 's' : 'u', src_type, val, dst_type));
+				e:get(io1:fmt(ctx->code, "\t%C = fpto%ci %C %C to %C\n", ret, pl3:type_is_signed(comp->type) ? 's' : 'u', src_type, val, dst_type));
 
 				return ret;
 			}
 			else if(pl3:type_is_fp(src->type) && pl3:type_is_fp(comp->type)) {
 				var cpt:char name;
-				var st:io:call ret, src_type, dst_type;
+				var st:io1:call ret, src_type, dst_type;
 
 				if(pl3:type_size(src->type, &pl3:arch_x64) > pl3:type_size(comp->type, &pl3:arch_x64))
 					name = "fptrunc";
@@ -1371,7 +1393,7 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 				ret = gen_tmp(ctx);
 				src_type = call_tyinfo(getref(st:tyinfo{ ctx, src->type }));
 				dst_type = call_tyinfo(getref(st:tyinfo{ ctx, comp->type }));
-				e:get(io:fmt(ctx->code, "\t%C = %s %C %C to %C\n", ret, name, src_type, val, dst_type));
+				e:get(io1:fmt(ctx->code, "\t%C = %s %C %C to %C\n", ret, name, src_type, val, dst_type));
 
 				return ret;
 				
@@ -1385,7 +1407,7 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 
 	case ev:pl3:expr:call: {
 		var u32 i;
-		var st:io:call func, ret;
+		var st:io1:call func, ret;
 		var pt:st:pl3:arg arg;
 		var pt:st:pl3:sig sig;
 		var pt:st:arg list;
@@ -1393,7 +1415,7 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 
 		if(call->deref) {
 			var pt:st:pl3:ptr ptr;
-			var st:io:call tmp;
+			var st:io1:call tmp;
 
 			ptr = pl3:type_get_ptr(call->func->type);
 			if(ptr == null)
@@ -1406,7 +1428,7 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 			tmp = e:get(ctx_expr(ctx, env, call->func));
 
 			func = gen_tmp(ctx);
-			e:get(io:fmt(ctx->code, "\t%C = bitcast i8* %C to %C*\n", func, tmp, call_type(&ptr->type)));
+			e:get(io1:fmt(ctx->code, "\t%C = bitcast i8* %C to %C*\n", func, tmp, call_type(&ptr->type)));
 		}
 		else {
 			sig = pl3:type_get_sig(call->func->type);
@@ -1431,11 +1453,11 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 
 		if(pl3:type_is_void(sig->ret)) {
 			ret = io:call_null;
-			e:get(io:fmt(ctx->code, "\tcall %C %C(%C)\n", call_sig(sig), func, call_args(list)));
+			e:get(io1:fmt(ctx->code, "\tcall %C %C(%C)\n", call_sig(sig), func, call_args(list)));
 		}
 		else {
 			ret = gen_tmp(ctx);
-			e:get(io:fmt(ctx->code, "\t%C = call %C %C(%C)\n", ret, call_sig(sig), func, call_args(list)));
+			e:get(io1:fmt(ctx->code, "\t%C = call %C %C(%C)\n", ret, call_sig(sig), func, call_args(list)));
 		}
 /*
 		if(!el_type_is_void(func->ret)) {
@@ -1461,7 +1483,7 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 		var st:pl3:type type = elem->expr->type;
 
 		if(pl3:type_get_err(type) != null) {
-			var st:io:call ret, base;
+			var st:io1:call ret, base;
 			var pt:st:pl3:err err = pl3:type_get_err(type);
 
 			base = e:get(ctx_expr(ctx, env, elem->expr));
@@ -1469,14 +1491,14 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 			if(str:equal(elem->id, "err")) {
 				if(!pl3:type_is_void(err->suc)) {
 					ret = gen_tmp(ctx);
-					e:get(io:fmt(ctx->code, "\t%C = extractvalue %C %C, 1\n", ret, call_type(&type), base));
+					e:get(io1:fmt(ctx->code, "\t%C = extractvalue %C %C, 1\n", ret, call_type(&type), base));
 				}
 				else
 					ret = base;
 			}
 			else if(str:equal(elem->id, "val")) {
 				ret = gen_tmp(ctx);
-				e:get(io:fmt(ctx->code, "\t%C = extractvalue %C %C, 0\n", ret, call_type(&type), base));
+				e:get(io1:fmt(ctx->code, "\t%C = extractvalue %C %C, 0\n", ret, call_type(&type), base));
 			}
 			else
 				e:fmt("Internal error. Invalid member access on error type.");
@@ -1485,7 +1507,7 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 		}
 		else {
 			var en:pl3:tydecl tag;
-			var st:io:call ret, tmp, tyinfo, base;
+			var st:io1:call ret, tmp, tyinfo, base;
 			var pt:st:pl3:elem elem = expr->data.elem;
 			var st:pl3:type type = elem->expr->type;
 		
@@ -1501,10 +1523,10 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 				tyinfo = call_tyinfo(getref(st:tyinfo{ ctx, type }));
 
 				tmp = gen_tmp(ctx);
-				e:get(io:fmt(ctx->code, "\t%C = bitcast i8* %C to %C*\n", tmp, base, call_type(&type)));
+				e:get(io1:fmt(ctx->code, "\t%C = bitcast i8* %C to %C*\n", tmp, base, call_type(&type)));
 
 				ret = gen_tmp(ctx);
-				e:get(io:fmt(ctx->code, "\t%C = load %C, %C* %C\n", ret, call_type(&type), call_type(&type), tmp));
+				e:get(io1:fmt(ctx->code, "\t%C = load %C, %C* %C\n", ret, call_type(&type), call_type(&type), tmp));
 				base = ret;
 			}
 
@@ -1515,19 +1537,19 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 
 			if(tag == ev:pl3:tydecl:struct) {
 				tyinfo = call_tyinfo(getref(st:tyinfo{ ctx, type }));
-				e:get(io:fmt(ctx->code, "\t%C = extractvalue %C %C, %u\n", ret, tyinfo, base, elem->idx));
+				e:get(io1:fmt(ctx->code, "\t%C = extractvalue %C %C, %u\n", ret, tyinfo, base, elem->idx));
 			}
 			else if(tag == ev:pl3:tydecl:union) {
-				var st:io:call tmp, cast;
+				var st:io1:call tmp, cast;
 				var u32 sz = 8 * pl3:type_size(type, &pl3:arch_x64);
 
 				tmp = gen_tmp(ctx);
 				cast = gen_tmp(ctx);
 
-				e:get(io:fmt(ctx->vars, "\t%C = alloca i%u\n", tmp, sz));
-				e:get(io:fmt(ctx->code, "\tstore i%u %C, i%u* %C\n", sz, base, sz, tmp));
-				e:get(io:fmt(ctx->code, "\t%C = bitcast i%u* %C to %C*\n", cast, sz, tmp, call_type(&expr->type)));
-				e:get(io:fmt(ctx->code, "\t%C = load %C, %C* %C\n", ret, call_type(&expr->type), call_type(&expr->type), cast));
+				e:get(io1:fmt(ctx->vars, "\t%C = alloca i%u\n", tmp, sz));
+				e:get(io1:fmt(ctx->code, "\tstore i%u %C, i%u* %C\n", sz, base, sz, tmp));
+				e:get(io1:fmt(ctx->code, "\t%C = bitcast i%u* %C to %C*\n", cast, sz, tmp, call_type(&expr->type)));
+				e:get(io1:fmt(ctx->code, "\t%C = load %C, %C* %C\n", ret, call_type(&expr->type), call_type(&expr->type), cast));
 			}
 			else
 				e:fmt("Internal error. Invalid element access.");
@@ -1538,7 +1560,7 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 
 	case ev:pl3:expr:eget: {
 		var u32 onsuc, onfail;
-		var st:io:call type, fty, val, suc, fail, cond, pack;
+		var st:io1:call type, fty, val, suc, fail, cond, pack;
 		var pt:st:pl3:err err;
 
 		err = pl3:type_get_err(expr->data.expr->type);
@@ -1553,8 +1575,8 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 		if(!pl3:type_is_void(err->suc)) {
 			fail = gen_tmp(ctx);
 			suc = gen_tmp(ctx);
-			e:get(io:fmt(ctx->code, "\t%C = extractvalue %C %C, 0\n", suc, type, val));
-			e:get(io:fmt(ctx->code, "\t%C = extractvalue %C %C, 1\n", fail, type, val));
+			e:get(io1:fmt(ctx->code, "\t%C = extractvalue %C %C, 0\n", suc, type, val));
+			e:get(io1:fmt(ctx->code, "\t%C = extractvalue %C %C, 1\n", fail, type, val));
 		}
 		else {
 			suc = io:call_str("undef");
@@ -1565,9 +1587,9 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 		onfail = ctx->lab++;
 
 		cond = gen_tmp(ctx);
-		e:get(io:fmt(ctx->code, "\t%C = icmp eq %C %C, %s", cond, fty, fail, pl3:type_is_ptr(err->fail) ? "null" : "0"));
-		e:get(io:fmt(ctx->code, "\tbr i1 %C, label %%l%u, label %%l%u\n", cond, onsuc, onfail));
-		e:get(io:fmt(ctx->code, "l%u:\n", onfail));
+		e:get(io1:fmt(ctx->code, "\t%C = icmp eq %C %C, %s", cond, fty, fail, pl3:type_is_ptr(err->fail) ? "null" : "0"));
+		e:get(io1:fmt(ctx->code, "\tbr i1 %C, label %%l%u, label %%l%u\n", cond, onsuc, onfail));
+		e:get(io1:fmt(ctx->code, "l%u:\n", onfail));
 
 		err = pl3:type_get_err(ctx->sig->ret);
 		if(err == null)
@@ -1576,20 +1598,20 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 		if(!pl3:type_is_void(err->suc)) {
 			pack = gen_tmp(ctx);
 			type = call_tyinfo(getref(st:tyinfo{ ctx, ctx->sig->ret }));
-			var st:io:call ety;
+			var st:io1:call ety;
 			// FIXME so ugly
 			ety = call_tyinfo(getref(st:tyinfo{ ctx, err->fail }));
 			type = call_tyinfo(getref(st:tyinfo{ ctx, ctx->sig->ret }));
-			e:get(io:fmt(ctx->code, "\t%C = insertvalue %C undef, %C %C, 1\n", pack, type, ety, fail));
+			e:get(io1:fmt(ctx->code, "\t%C = insertvalue %C undef, %C %C, 1\n", pack, type, ety, fail));
 			e:get(scope_emit(env->scope, ctx, env));
-			e:get(io:fmt(ctx->code, "\tret %C %C\n", type, pack));
+			e:get(io1:fmt(ctx->code, "\tret %C %C\n", type, pack));
 		}
 		else {
 			e:get(scope_emit(env->scope, ctx, env));
-			e:get(io:fmt(ctx->code, "\tret %C %C\n", call_type(&ctx->sig->ret), fail));
+			e:get(io1:fmt(ctx->code, "\tret %C %C\n", call_type(&ctx->sig->ret), fail));
 		}
 
-		e:get(io:fmt(ctx->code, "l%u:\n", onsuc));
+		e:get(io1:fmt(ctx->code, "l%u:\n", onsuc));
 
 		return suc;
 	} break;
@@ -1597,7 +1619,7 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 	case ev:pl3:expr:ereq: {
 		// TODO fix this, and the damn thing above it
 		var u32 onsuc, onfail;
-		var st:io:call type, fty, val, suc, fail, cond, pack;
+		var st:io1:call type, fty, val, suc, fail, cond, pack;
 		var pt:st:pl3:err err;
 
 		err = pl3:type_get_err(expr->data.expr->type);
@@ -1612,8 +1634,8 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 		if(!pl3:type_is_void(err->suc)) {
 			fail = gen_tmp(ctx);
 			suc = gen_tmp(ctx);
-			e:get(io:fmt(ctx->code, "\t%C = extractvalue %C %C, 0\n", suc, type, val));
-			e:get(io:fmt(ctx->code, "\t%C = extractvalue %C %C, 1\n", fail, type, val));
+			e:get(io1:fmt(ctx->code, "\t%C = extractvalue %C %C, 0\n", suc, type, val));
+			e:get(io1:fmt(ctx->code, "\t%C = extractvalue %C %C, 1\n", fail, type, val));
 		}
 		else {
 			suc = io:call_str("undef");
@@ -1624,19 +1646,19 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 		onfail = ctx->lab++;
 
 		cond = gen_tmp(ctx);
-		e:get(io:fmt(ctx->code, "\t%C = icmp eq %C %C, %s", cond, fty, fail, pl3:type_is_ptr(err->fail) ? "null" : "0"));
-		e:get(io:fmt(ctx->code, "\tbr i1 %C, label %%l%u, label %%l%u\n", cond, onsuc, onfail));
-		e:get(io:fmt(ctx->code, "l%u:\n", onfail));
+		e:get(io1:fmt(ctx->code, "\t%C = icmp eq %C %C, %s", cond, fty, fail, pl3:type_is_ptr(err->fail) ? "null" : "0"));
+		e:get(io1:fmt(ctx->code, "\tbr i1 %C, label %%l%u, label %%l%u\n", cond, onsuc, onfail));
+		e:get(io1:fmt(ctx->code, "l%u:\n", onfail));
 
 		//var u32 dbg = map_get(&ctx->dbgs, expr);
 		//FIXME need to check type, pass it properly to fatal with
 		//format strings
-		e:get(io:fmt(ctx->code, "\tcall void(i8*, ...) @fatal(%C %C)\n", fty, fail));
-		//e:get(io:fmt(ctx->code, "\tcall void(i8*, ...) @fatal(%t %%r%u), !dbg !%u\n", etype, err, dbg));
-		//e:get(io:fmt(ctx->ext, "!%u = distinct !DILocation(line: %u, column: %u, scope: !%u)\n", dbg, expr->tag->line, expr->tag->col, env->prog));
-		e:get(io:fmt(ctx->code, "\tunreachable\n"));
+		e:get(io1:fmt(ctx->code, "\tcall void(i8*, ...) @fatal(%C %C)\n", fty, fail));
+		//e:get(io1:fmt(ctx->code, "\tcall void(i8*, ...) @fatal(%t %%r%u), !dbg !%u\n", etype, err, dbg));
+		//e:get(io1:fmt(ctx->ext, "!%u = distinct !DILocation(line: %u, column: %u, scope: !%u)\n", dbg, expr->tag->line, expr->tag->col, env->prog));
+		e:get(io1:fmt(ctx->code, "\tunreachable\n"));
 
-		e:get(io:fmt(ctx->code, "l%u:\n", onsuc));
+		e:get(io1:fmt(ctx->code, "l%u:\n", onsuc));
 
 		return suc;
 	} break;
@@ -1644,7 +1666,7 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 	case ev:pl3:expr:eign: {
 		// TODO fix this, and the damn thing above it
 		var u32 onsuc, onfail;
-		var st:io:call type, fty, val, suc, fail, cond, pack;
+		var st:io1:call type, fty, val, suc, fail, cond, pack;
 		var pt:st:pl3:err err;
 
 		err = pl3:type_get_err(expr->data.expr->type);
@@ -1659,8 +1681,8 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 		if(!pl3:type_is_void(err->suc)) {
 			fail = gen_tmp(ctx);
 			suc = gen_tmp(ctx);
-			e:get(io:fmt(ctx->code, "\t%C = extractvalue %C %C, 0\n", suc, type, val));
-			e:get(io:fmt(ctx->code, "\t%C = extractvalue %C %C, 1\n", fail, type, val));
+			e:get(io1:fmt(ctx->code, "\t%C = extractvalue %C %C, 0\n", suc, type, val));
+			e:get(io1:fmt(ctx->code, "\t%C = extractvalue %C %C, 1\n", fail, type, val));
 		}
 		else {
 			suc = io:call_str("undef");
@@ -1671,25 +1693,25 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 		onfail = ctx->lab++;
 
 		cond = gen_tmp(ctx);
-		e:get(io:fmt(ctx->code, "\t%C = icmp eq %C %C, %s", cond, fty, fail, pl3:type_is_ptr(err->fail) ? "null" : "0"));
-		e:get(io:fmt(ctx->code, "\tbr i1 %C, label %%l%u, label %%l%u\n", cond, onsuc, onfail));
-		e:get(io:fmt(ctx->code, "l%u:\n", onfail));
+		e:get(io1:fmt(ctx->code, "\t%C = icmp eq %C %C, %s", cond, fty, fail, pl3:type_is_ptr(err->fail) ? "null" : "0"));
+		e:get(io1:fmt(ctx->code, "\tbr i1 %C, label %%l%u, label %%l%u\n", cond, onsuc, onfail));
+		e:get(io1:fmt(ctx->code, "l%u:\n", onfail));
 
 		//var u32 dbg = map_get(&ctx->dbgs, expr);
 		//FIXME need to check type, pass it properly to fatal with
 		//format strings
-		e:get(io:fmt(ctx->code, "\tcall void @\"mem:free\"(i8* %C)\n", fail));
-		//e:get(io:fmt(ctx->code, "\tcall void(i8*, ...) @fatal(%t %%r%u), !dbg !%u\n", etype, err, dbg));
-		//e:get(io:fmt(ctx->ext, "!%u = distinct !DILocation(line: %u, column: %u, scope: !%u)\n", dbg, expr->tag->line, expr->tag->col, env->prog));
-		e:get(io:fmt(ctx->code, "\tbr label %%l%u\n", onsuc));
+		e:get(io1:fmt(ctx->code, "\tcall void @\"mem:free\"(i8* %C)\n", fail));
+		//e:get(io1:fmt(ctx->code, "\tcall void(i8*, ...) @fatal(%t %%r%u), !dbg !%u\n", etype, err, dbg));
+		//e:get(io1:fmt(ctx->ext, "!%u = distinct !DILocation(line: %u, column: %u, scope: !%u)\n", dbg, expr->tag->line, expr->tag->col, env->prog));
+		e:get(io1:fmt(ctx->code, "\tbr label %%l%u\n", onsuc));
 
-		e:get(io:fmt(ctx->code, "l%u:\n", onsuc));
+		e:get(io1:fmt(ctx->code, "l%u:\n", onsuc));
 
 		return suc;
 	} break;
 
 	case ev:pl3:expr:tern: {
-		var st:io:call eval, ret, lhs, rhs;
+		var st:io1:call eval, ret, lhs, rhs;
 		var u32 ontrue, onfalse, after, left, right;
 		var pt:st:pl3:tern tern = expr->data.tern;
 
@@ -1699,57 +1721,57 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 
 		eval = e:get(ctx_expr(ctx, env, tern->cond));	
 
-		e:get(io:fmt(ctx->code, "\tbr i1 %C, label %%l%u, label %%l%u\n", e:get(mk_bool(ctx, eval)), ontrue, onfalse));
+		e:get(io1:fmt(ctx->code, "\tbr i1 %C, label %%l%u, label %%l%u\n", e:get(mk_bool(ctx, eval)), ontrue, onfalse));
 
 		left = ctx->lab++;
-		e:get(io:fmt(ctx->code, "l%u:\n", ontrue));
+		e:get(io1:fmt(ctx->code, "l%u:\n", ontrue));
 		lhs = e:get(ctx_expr(ctx, env, tern->ontrue));
-		e:get(io:fmt(ctx->code, "\tbr label %%l%u\n", left));
-		e:get(io:fmt(ctx->code, "l%u:\n", left));
-		e:get(io:fmt(ctx->code, "\tbr label %%l%u\n", after));
+		e:get(io1:fmt(ctx->code, "\tbr label %%l%u\n", left));
+		e:get(io1:fmt(ctx->code, "l%u:\n", left));
+		e:get(io1:fmt(ctx->code, "\tbr label %%l%u\n", after));
 
 		right = ctx->lab++;
-		e:get(io:fmt(ctx->code, "l%u:\n", onfalse));
+		e:get(io1:fmt(ctx->code, "l%u:\n", onfalse));
 		rhs = e:get(ctx_expr(ctx, env, tern->onfalse));
-		e:get(io:fmt(ctx->code, "\tbr label %%l%u\n", right));
-		e:get(io:fmt(ctx->code, "l%u:\n", right));
-		e:get(io:fmt(ctx->code, "\tbr label %%l%u\n", after));
+		e:get(io1:fmt(ctx->code, "\tbr label %%l%u\n", right));
+		e:get(io1:fmt(ctx->code, "l%u:\n", right));
+		e:get(io1:fmt(ctx->code, "\tbr label %%l%u\n", after));
 
-		e:get(io:fmt(ctx->code, "l%u:\n", after));
+		e:get(io1:fmt(ctx->code, "l%u:\n", after));
 
 		ret = gen_tmp(ctx);
-		e:get(io:fmt(ctx->code, "\t%C = phi %C [ %C, %%l%u ], [ %C, %%l%u ]\n", ret, call_type(&expr->type), lhs, left, rhs, right));
+		e:get(io1:fmt(ctx->code, "\t%C = phi %C [ %C, %%l%u ], [ %C, %%l%u ]\n", ret, call_type(&expr->type), lhs, left, rhs, right));
 
 		return ret;
 	} break;
 
 	case ev:pl3:expr:size: {
-		var st:io:call ret, type;
+		var st:io1:call ret, type;
 		var pt:st:pl3:size size = expr->data.size;
 
 		ret = gen_tmp(ctx);
 		type = call_type(&expr->type);
 		//TODO: check out of range size
-		e:get(io:fmt(ctx->code, "\t%C = bitcast %C %d to %C\n", ret, type, pl3:type_size(size->type, &pl3:arch_x64), type));
+		e:get(io1:fmt(ctx->code, "\t%C = bitcast %C %d to %C\n", ret, type, pl3:type_size(size->type, &pl3:arch_x64), type));
 
 		return ret;
 	} break;
 
 	case ev:pl3:expr:arrlen: {
-		var st:io:call ret, type;
+		var st:io1:call ret, type;
 		var pt:st:pl3:arrlen alen = expr->data.len;
 
 		ret = gen_tmp(ctx);
 		type = call_type(&expr->type);
 		//TODO: check out of range size
-		e:get(io:fmt(ctx->code, "\t%C = bitcast %C %d to %C\n", ret, type, alen->val, type));
+		e:get(io1:fmt(ctx->code, "\t%C = bitcast %C %d to %C\n", ret, type, alen->val, type));
 
 		return ret;
 	} break;
 
 	case ev:pl3:expr:offset: {
 		var pt:st:pl3:agg agg;
-		var st:io:call ret, type;
+		var st:io1:call ret, type;
 		var pt:st:pl3:offset offset = expr->data.offset;
 
 		agg = pl3:type_get_struct(offset->type);
@@ -1760,18 +1782,18 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 		ret = gen_tmp(ctx);
 		type = call_type(&expr->type);
 		//TODO: check out of range size
-		e:get(io:fmt(ctx->code, "\t%C = bitcast %C %d to %C\n", ret, type, offset->val, type));
+		e:get(io1:fmt(ctx->code, "\t%C = bitcast %C %d to %C\n", ret, type, offset->val, type));
 
 		return ret;
 	} break;
 
 	case ev:pl3:expr:parent: {
-		var st:io:call ret, in;
+		var st:io1:call ret, in;
 		var pt:st:pl3:parent parent = expr->data.parent;
 
 		in = e:get(ctx_expr(ctx, env, parent->expr));
 		ret = gen_tmp(ctx);
-		e:get(io:fmt(ctx->code, "\t%C = getelementptr i8, i8* %C, i32 -%u\n", ret, in, parent->off));
+		e:get(io1:fmt(ctx->code, "\t%C = getelementptr i8, i8* %C, i32 -%u\n", ret, in, parent->off));
 
 		return ret;
 	} break;
@@ -1789,22 +1811,22 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 	} break;
 
 	case ev:pl3:expr:vinit: {
-		var st:io:call tmp, ptr, ret;
+		var st:io1:call tmp, ptr, ret;
 
 		tmp = gen_tmp(ctx);
 		ptr = gen_tmp(ctx);
 		ret = gen_tmp(ctx);
 
-		e:get(io:fmt(ctx->vars, "\t%C = alloca %%\"$args\"\n", tmp));
-		e:get(io:fmt(ctx->vars, "\t%C = bitcast %%\"$args\"* %C to i8*\n", ptr, tmp));
-		e:get(io:fmt(ctx->code, "\tcall void @llvm.va_start(i8* %C)\n", ptr));
-		e:get(io:fmt(ctx->code, "\t%C = load %%\"$args\", %%\"$args\"* %C\n", ret, tmp));
+		e:get(io1:fmt(ctx->vars, "\t%C = alloca %%\"$args\"\n", tmp));
+		e:get(io1:fmt(ctx->vars, "\t%C = bitcast %%\"$args\"* %C to i8*\n", ptr, tmp));
+		e:get(io1:fmt(ctx->code, "\tcall void @llvm.va_start(i8* %C)\n", ptr));
+		e:get(io1:fmt(ctx->code, "\t%C = load %%\"$args\", %%\"$args\"* %C\n", ret, tmp));
 
 		return ret;
 	} break;
 
 	case ev:pl3:expr:vget: {
-		var st:io:call args, ret;
+		var st:io1:call args, ret;
 		var pt:st:pl3:vget get = expr->data.vget;
 
 		args = e:get(ctx_expr(ctx, env, get->expr));
@@ -1812,38 +1834,38 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 
 		//if(pl3:type_get_agg(get->type, null) != null) {
 			var u32 sz = 8 * pl3:type_size(get->type, &pl3:arch_x64);
-			var st:io:call tmp, val, ptr, type;
+			var st:io1:call tmp, val, ptr, type;
 
 			tmp = gen_tmp(ctx);
 			val = gen_tmp(ctx);
 			ptr = gen_tmp(ctx);
 			type = call_type(&get->type);
 
-			e:get(io:fmt(ctx->vars, "\t%C = alloca i%u\n", tmp, sz));
-			e:get(io:fmt(ctx->code, "\t%C = bitcast i%u* %C to i8*\n", val, sz, tmp));
-			e:get(io:fmt(ctx->code, "\tcall void @_getarg(i8* %C, i32 %u, i8* %C)\n", args, sz, val));
-			//e:get(io:fmt(ctx->code, "\t%C = va_arg i8* %C, i%u\n", val, args, sz));
-			//e:get(io:fmt(ctx->code, "\tstore i%u %C, i%u* %C\n", sz, val, sz, tmp));
-			e:get(io:fmt(ctx->code, "\t%C = bitcast i%u* %C to %C*\n", ptr, sz, tmp, type));
-			e:get(io:fmt(ctx->code, "\t%C = load %C, %C* %C\n", ret, type, type, ptr));
+			e:get(io1:fmt(ctx->vars, "\t%C = alloca i%u\n", tmp, sz));
+			e:get(io1:fmt(ctx->code, "\t%C = bitcast i%u* %C to i8*\n", val, sz, tmp));
+			e:get(io1:fmt(ctx->code, "\tcall void @_getarg(i8* %C, i32 %u, i8* %C)\n", args, sz, val));
+			//e:get(io1:fmt(ctx->code, "\t%C = va_arg i8* %C, i%u\n", val, args, sz));
+			//e:get(io1:fmt(ctx->code, "\tstore i%u %C, i%u* %C\n", sz, val, sz, tmp));
+			e:get(io1:fmt(ctx->code, "\t%C = bitcast i%u* %C to %C*\n", ptr, sz, tmp, type));
+			e:get(io1:fmt(ctx->code, "\t%C = load %C, %C* %C\n", ret, type, type, ptr));
 		//}
 		//else
-			//e:get(io:fmt(ctx->code, "\t%C = va_arg i8* %C, %C\n", ret, args, call_type(&get->type)));
+			//e:get(io1:fmt(ctx->code, "\t%C = va_arg i8* %C, %C\n", ret, args, call_type(&get->type)));
 
 		return ret;
 	} break;
 
 	case ev:pl3:expr:getref: {
-		var st:io:call val, tmp, ret, type;
+		var st:io1:call val, tmp, ret, type;
 
 		tmp = gen_tmp(ctx);
 		ret = gen_tmp(ctx);
 		type = call_type(&expr->data.expr->type);
 
 		val = e:get(ctx_expr(ctx, env, expr->data.expr));
-		e:get(io:fmt(ctx->vars, "\t%C = alloca %C\n", tmp, type));
-		e:get(io:fmt(ctx->code, "\tstore %C %C, %C* %C\n", type, val, type, tmp));
-		e:get(io:fmt(ctx->code, "\t%C = bitcast %C* %C to i8*\n", ret, type, tmp));
+		e:get(io1:fmt(ctx->vars, "\t%C = alloca %C\n", tmp, type));
+		e:get(io1:fmt(ctx->code, "\tstore %C %C, %C* %C\n", type, val, type, tmp));
+		e:get(io1:fmt(ctx->code, "\t%C = bitcast %C* %C to i8*\n", ret, type, tmp));
 
 		return ret;
 	} break;
@@ -1860,7 +1882,7 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
  *   @expr: The expression.
  *   &returns: The result.
  */
-def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_left = {
+def e:str[st:io1:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_left = {
 	switch(expr->tag) {
 	case ev:pl3:expr:ident: {
 		var i32 id;
@@ -1913,11 +1935,11 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_lef
 
 		switch(op1->tag) {
 		case ev:pl3:op1:deref: {
-			var st:io:call val, ret;
+			var st:io1:call val, ret;
 
 			ret = gen_tmp(ctx);
 			val = e:get(ctx_expr(ctx, env, op1->in));
-			e:get(io:fmt(ctx->code, "\t%C = bitcast i8* %C to %C*\n", ret, val, call_type(&expr->type)));
+			e:get(io1:fmt(ctx->code, "\t%C = bitcast i8* %C to %C*\n", ret, val, call_type(&expr->type)));
 
 			return ret;
 		} break;
@@ -1929,13 +1951,13 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_lef
 
 	case ev:pl3:expr:index: {
 		var pt:st:pl3:arr arr;
-		var st:io:call base, off;
+		var st:io1:call base, off;
 		var pt:st:pl3:index index = expr->data.index;
 
 		off = e:get(ctx_expr(ctx, env, index->off));
 
 		if(pl3:type_is_ptr(index->base->type)) {
-			var st:io:call type, ptr, cast;
+			var st:io1:call type, ptr, cast;
 
 			base = e:get(ctx_expr(ctx, env, index->base));
 
@@ -1943,19 +1965,19 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_lef
 			ptr = gen_tmp(ctx);
 			cast = gen_tmp(ctx);
 
-			e:get(io:fmt(ctx->code, "\t%C = bitcast i8* %C to %C*\n", ptr, base, type));
-			e:get(io:fmt(ctx->code, "\t%C = getelementptr %C, %C* %C, %C %C\n", cast, type, type, ptr, call_type(&index->off->type), off));
+			e:get(io1:fmt(ctx->code, "\t%C = bitcast i8* %C to %C*\n", ptr, base, type));
+			e:get(io1:fmt(ctx->code, "\t%C = getelementptr %C, %C* %C, %C %C\n", cast, type, type, ptr, call_type(&index->off->type), off));
 
 			return cast;
 		}
 		else if((arr = pl3:type_get_arr(index->base->type)) != null) {
-			var st:io:call ret, type;
+			var st:io1:call ret, type;
 
 			base = e:get(ctx_left(ctx, env, index->base));
 		
 			ret = gen_tmp(ctx);
 			type = call_type(&index->base->type);
-			e:get(io:fmt(ctx->code, "\t%C = getelementptr %C, %C* %C, i64 0, %C %C\n", ret, type, type, base, call_type(&index->off->type), off));
+			e:get(io1:fmt(ctx->code, "\t%C = getelementptr %C, %C* %C, i64 0, %C %C\n", ret, type, type, base, call_type(&index->off->type), off));
 
 			return ret;
 		}
@@ -1965,13 +1987,13 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_lef
 
 	case ev:pl3:expr:elem: {
 		var en:pl3:tydecl tag;
-		var st:io:call ret, base;
+		var st:io1:call ret, base;
 		var pt:st:pl3:elem elem = expr->data.elem;
 		var st:pl3:type type = elem->expr->type;
 
 		if(elem->deref) {
 			var pt:st:pl3:ptr ptr;
-			var st:io:call tmp;
+			var st:io1:call tmp;
 
 			ptr = pl3:type_get_ptr(type);
 			if(ptr == null)
@@ -1981,7 +2003,7 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_lef
 			tmp = e:get(ctx_expr(ctx, env, elem->expr));
 
 			base = gen_tmp(ctx);
-			e:get(io:fmt(ctx->code, "\t%C = bitcast i8* %C to %C*\n", base, tmp, call_type(&type)));
+			e:get(io1:fmt(ctx->code, "\t%C = bitcast i8* %C to %C*\n", base, tmp, call_type(&type)));
 		}
 		else
 			base = e:get(ctx_left(ctx, env, elem->expr));
@@ -1992,9 +2014,9 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_lef
 		ret = gen_tmp(ctx);
 
 		if(tag == ev:pl3:tydecl:struct)
-			e:get(io:fmt(ctx->code, "\t%C = getelementptr %C, %C* %C, i32 0, i32 %u\n", ret, call_type(&type), call_type(&type), base, elem->idx));
+			e:get(io1:fmt(ctx->code, "\t%C = getelementptr %C, %C* %C, i32 0, i32 %u\n", ret, call_type(&type), call_type(&type), base, elem->idx));
 		else if(tag == ev:pl3:tydecl:union)
-			e:get(io:fmt(ctx->code, "\t%C = bitcast i%u* %C to %C*\n", ret, 8 * pl3:type_size(type, &pl3:arch_x64), base, call_type(&expr->type)));
+			e:get(io1:fmt(ctx->code, "\t%C = bitcast i%u* %C to %C*\n", ret, 8 * pl3:type_size(type, &pl3:arch_x64), base, call_type(&expr->type)));
 		else
 			e:fmt("Internal error. Invalid element access.");
 
@@ -2006,7 +2028,7 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_lef
 	}
 };
 
-def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, en:pl3:tydecl tag, pt:st:pl3:agg agg, pt:st:pl3:list list) emit_list = {
+def e:str[st:io1:call](pt:st:ctx ctx, pt:st:env env, en:pl3:tydecl tag, pt:st:pl3:agg agg, pt:st:pl3:list list) emit_list = {
 	switch(tag) {
 	case ev:pl3:tydecl:struct:
 		return e:get(emit_struct(ctx, env, agg, list));
@@ -2019,7 +2041,7 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, en:pl3:tydecl tag, pt:st:pl3
 	}
 };
 
-def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:init init) emit_init = {
+def e:str[st:io1:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:init init) emit_init = {
 	switch(init->tag) {
 	case ev:pl3:init:expr:
 		return e:get(ctx_expr(ctx, env, init->data.expr));
@@ -2027,11 +2049,14 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:init init) emit_in
 	case ev:pl3:init:nest: {
 		var en:pl3:tydecl tag;
 		var pt:st:pl3:agg agg;
+		var pt:st:pl3:arr arr;
 
-		if((agg = pl3:type_get_agg(init->type, &tag)) == null)
+		if((agg = pl3:type_get_agg(init->type, &tag)) != null)
+			return e:get(emit_list(ctx, env, tag, agg, init->data.list));
+		else if((arr = pl3:type_get_arr(init->type)) != null)
+			return e:get(emit_arr(ctx, env, tag, arr, init->data.list));
+		else
 			e:fmt("Internal error. Invalid structure type.");
-
-		return e:get(emit_list(ctx, env, tag, agg, init->data.list));
 	} break;
 	}
 
@@ -2046,8 +2071,8 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:init init) emit_in
  *   @list; The initializer list.
  *   &returns: The result.
  */
-def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:agg agg, pt:st:pl3:list list) emit_struct = {
-	var st:io:call type, val, elem, tmp;
+def e:str[st:io1:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:agg agg, pt:st:pl3:list list) emit_struct = {
+	var st:io1:call type, val, elem, tmp;
 	var pt:st:pl3:init init;
 
 	val = io:call_str("undef");
@@ -2057,7 +2082,7 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:agg agg, pt:st:pl3
 		elem = e:get(emit_init(ctx, env, init));
 
 		tmp = gen_tmp(ctx);
-		e:get(io:fmt(ctx->code, "\t%C = insertvalue %C %C, %C %C, %d\n", tmp, type, val, call_type(&init->type), elem, init->idx));
+		e:get(io1:fmt(ctx->code, "\t%C = insertvalue %C %C, %C %C, %d\n", tmp, type, val, call_type(&init->type), elem, init->idx));
 		val = tmp;
 	}
 
@@ -2072,9 +2097,9 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:agg agg, pt:st:pl3
  *   @list; The initializer list.
  *   &returns: The result.
  */
-def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:agg agg, pt:st:pl3:list list) emit_union = {
+def e:str[st:io1:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:agg agg, pt:st:pl3:list list) emit_union = {
 	var pt:st:pl3:init init;
-	var st:io:call val, tmp, cast, ret;
+	var st:io1:call val, tmp, cast, ret;
 	var u32 sz = 8 * pl3:agg_max(agg, &pl3:arch_x64);
 
 	if(list->init == null)
@@ -2090,10 +2115,10 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:agg agg, pt:st:pl3
 	cast = gen_tmp(ctx);
 	ret = gen_tmp(ctx);
 
-	e:get(io:fmt(ctx->vars, "\t%C = alloca i%u\n", tmp, sz));
-	e:get(io:fmt(ctx->code, "\t%C = bitcast i%u* %C to %C*\n", cast, sz, tmp, call_type(&init->type)));
-	e:get(io:fmt(ctx->code, "\tstore %C %C, %C* %C\n", call_type(&init->type), val, call_type(&init->type), cast));
-	e:get(io:fmt(ctx->code, "\t%C = load i%u, i%u* %C\n", ret, sz, sz, tmp));
+	e:get(io1:fmt(ctx->vars, "\t%C = alloca i%u\n", tmp, sz));
+	e:get(io1:fmt(ctx->code, "\t%C = bitcast i%u* %C to %C*\n", cast, sz, tmp, call_type(&init->type)));
+	e:get(io1:fmt(ctx->code, "\tstore %C %C, %C* %C\n", call_type(&init->type), val, call_type(&init->type), cast));
+	e:get(io1:fmt(ctx->code, "\t%C = load i%u, i%u* %C\n", ret, sz, sz, tmp));
 
 	return ret;
 };
@@ -2106,8 +2131,8 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:agg agg, pt:st:pl3
  *   @list; The initializer list.
  *   &returns: The result.
  */
-def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, en:pl3:tydecl tag, pt:st:pl3:arr arr, pt:st:pl3:list list) emit_arr = {
-	var st:io:call type, val, elem, tmp;
+def e:str[st:io1:call](pt:st:ctx ctx, pt:st:env env, en:pl3:tydecl tag, pt:st:pl3:arr arr, pt:st:pl3:list list) emit_arr = {
+	var st:io1:call type, val, elem, tmp;
 	var pt:st:pl3:init init;
 
 	val = io:call_str("undef");
@@ -2117,8 +2142,8 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, en:pl3:tydecl tag, pt:st:pl3
 		elem = e:get(emit_init(ctx, env, init));
 
 		tmp = gen_tmp(ctx);
-		//e:get(io:fmt(ctx->code, "\t%C = insertelement %C %C, %C %C, i32 %d\n", tmp, type, val, call_type(&init->type), elem, init->idx));
-		e:get(io:fmt(ctx->code, "\t%C = insertvalue %C %C, %C %C, %d\n", tmp, type, val, call_type(&init->type), elem, init->idx));
+		//e:get(io1:fmt(ctx->code, "\t%C = insertelement %C %C, %C %C, i32 %d\n", tmp, type, val, call_type(&init->type), elem, init->idx));
+		e:get(io1:fmt(ctx->code, "\t%C = insertvalue %C %C, %C %C, %d\n", tmp, type, val, call_type(&init->type), elem, init->idx));
 		val = tmp;
 	}
 
@@ -2130,12 +2155,12 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, en:pl3:tydecl tag, pt:st:pl3
  *   @ctx: The context.
  *   &returns: The callback.
  */
-def st:io:call(pt:st:ctx ctx) gen_tmp = {
+def st:io1:call(pt:st:ctx ctx) gen_tmp = {
 	def e:str[void](st:io file, pt:void arg) func = {
-		io:fmt(file, "%%t%u", u32{arg});
+		io1:fmt(file, "%%t%u", u32{arg});
 	};
 
-	return st:io:call{ &func, pt:void{ctx->tmp++} };
+	return st:io1:call{ &func, pt:void{ctx->tmp++} };
 };
 
 /**
@@ -2143,40 +2168,40 @@ def st:io:call(pt:st:ctx ctx) gen_tmp = {
  *   @lit: The literal.
  *   &returns: The callback.
  */
-def st:io:call(cpt:st:pl3:lit lit) gen_lit = {
+def st:io1:call(cpt:st:pl3:lit lit) gen_lit = {
 	def e:str[void](st:io file, cpt:st:pl3:lit lit) func = {
 		/* FIXME: we need a better io:fmt function */
 		switch(lit->tag) {
-		case ev:pl3:lit:bool: e:get(io:fmt(file, "%u", u32{lit->data.boolv})); break;
-		case ev:pl3:lit:null: e:get(io:fmt(file, "zeroinitializer")); break;
-		case ev:pl3:lit:i8v: e:get(io:fmt(file, "%d", i32{lit->data.i8v})); break;
-		case ev:pl3:lit:u8v: e:get(io:fmt(file, "%u", u32{lit->data.u8v})); break;
-		case ev:pl3:lit:i16v: e:get(io:fmt(file, "%d", i32{lit->data.i16v})); break;
-		case ev:pl3:lit:u16v: e:get(io:fmt(file, "%u", u32{lit->data.u16v})); break;
-		case ev:pl3:lit:i32v: e:get(io:fmt(file, "%d", lit->data.i32v)); break;
-		case ev:pl3:lit:u32v: e:get(io:fmt(file, "%u", lit->data.u32v)); break;
-		case ev:pl3:lit:i64v: e:get(io:fmt(file, "%d", i32{lit->data.i64v})); break;
-		case ev:pl3:lit:u64v: e:get(io:fmt(file, "%u", u32{lit->data.u64v})); break;
+		case ev:pl3:lit:bool: e:get(io1:fmt(file, "%u", u32{lit->data.boolv})); break;
+		case ev:pl3:lit:null: e:get(io1:fmt(file, "zeroinitializer")); break;
+		case ev:pl3:lit:i8v: e:get(io1:fmt(file, "%d", i32{lit->data.i8v})); break;
+		case ev:pl3:lit:u8v: e:get(io1:fmt(file, "%u", u32{lit->data.u8v})); break;
+		case ev:pl3:lit:i16v: e:get(io1:fmt(file, "%d", i32{lit->data.i16v})); break;
+		case ev:pl3:lit:u16v: e:get(io1:fmt(file, "%u", u32{lit->data.u16v})); break;
+		case ev:pl3:lit:i32v: e:get(io1:fmt(file, "%d", lit->data.i32v)); break;
+		case ev:pl3:lit:u32v: e:get(io1:fmt(file, "%u", lit->data.u32v)); break;
+		case ev:pl3:lit:i64v: e:get(io1:fmt(file, "%ld", lit->data.i64v)); break;
+		case ev:pl3:lit:u64v: e:get(io1:fmt(file, "%lu", lit->data.u64v)); break;
 		case ev:pl3:lit:int: e:fmt("Cannot emit big integer.");
 		case ev:pl3:lit:fp32: {
 			var u64 i;
 			var fp64 f = cast_fp32tofp64(lit->data.fp32v);
 			mem:copy(&i, &f, 8);
-			e:get(io:fmt(file, "0x%p", i)); // TODO ugly but work
+			e:get(io1:fmt(file, "0x%p", i)); // TODO ugly but work
 		} break;
 		case ev:pl3:lit:fp64: {
 			var u64 i;
 			mem:copy(&i, &lit->data.fp64v, 8);
-			e:get(io:fmt(file, "0x%p", i)); // TODO ugly but work
+			e:get(io1:fmt(file, "0x%p", i)); // TODO ugly but work
 		} break;
 		case ev:pl3:lit:flt: e:fmt("Cannot emit big float.");
-		case ev:pl3:lit:ptr: e:get(io:fmt(file, "inttoptr (i32 %d to i8*)", m:int_get_i32(lit->data.int))); break; //FIXME very wrong
+		case ev:pl3:lit:ptr: e:get(io1:fmt(file, "inttoptr (i32 %d to i8*)", m:int_get_i32(lit->data.int))); break; //FIXME very wrong
 		default: fatal("FIXME stub lit %u", lit->tag);
 		}
 
 	};
 	
-	return st:io:call{ &func, lit };
+	return st:io1:call{ &func, lit };
 };
 
 
@@ -2184,17 +2209,17 @@ tydef st:wrap {
 	pt:st:ctx ctx;
 	pt:st:pl3:expr expr;
 };
-def st:io:call(cpt:st:wrap wrap) wrap_call = {
+def st:io1:call(cpt:st:wrap wrap) wrap_call = {
 	def e:str[void](st:io file, cpt:st:wrap wrap) func = {
 		switch(wrap->expr->tag) {
 		case ev:pl3:expr:lit:
 			var pt:st:pl3:lit lit = wrap->expr->data.lit;
 
 			switch(lit->tag) {
-			case ev:pl3:lit:i32v: e:get(io:fmt(file, "%d", lit->data.i32v)); break;
-			case ev:pl3:lit:u32v: e:get(io:fmt(file, "%u", lit->data.u32v)); break;
-			case ev:pl3:lit:i64v: e:get(io:fmt(file, "%{i64}", lit->data.i64v)); break;
-			case ev:pl3:lit:u64v: e:get(io:fmt(file, "%{u64}", lit->data.u64v)); break;
+			case ev:pl3:lit:i32v: e:get(io1:fmt(file, "%d", lit->data.i32v)); break;
+			case ev:pl3:lit:u32v: e:get(io1:fmt(file, "%u", lit->data.u32v)); break;
+			case ev:pl3:lit:i64v: e:get(io1:fmt(file, "%{i64}", lit->data.i64v)); break;
+			case ev:pl3:lit:u64v: e:get(io1:fmt(file, "%{u64}", lit->data.u64v)); break;
 			case ev:pl3:lit:int: e:fmt("Cannot emit big integer.");
 			default: fatal("FIXME stub wrap_call");
 			}
@@ -2206,7 +2231,7 @@ def st:io:call(cpt:st:wrap wrap) wrap_call = {
 		}
 	};
 	
-	return st:io:call{ &func, pt:void{wrap} }; // FIXME: remove cast
+	return st:io1:call{ &func, pt:void{wrap} }; // FIXME: remove cast
 };
 
 
@@ -2216,9 +2241,9 @@ def st:io:call(cpt:st:wrap wrap) wrap_call = {
  *   @file: The file string.
  *   &returns: The callback.
  */
-def st:io:call(pt:st:ctx ctx, pt:st:pl3:str str) dbg_file = {
+def st:io1:call(pt:st:ctx ctx, pt:st:pl3:str str) dbg_file = {
 	def e:str[void](st:io file, pt:void arg) func = {
-		io:fmt(file, "!%u", u32{arg});
+		io1:fmt(file, "!%u", u32{arg});
 	};
 
 	var u32 id, cnt;
@@ -2226,9 +2251,9 @@ def st:io:call(pt:st:ctx ctx, pt:st:pl3:str str) dbg_file = {
 	cnt = ctx->dbgs.cnt;
 	id = map_get(&ctx->dbgs, str);
 	if(id >= cnt)
-		io:fmt(ctx->ext, "!%u = !DIFile(filename: \"%s\", directory: \".\")\n", id, str->buf);
+		io1:fmt(ctx->ext, "!%u = !DIFile(filename: \"%s\", directory: \".\")\n", id, str->buf);
 
-	return st:io:call{ &func, pt:void{id} };
+	return st:io1:call{ &func, pt:void{id} };
 };
 
 /**
@@ -2238,13 +2263,13 @@ def st:io:call(pt:st:ctx ctx, pt:st:pl3:str str) dbg_file = {
  *   @decl: The declaration for type information.
  *   &returns: The callback.
  */
-def st:io:call(pt:st:ctx ctx, pt:st:pl3:bind bind, pt:st:pl3:decl decl) dbg_bind = {
+def st:io1:call(pt:st:ctx ctx, pt:st:pl3:bind bind, pt:st:pl3:decl decl) dbg_bind = {
 	def e:str[void](st:io file, pt:void arg) func = {
-		io:fmt(file, "!%u", u32{arg});
+		io1:fmt(file, "!%u", u32{arg});
 	};
 
 	var u32 id, cnt;
-	var st:io:call file;
+	var st:io1:call file;
 
 	file = dbg_file(ctx, bind->meta.loc->file);
 
@@ -2253,11 +2278,11 @@ def st:io:call(pt:st:ctx ctx, pt:st:pl3:bind bind, pt:st:pl3:decl decl) dbg_bind
 	if(id >= cnt) {
 		var u32 ext = ctx->dbgs.cnt++;
 
-		io:fmt(ctx->ext, "!%u = !DIGlobalVariableExpression(var: !%u, expr: !DIExpression())\n", id, ext);
-		io:fmt(ctx->ext, "!%u = !DIGlobalVariable(name: \"%s\", file: %C, line: %u, type: !DIBasicType())\n", ext, bind->id, file, bind->meta.loc->lin + 1);
+		io1:fmt(ctx->ext, "!%u = !DIGlobalVariableExpression(var: !%u, expr: !DIExpression())\n", id, ext);
+		io1:fmt(ctx->ext, "!%u = !DIGlobalVariable(name: \"%s\", file: %C, line: %u, type: !DIBasicType())\n", ext, bind->id, file, bind->meta.loc->lin + 1);
 	}
 
-	return st:io:call{ &func, pt:void{id} };
+	return st:io1:call{ &func, pt:void{id} };
 };
 
 
@@ -2385,12 +2410,12 @@ def u32(pt:st:map map, cpt:void ptr) map_get = {
  *   @id: The identifier.
  *   &returns: The callback.
  */
-def st:io:call(u32 id) call_local = {
+def st:io1:call(u32 id) call_local = {
 	def e:str[void](st:io file, pt:void arg) func = {
-		io:fmt(file, "%%r%u", u32{arg});
+		io1:fmt(file, "%%r%u", u32{arg});
 	};
 
-	return st:io:call{ &func, pt:void{id} };
+	return st:io1:call{ &func, pt:void{id} };
 };
 
 /**
@@ -2398,12 +2423,12 @@ def st:io:call(u32 id) call_local = {
  *   @id: The identifier.
  *   &returns: The callback.
  */
-def st:io:call(u32 id) call_lab = {
+def st:io1:call(u32 id) call_lab = {
 	def e:str[void](st:io file, pt:void arg) func = {
-		io:fmt(file, "%%l%u", u32{arg});
+		io1:fmt(file, "%%l%u", u32{arg});
 	};
 
-	return st:io:call{ &func, pt:void{id} };
+	return st:io1:call{ &func, pt:void{id} };
 };
 
 
@@ -2423,50 +2448,50 @@ tydef st:pinfo {
  *   @param: The parameter list.
  *   &returns: The callback.
  */
-def st:io:call(cpt:st:pinfo info) call_pinfo = {
+def st:io1:call(cpt:st:pinfo info) call_pinfo = {
 	def e:str[void](st:io file, cpt:st:pinfo info) func = {
 		var u32 i = 0;
 		var pt:st:pl3:param param = info->param;
 
 		while(param != null) {
-			io:fmt(file, "%C", call_tyinfo(getref(st:tyinfo{ info->ctx, param->type })));
+			io1:fmt(file, "%C", call_tyinfo(getref(st:tyinfo{ info->ctx, param->type })));
 
 			if(param->id != null)
-				io:fmt(file, " %%a%u", i++);
+				io1:fmt(file, " %%a%u", i++);
 
 			param = param->next;
 			if((param != null) || info->vlist)
-				io:fmt(file, ", ");
+				io1:fmt(file, ", ");
 		}
 
 		if(info->vlist)
-			e:get(io:fmt(file, "..."));
+			e:get(io1:fmt(file, "..."));
 	};
 
-	return st:io:call{ &func, info };
+	return st:io1:call{ &func, info };
 };
 
 tydef st:arg {
 	pt:st:pl3:type type;
-	st:io:call val;
+	st:io1:call val;
 };
 
 /**
  * Create a callback for an argument list.
  *   @args: The list of argument types and values.
  */
-def st:io:call(pt:st:arg args) call_args = {
+def st:io1:call(pt:st:arg args) call_args = {
 	def e:str[void](st:io file, cpt:st:arg arg) func = {
 		while(arg->type != null) {
-			io:fmt(file, "%C %C", call_type(arg->type), arg->val);
+			io1:fmt(file, "%C %C", call_type(arg->type), arg->val);
 
 			arg = arg + 1; // FIXME
 			if(arg->type != null)
-				io:fmt(file, ", ");
+				io1:fmt(file, ", ");
 		}
 	};
 
-	return st:io:call{ &func, args };
+	return st:io1:call{ &func, args };
 };
 
 
@@ -2480,12 +2505,12 @@ tydef st:tyinfo {
 	st:pl3:type type;
 };
 
-def st:io:call(cpt:st:tyinfo info) call_tyinfo = {
+def st:io1:call(cpt:st:tyinfo info) call_tyinfo = {
 	def e:str[void](st:io file, cpt:st:tyinfo info) func = {
-		e:get(io:fmt(file, "%C", call_type(&info->type)));
+		e:get(io1:fmt(file, "%C", call_type(&info->type)));
 	};
 
-	return st:io:call{ &func, info };
+	return st:io1:call{ &func, info };
 };
 
 /**
@@ -2493,31 +2518,31 @@ def st:io:call(cpt:st:tyinfo info) call_tyinfo = {
  *   @type: The type pointer.
  *   &returns: The callback.
  */
-def st:io:call(cpt:st:pl3:type type) call_type = {
+def st:io1:call(cpt:st:pl3:type type) call_type = {
 	def e:str[void](st:io file, cpt:st:pl3:type type) func = {
 		switch(type->tag) {
 		case ev:pl3:type:unk: e:fmt("Unresolved type.");
-		case ev:pl3:type:void: e:get(io:fmt(file, "void")); break;
-		case ev:pl3:type:bool: e:get(io:fmt(file, "i8")); break;
-		case ev:pl3:type:i8: e:get(io:fmt(file, "i8")); break;
-		case ev:pl3:type:u8: e:get(io:fmt(file, "i8")); break;
-		case ev:pl3:type:i16: e:get(io:fmt(file, "i16")); break;
-		case ev:pl3:type:u16: e:get(io:fmt(file, "i16")); break;
-		case ev:pl3:type:i32: e:get(io:fmt(file, "i32")); break;
-		case ev:pl3:type:u32: e:get(io:fmt(file, "i32")); break;
-		case ev:pl3:type:i64: e:get(io:fmt(file, "i64")); break;
-		case ev:pl3:type:u64: e:get(io:fmt(file, "i64")); break;
-		case ev:pl3:type:fp32: e:get(io:fmt(file, "float")); break;
-		case ev:pl3:type:fp64: e:get(io:fmt(file, "double")); break;
+		case ev:pl3:type:void: e:get(io1:fmt(file, "void")); break;
+		case ev:pl3:type:bool: e:get(io1:fmt(file, "i8")); break;
+		case ev:pl3:type:i8: e:get(io1:fmt(file, "i8")); break;
+		case ev:pl3:type:u8: e:get(io1:fmt(file, "i8")); break;
+		case ev:pl3:type:i16: e:get(io1:fmt(file, "i16")); break;
+		case ev:pl3:type:u16: e:get(io1:fmt(file, "i16")); break;
+		case ev:pl3:type:i32: e:get(io1:fmt(file, "i32")); break;
+		case ev:pl3:type:u32: e:get(io1:fmt(file, "i32")); break;
+		case ev:pl3:type:i64: e:get(io1:fmt(file, "i64")); break;
+		case ev:pl3:type:u64: e:get(io1:fmt(file, "i64")); break;
+		case ev:pl3:type:fp32: e:get(io1:fmt(file, "float")); break;
+		case ev:pl3:type:fp64: e:get(io1:fmt(file, "double")); break;
 
 		case ev:pl3:type:ptr:
-			e:get(io:fmt(file, "i8*"));
+			e:get(io1:fmt(file, "i8*"));
 			break;
 
 		case ev:pl3:type:arr: {
 			var pt:st:pl3:arr arr = type->data.arr;
 
-			e:get(io:fmt(file, "[%u x %C]", arr->len, call_type(&arr->type)));
+			e:get(io1:fmt(file, "[%u x %C]", arr->len, call_type(&arr->type)));
 		} break;
 
 		case ev:pl3:type:name: {
@@ -2530,11 +2555,11 @@ def st:io:call(cpt:st:pl3:type type) call_type = {
 			decl = name->decl;
 			switch(decl->tag) {
 			case ev:pl3:tydecl:enum:
-				e:get(io:fmt(file, "i32")); // FIXME different widths.
+				e:get(io1:fmt(file, "i32")); // FIXME different widths.
 				break;
 
 			case ev:pl3:tydecl:alias:
-				e:get(io:fmt(file, "%C", call_type(&decl->data.alias->type)));
+				e:get(io1:fmt(file, "%C", call_type(&decl->data.alias->type)));
 				break;
 
 			case ev:pl3:tydecl:struct: {
@@ -2542,49 +2567,49 @@ def st:io:call(cpt:st:pl3:type type) call_type = {
 				var pt:st:pl3:field field;
 				var pt:st:pl3:agg agg = decl->data.agg;
 				
-				e:get(io:fmt(file, "{"));
+				e:get(io1:fmt(file, "{"));
 
 				for(memb = agg->memb; memb != null; memb = memb->next) {
 					for(field = memb->field; field != null; field = field->next) {
-						e:get(io:fmt(file, "%C", call_type(&memb->type)));
+						e:get(io1:fmt(file, "%C", call_type(&memb->type)));
 
 						if((field->next != null) || (memb->next != null))
-							e:get(io:fmt(file, ", "));
+							e:get(io1:fmt(file, ", "));
 					}
 				}
 
-				e:get(io:fmt(file, "}"));
+				e:get(io1:fmt(file, "}"));
 			} break;
 
 			case ev:pl3:tydecl:union:
-				e:get(io:fmt(file, "i%u", 8 * pl3:type_size(*type, &pl3:arch_x64)));
+				e:get(io1:fmt(file, "i%u", 8 * pl3:type_size(*type, &pl3:arch_x64)));
 				break;
 			}
 
 		} break;
 
 		case ev:pl3:type:sig:
-			e:get(io:fmt(file, "%C", call_sig(type->data.sig)));
+			e:get(io1:fmt(file, "%C", call_sig(type->data.sig)));
 			break;
 
 		case ev:pl3:type:args:
-			e:get(io:fmt(file, "%%\"$args\""));
+			e:get(io1:fmt(file, "%%\"$args\""));
 			break;
 
 		case ev:pl3:type:err: {
 			var cpt:st:pl3:err err = type->data.err;
 
 			if(pl3:type_is_void(err->suc))
-				e:get(io:fmt(file, "%C", call_type(&err->fail)));
+				e:get(io1:fmt(file, "%C", call_type(&err->fail)));
 			else
-				e:get(io:fmt(file, "{%C,%C}", call_type(&err->suc), call_type(&err->fail)));
+				e:get(io1:fmt(file, "{%C,%C}", call_type(&err->suc), call_type(&err->fail)));
 		} break;
 
 		default: fatal("FIXME call type %d", type->tag);
 		}
 	};
 
-	return st:io:call{ &func, type };
+	return st:io1:call{ &func, type };
 };
 
 /**
@@ -2592,26 +2617,26 @@ def st:io:call(cpt:st:pl3:type type) call_type = {
  *   @agg: The aggregate.
  *   &returns: The callback.
  */
-def st:io:call(cpt:st:pl3:agg agg) call_struct = {
+def st:io1:call(cpt:st:pl3:agg agg) call_struct = {
 	def e:str[void](st:io file, cpt:st:pl3:agg agg) func = {
 		var pt:st:pl3:memb memb;
 		var pt:st:pl3:field field;
 		
-		e:get(io:fmt(file, "{"));
+		e:get(io1:fmt(file, "{"));
 
 		for(memb = agg->memb; memb != null; memb = memb->next) {
 			for(field = memb->field; field != null; field = field->next) {
-				e:get(io:fmt(file, "%C", call_type(&memb->type)));
+				e:get(io1:fmt(file, "%C", call_type(&memb->type)));
 
 				if((field->next != null) || (memb->next != null))
-					e:get(io:fmt(file, ", "));
+					e:get(io1:fmt(file, ", "));
 			}
 		}
 
-		e:get(io:fmt(file, "}"));
+		e:get(io1:fmt(file, "}"));
 	};
 
-	return st:io:call{ &func, agg};
+	return st:io1:call{ &func, agg};
 };
 
 /**
@@ -2619,12 +2644,12 @@ def st:io:call(cpt:st:pl3:agg agg) call_struct = {
  *   @arr: The array type.
  *   &returns: The callback.
  */
-def st:io:call(cpt:st:pl3:arr arr) call_arr = {
+def st:io1:call(cpt:st:pl3:arr arr) call_arr = {
 	def e:str[void](st:io file, cpt:st:pl3:arr arr) func = {
-		e:get(io:fmt(file, "[%u x %C]", arr->len, call_type(&arr->type)));
+		e:get(io1:fmt(file, "[%u x %C]", arr->len, call_type(&arr->type)));
 	};
 
-	return st:io:call{ &func, arr };
+	return st:io1:call{ &func, arr };
 };
 
 tydef st:siginfo {
@@ -2637,27 +2662,27 @@ tydef st:siginfo {
  *   @type: The function signature.
  *   &returns: The callback.
  */
-def st:io:call(cpt:st:pl3:sig sig) call_sig = {
+def st:io1:call(cpt:st:pl3:sig sig) call_sig = {
 	def e:str[void](st:io file, cpt:st:pl3:sig sig) func = {
 		var cpt:st:pl3:param param = sig->param;
 
-		e:get(io:fmt(file, "%C(", call_type(&sig->ret)));
+		e:get(io1:fmt(file, "%C(", call_type(&sig->ret)));
 
 		while(param != null) {
-			io:fmt(file, "%C", call_type(&param->type));
+			io1:fmt(file, "%C", call_type(&param->type));
 
 			param = param->next;
 			if((param != null) || sig->vlist)
-				io:fmt(file, ", ");
+				io1:fmt(file, ", ");
 		}
 
 		if(sig->vlist)
-			e:get(io:fmt(file, "..."));
+			e:get(io1:fmt(file, "..."));
 
-		e:get(io:fmt(file, ")"));
+		e:get(io1:fmt(file, ")"));
 	};
 
-	return st:io:call{ &func, sig };
+	return st:io1:call{ &func, sig };
 };
 
 
@@ -2680,7 +2705,7 @@ tydef st:calc {
  *   @expr: The expression.
  *   &returns: The callback.
  */
-def st:io:call(cpt:st:calc info) calc_expr = {
+def st:io1:call(cpt:st:calc info) calc_expr = {
 	def e:str[void](st:io file, cpt:st:calc info) func = {
 		var cpt:st:pl3:expr expr = info->expr;
 
@@ -2716,25 +2741,25 @@ def st:io:call(cpt:st:calc info) calc_expr = {
 				str = str:buf_done(&buf);
 				onerr mem:free(str);
 
-				e:get(io:fmt(info->ctx->ext, "@s%u = internal local_unnamed_addr constant [%u x i8] c\"%s\", align 1\n", num, sz, str));
-				e:get(io:fmt(file, "getelementptr inbounds([%u x i8], [%u x i8]* @s%u, i64 0, i64 0)", sz, sz, num));
+				e:get(io1:fmt(info->ctx->ext, "@s%u = internal local_unnamed_addr constant [%u x i8] c\"%s\", align 1\n", num, sz, str));
+				e:get(io1:fmt(file, "getelementptr inbounds([%u x i8], [%u x i8]* @s%u, i64 0, i64 0)", sz, sz, num));
 
 				mem:free(str);
 			}
 			else {
 				/* FIXME: we need a better io:fmt function */
 				switch(lit->tag) {
-				case ev:pl3:lit:bool: e:get(io:fmt(file, "%u", u32{lit->data.boolv})); break;
-				case ev:pl3:lit:null: e:get(io:fmt(file, "zeroinitializer")); break;
-				case ev:pl3:lit:i8v: e:get(io:fmt(file, "%d", i32{lit->data.i8v})); break;
-				case ev:pl3:lit:u8v: e:get(io:fmt(file, "%u", u32{lit->data.u8v})); break;
-				case ev:pl3:lit:i16v: e:get(io:fmt(file, "%d", i32{lit->data.i16v})); break;
-				case ev:pl3:lit:u16v: e:get(io:fmt(file, "%u", u32{lit->data.u16v})); break;
-				case ev:pl3:lit:i32v: e:get(io:fmt(file, "%d", lit->data.i32v)); break;
-				case ev:pl3:lit:u32v: e:get(io:fmt(file, "%u", lit->data.u32v)); break;
-				case ev:pl3:lit:i64v: e:get(io:fmt(file, "%d", i32{lit->data.i64v})); break;
-				case ev:pl3:lit:u64v: e:get(io:fmt(file, "%u", u32{lit->data.u64v})); break;
-				case ev:pl3:lit:ptr: e:get(io:fmt(file, "inttoptr(i64 %u to i8*)", u32{m:int_get_u64(lit->data.int)})); break; // TODO not this
+				case ev:pl3:lit:bool: e:get(io1:fmt(file, "%u", u32{lit->data.boolv})); break;
+				case ev:pl3:lit:null: e:get(io1:fmt(file, "zeroinitializer")); break;
+				case ev:pl3:lit:i8v: e:get(io1:fmt(file, "%d", i32{lit->data.i8v})); break;
+				case ev:pl3:lit:u8v: e:get(io1:fmt(file, "%u", u32{lit->data.u8v})); break;
+				case ev:pl3:lit:i16v: e:get(io1:fmt(file, "%d", i32{lit->data.i16v})); break;
+				case ev:pl3:lit:u16v: e:get(io1:fmt(file, "%u", u32{lit->data.u16v})); break;
+				case ev:pl3:lit:i32v: e:get(io1:fmt(file, "%d", lit->data.i32v)); break;
+				case ev:pl3:lit:u32v: e:get(io1:fmt(file, "%u", lit->data.u32v)); break;
+				case ev:pl3:lit:i64v: e:get(io1:fmt(file, "%ld", lit->data.i64v)); break;
+				case ev:pl3:lit:u64v: e:get(io1:fmt(file, "%lu", lit->data.u64v)); break;
+				case ev:pl3:lit:ptr: e:get(io1:fmt(file, "inttoptr(i64 %u to i8*)", u32{m:int_get_u64(lit->data.int)})); break; // TODO not this
 				case ev:pl3:lit:int: e:fmt("Internal error. Cannot emit big integer.");
 				default: fatal("FIXME stub calc_expr lit %u", lit->tag);
 				}
@@ -2751,9 +2776,9 @@ def st:io:call(cpt:st:calc info) calc_expr = {
 					e:fmt("Internal error. Mutable variable used in constant expression.");
 
 				//if((link.decl->flags & pl3:decl:ext) != 0)
-					//e:get(io:fmt(file, "@\"%s\"", link.bind->id));
+					//e:get(io1:fmt(file, "@\"%s\"", link.bind->id));
 				//else
-				e:get(io:fmt(file, "%C", calc_expr(getref(st:calc{ info->ctx, info->env, link.bind->expr }))));
+				e:get(io1:fmt(file, "%C", calc_expr(getref(st:calc{ info->ctx, info->env, link.bind->expr }))));
 			}
 			else
 				fatal("FIXME what error");
@@ -2761,20 +2786,20 @@ def st:io:call(cpt:st:calc info) calc_expr = {
 
 		case ev:pl3:expr:op1: {
 			var pt:st:pl3:op1 op1 = expr->data.op1;
-			var st:io:call type = call_type(&op1->in->type);
+			var st:io1:call type = call_type(&op1->in->type);
 
 			switch(op1->tag) {
 			case ev:pl3:op1:neg: {
-				var st:io:call calc = calc_expr(getref(st:calc{ info->ctx, info->env, op1->in }));
+				var st:io1:call calc = calc_expr(getref(st:calc{ info->ctx, info->env, op1->in }));
 
-				e:get(io:fmt(file, "sub(%C 0, %C %C)", type, type, calc));
+				e:get(io1:fmt(file, "sub(%C 0, %C %C)", type, type, calc));
 			} break;
 
 			case ev:pl3:op1:addr:
 				switch(op1->in->tag) {
 				case ev:pl3:expr:ident: {
 					var i32 id;
-					var st:io:call val;
+					var st:io1:call val;
 					var pt:st:pl3:ident ident = op1->in->data.ident;
 
 					if(ident->tag != ev:pl3:ident:link)
@@ -2786,7 +2811,7 @@ def st:io:call(cpt:st:calc info) calc_expr = {
 					else
 						val = ref_bind(info->ctx, ident->data.link.bind);
 
-					e:get(io:fmt(file, "bitcast (%C* %C to i8*)", call_type(&ident->data.link.decl->type), val));
+					e:get(io1:fmt(file, "bitcast (%C* %C to i8*)", call_type(&ident->data.link.decl->type), val));
 				} break;
 					
 				default:
@@ -2802,7 +2827,7 @@ def st:io:call(cpt:st:calc info) calc_expr = {
 
 		case ev:pl3:expr:op2: {
 			var cpt:char code;
-			var st:io:call lhs, rhs;
+			var st:io1:call lhs, rhs;
 			var pt:st:pl3:op2 op2 = expr->data.op2;
 
 			switch(op2->tag) {
@@ -2846,15 +2871,15 @@ def st:io:call(cpt:st:calc info) calc_expr = {
 
 			lhs = calc_expr(getref(st:calc{ info->ctx, info->env, op2->lhs }));
 			rhs = calc_expr(getref(st:calc{ info->ctx, info->env, op2->rhs }));
-			e:get(io:fmt(file, "%s(%C %C, %C %C)", code, call_type(&op2->lhs->type), lhs, call_type(&op2->rhs->type), rhs));
+			e:get(io1:fmt(file, "%s(%C %C, %C %C)", code, call_type(&op2->lhs->type), lhs, call_type(&op2->rhs->type), rhs));
 		} break;
 
 		case ev:pl3:expr:comp:
-			e:get(io:fmt(file, "%C", calc_comp(getref(st:calc{ info->ctx, info->env, null, { .comp = expr->data.comp } }))));
+			e:get(io1:fmt(file, "%C", calc_comp(getref(st:calc{ info->ctx, info->env, null, { .comp = expr->data.comp } }))));
 			break;
 
 		case ev:pl3:expr:enref: {
-			e:get(io:fmt(file, "%C", calc_expr(getref(st:calc{ info->ctx, info->env, expr->data.enref->val->expr }))));
+			e:get(io1:fmt(file, "%C", calc_expr(getref(st:calc{ info->ctx, info->env, expr->data.enref->val->expr }))));
 		} break;
 
 		default:
@@ -2862,7 +2887,7 @@ def st:io:call(cpt:st:calc info) calc_expr = {
 		}
 	};
 
-	return st:io:call{ &func, info };
+	return st:io1:call{ &func, info };
 };
 
 /**
@@ -2870,7 +2895,7 @@ def st:io:call(cpt:st:calc info) calc_expr = {
  *   @expr: The expression.
  *   &returns: The callback.
  */
-def st:io:call(cpt:st:calc info) calc_comp = {
+def st:io1:call(cpt:st:calc info) calc_comp = {
 	def e:str[void](st:io file, cpt:st:calc info) func = {
 		var pt:st:pl3:agg agg;
 		var pt:st:pl3:arr arr;
@@ -2880,59 +2905,63 @@ def st:io:call(cpt:st:calc info) calc_comp = {
 		if((arr = pl3:type_get_arr(comp->type)) != null) {
 			var pt:st:pl3:init init;
 
-			e:get(io:fmt(file, "["));
+			e:get(io1:fmt(file, "["));
 
 			for(init = list->init; init != null; init = init->next) {
-				e:get(io:fmt(file, "%C ", call_type(&arr->type)));
+				e:get(io1:fmt(file, "%C ", call_type(&arr->type)));
 
 				switch(init->tag) {
 				case ev:pl3:init:nest: {
 					var st:pl3:comp comp = { arr->type, init->data.list };
-					var st:io:call calc = calc_comp(getref(st:calc{ info->ctx, info->env, null, { .comp = &comp } }));
+					var st:io1:call calc = calc_comp(getref(st:calc{ info->ctx, info->env, null, { .comp = &comp } }));
 
-					e:get(io:fmt(file, "%C", calc));
+					e:get(io1:fmt(file, "%C", calc));
 				} break;
 
 				case ev:pl3:init:expr: {
-					var st:io:call calc = calc_expr(getref(st:calc{ info->ctx, info->env, init->data.expr }));
+					var st:io1:call calc = calc_expr(getref(st:calc{ info->ctx, info->env, init->data.expr }));
 
-					e:get(io:fmt(file, "%C", calc));
+					e:get(io1:fmt(file, "%C", calc));
 				} break;
 				}
 
 				if(init->next != null)
-					e:get(io:fmt(file, ", "));
+					e:get(io1:fmt(file, ", "));
 			}
 
-			e:get(io:fmt(file, "]"));
+			e:get(io1:fmt(file, "]"));
 		}
 		else if((agg = pl3:type_get_agg(comp->type, null)) != null) {
 			var pt:st:pl3:init init;
 			var u32 i, cnt = pl3:agg_cnt(agg);
 
-			e:get(io:fmt(file, "{"));
+			e:get(io1:fmt(file, "{"));
 
 			for(i = 0; i < cnt; i++) {
 				var st:pl3:type type;
 
 				if(i > 0)
-					e:get(io:fmt(file, ", "));
+					e:get(io1:fmt(file, ", "));
 
 				pl3:agg_get(agg, i, &type);
-				e:get(io:fmt(file, "%C ", call_type(&type)));
+				e:get(io1:fmt(file, "%C ", call_type(&type)));
 
 				for(init = list->init; init != null; init = init->next) {
 					if(init->idx != i32{i})
 						continue;
 
 					switch(init->tag) {
-					case ev:pl3:init:nest:
-						fatal("FIXME stub init const nest");
+					case ev:pl3:init:nest: {
+						var st:pl3:comp comp = { type, init->data.list };
+						var st:io1:call calc = calc_comp(getref(st:calc{ info->ctx, info->env, null, { .comp = &comp } }));
+
+						e:get(io1:fmt(file, "%C", calc));
+					} break;
 
 					case ev:pl3:init:expr: {
-						var st:io:call calc = calc_expr(getref(st:calc{ info->ctx, info->env, init->data.expr }));
+						var st:io1:call calc = calc_expr(getref(st:calc{ info->ctx, info->env, init->data.expr }));
 
-						e:get(io:fmt(file, "%C", calc));
+						e:get(io1:fmt(file, "%C", calc));
 					} break;
 					}
 
@@ -2940,17 +2969,17 @@ def st:io:call(cpt:st:calc info) calc_comp = {
 				}
 
 				if(init == null)
-					e:get(io:fmt(file, "zeroinitializer"));
+					e:get(io1:fmt(file, "zeroinitializer"));
 			}
 
-			e:get(io:fmt(file, "}"));
+			e:get(io1:fmt(file, "}"));
 		}
 		else {
 			fatal("FIXME stub cast const");
 		}
 	};
 
-	return st:io:call{ &func, info };
+	return st:io1:call{ &func, info };
 };
 
 
@@ -3027,23 +3056,23 @@ def[export] st:pl3:val(pt:st:pl3:expr expr) pl3:val_calc = {
 	return st:pl3:val{ ev:pl3:type:unk, {}};
 };
 
-def[export] st:io:call(cpt:st:pl3:val val) pl3:val_call = {
+def[export] st:io1:call(cpt:st:pl3:val val) pl3:val_call = {
 	def e:str[void](st:io file, cpt:st:pl3:val val) func = {
 		/* FIXME: we need a better io:fmt function */
 		switch(val->tag) {
-		case ev:pl3:type:i8: io:fmt(file, "%d", i32{val->data.i8v}); break;
-		case ev:pl3:type:u8: io:fmt(file, "%u", u32{val->data.u8v}); break;
-		case ev:pl3:type:i16: io:fmt(file, "%d", i32{val->data.i16v}); break;
-		case ev:pl3:type:u16: io:fmt(file, "%u", u32{val->data.u16v}); break;
-		case ev:pl3:type:i32: io:fmt(file, "%d", val->data.i32v); break;
-		case ev:pl3:type:u32: io:fmt(file, "%u", val->data.u32v); break;
-		case ev:pl3:type:i64: io:fmt(file, "%d", i32{val->data.i64v}); break;
-		case ev:pl3:type:u64: io:fmt(file, "%u", u32{val->data.u64v}); break;
+		case ev:pl3:type:i8: io1:fmt(file, "%d", i32{val->data.i8v}); break;
+		case ev:pl3:type:u8: io1:fmt(file, "%u", u32{val->data.u8v}); break;
+		case ev:pl3:type:i16: io1:fmt(file, "%d", i32{val->data.i16v}); break;
+		case ev:pl3:type:u16: io1:fmt(file, "%u", u32{val->data.u16v}); break;
+		case ev:pl3:type:i32: io1:fmt(file, "%d", val->data.i32v); break;
+		case ev:pl3:type:u32: io1:fmt(file, "%u", val->data.u32v); break;
+		case ev:pl3:type:i64: io1:fmt(file, "%d", i32{val->data.i64v}); break;
+		case ev:pl3:type:u64: io1:fmt(file, "%u", u32{val->data.u64v}); break;
 		default: fatal("FIXME: the rest of these");
 		}
 	};
 
-	return st:io:call{ &func, val };
+	return st:io1:call{ &func, val };
 };
 
 
@@ -3087,7 +3116,7 @@ tydef en:ref { bind, func };
 tydef st:ref {
 	u32 id;
 	u32 bad1;
-	st:io:call call;
+	st:io1:call call;
 	cpt:void ptr;
 
 	st:avl:node node;
@@ -3105,7 +3134,7 @@ def pt:st:ref(pt:st:ctx ctx, en:ref tag, cpt:void ptr) ref_get = {
 	var pt:st:avl:node node;
 
 	def e:str[void](st:io file, cpt:void arg) proc = {
-		e:get(io:fmt(file, "@\"$v%u\"", u32{arg}));
+		e:get(io1:fmt(file, "@\"$v%u\"", u32{arg}));
 	};
 
 	node = avl:root_get(&ctx->refs, ptr);
@@ -3125,14 +3154,14 @@ def pt:st:ref(pt:st:ctx ctx, en:ref tag, cpt:void ptr) ref_get = {
  *   @func: The function.
  *   &returns: The name.
  */
-def st:io:call(pt:st:ctx ctx, cpt:st:pl3:func func) ref_func = {
+def st:io1:call(pt:st:ctx ctx, cpt:st:pl3:func func) ref_func = {
 	return ref_bind(ctx, cpt:st:pl3:bind{func}/*BUG WRONG*/);
 	/*
 	def e:str[void](st:io file, cpt:void arg) proc = {
-		e:get(io:fmt(file, "@\"$f%u\"", u32{arg}));
+		e:get(io1:fmt(file, "@\"$f%u\"", u32{arg}));
 	};
 
-	return st:io:call{ &proc, cpt:void{ref_get(ctx, ev:ref:func, func)->id} };
+	return st:io1:call{ &proc, cpt:void{ref_get(ctx, ev:ref:func, func)->id} };
 	*/
 };
 
@@ -3142,7 +3171,7 @@ def st:io:call(pt:st:ctx ctx, cpt:st:pl3:func func) ref_func = {
  *   @func: The function.
  *   &returns: The name.
  */
-def st:io:call(pt:st:ctx ctx, cpt:st:pl3:bind bind) ref_bind = {
+def st:io1:call(pt:st:ctx ctx, cpt:st:pl3:bind bind) ref_bind = {
 	return ref_get(ctx, ev:ref:bind, bind)->call;
 };
 
@@ -3150,11 +3179,11 @@ def st:io:call(pt:st:ctx ctx, cpt:st:pl3:bind bind) ref_bind = {
 tydef st:foo { };
 def void(st:foo foo) foo = { };
 def e:str[void](st:io file, cpt:st:pl3:bind bind) ext_proc = {
-	e:get(io:fmt(file, "@\"%s\"", bind->id));
+	e:get(io1:fmt(file, "@\"%s\"", bind->id));
 };
-def st:io:call(pt:st:ctx ctx, pt:st:pl3:bind bind) ref_external = {
+def st:io1:call(pt:st:ctx ctx, pt:st:pl3:bind bind) ref_external = {
 
-	return ref_put(ctx, bind, st:io:call{ &ext_proc, bind })->call;
+	return ref_put(ctx, bind, st:io1:call{ &ext_proc, bind })->call;
 };
 
 
@@ -3182,7 +3211,7 @@ def pt:st:ref(pt:st:ctx ctx, cpt:void ptr) ref_find = {
  *   @call: The call.
  *   &jeturns: The reference.
  */
-def pt:st:ref(pt:st:ctx ctx, cpt:void ptr, st:io:call call) ref_put = {
+def pt:st:ref(pt:st:ctx ctx, cpt:void ptr, st:io1:call call) ref_put = {
 	var pt:st:ref ref;
 
 	ref = mem:make(st:ref{ ctx->refs.cnt, 0/*FIXME*/, call, ptr, avl:node(ptr) });
@@ -3197,16 +3226,16 @@ def pt:st:ref(pt:st:ctx ctx, cpt:void ptr, st:io:call call) ref_put = {
  *   @ptr: The pointer.
  *   &returns: The call.
  */
-def st:io:call(pt:st:ctx ctx, cpt:void ptr) ref_uniq = {
+def st:io1:call(pt:st:ctx ctx, cpt:void ptr) ref_uniq = {
 	def e:str[void](st:io file, cpt:void arg) proc = {
-		e:get(io:fmt(file, "@\"$v%u\"", u32{arg}));
+		e:get(io1:fmt(file, "@\"$v%u\"", u32{arg}));
 	};
 
 	var pt:st:ref ref;
 
 	ref = ref_find(ctx, ptr);
 	if(ref == null)
-		ref = ref_put(ctx, ptr, st:io:call{ &proc, pt:void{ ctx->refs.cnt } });
+		ref = ref_put(ctx, ptr, st:io1:call{ &proc, pt:void{ ctx->refs.cnt } });
 
 	return ref->call;
 };
@@ -3255,11 +3284,11 @@ def e:str[void](pt:st:scope scope, pt:st:ctx ctx, pt:st:env env) scope_emit = {
 };
 
 
-def e:str[st:io:call](pt:st:ctx ctx, st:io:call val) mk_bool = {
-	var st:io:call ret;
+def e:str[st:io1:call](pt:st:ctx ctx, st:io1:call val) mk_bool = {
+	var st:io1:call ret;
 
 	ret = gen_tmp(ctx);
-	e:get(io:fmt(ctx->code, "  %C = trunc i8 %C to i1\n", ret, val));
+	e:get(io1:fmt(ctx->code, "  %C = trunc i8 %C to i1\n", ret, val));
 
 	return ret;
 };

@@ -4,11 +4,25 @@ def[export,extern] fp32(fp32 a) m_sqrt_fp32;
 def[export] fp32(fp32 a) m:pow2_fp32 = {
 	return a * a;
 };
+
+def[export] u16(u16 a, u16 b) m:max_u16 = {
+	return (a > b) ? a : b;
+};
+def[export] i16(i16 a, i16 b) m:max_i16 = {
+	return (a > b) ? a : b;
+};
 def[export] u32(u32 a, u32 b) m:max_u32 = {
 	return (a > b) ? a : b;
 };
 def[export] i32(i32 a, i32 b) m:max_i32 = {
 	return (a > b) ? a : b;
+};
+
+def[export] u16(u16 a, u16 b) m:min_u16 = {
+	return (a < b) ? a : b;
+};
+def[export] i16(i16 a, i16 b) m:min_i16 = {
+	return (a < b) ? a : b;
 };
 def[export] u32(u32 a, u32 b) m:min_u32 = {
 	return (a < b) ? a : b;
@@ -21,6 +35,13 @@ def[export] i64(i64 a, i64 b) m:max_i64 = {
 	return (a > b) ? a : b;
 };
 def[export] i64(i64 a, i64 b) m:min_i64 = {
+	return (a < b) ? a : b;
+};
+
+def[export] u64(u64 a, u64 b) m:max_u64 = {
+	return (a > b) ? a : b;
+};
+def[export] u64(u64 a, u64 b) m:min_u64 = {
 	return (a < b) ? a : b;
 };
 
