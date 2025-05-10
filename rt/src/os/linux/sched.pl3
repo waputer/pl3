@@ -1,0 +1,286 @@
+/**
+ * Task function.
+ *   @arg: The argument.
+ */
+tydef[export] ty:sys:task = void(pt:void arg);
+
+/**
+ * Task instance structure.
+ *   @func: The function.
+ *   @arg: The argument.
+ *   @next: The next task.
+ */
+tydef[export] st:sys:task:inst {
+	pt:ty:sys:task func;
+	pt:void arg;
+
+	pt:st:sys:task:inst next;
+};
+
+/**
+ * Task manager structure.
+ *   @head: The head of the list.
+ *   @tail: The tail pointer.
+ */
+tydef[export] st:sys:task {
+	pt:st:sys:task:inst head;
+	pt:pt:st:sys:task:inst tail;
+};
+
+/**
+ * Create a new task manager.
+ *   &returns: The task manager.
+ */
+def[export] pt:st:sys:task() sys:task_new = {
+	var pt:st:sys:task task;
+
+	task = mem:new(st:sys:task);
+	task->head = null;
+	task->tail = &task->head;
+
+	return task;
+};
+
+/**
+ * Delete a task manager.
+ *   @task: The task manager.
+ */
+def[export] void(pt:st:sys:task task) sys:task_delete = {
+	var pt:st:sys:task:inst cur, tmp;
+
+	cur = task->head;
+	while(cur != null) {
+		cur = (tmp = cur)->next;
+		mem:free(tmp);
+	}
+
+	mem:free(task);
+};
+
+
+/**
+ * Add a task.
+ *   @task: The task manager.
+ *   @func: The callback. function.
+ *   @arg: The arguments.
+ */
+def[export] void(pt:st:sys:task task, pt:ty:sys:task func, pt:void arg) sys:task_add = {
+	*task->tail = mem:make(st:sys:task:inst{ func, arg, null });
+	task->tail = &(*task->tail)->next;
+};
+
+/**
+ * Run all tasks.
+ *   @task: The task manager.
+ */
+def[export] void(pt:st:sys:task task) sys:task_run = {
+	var pt:st:sys:task:inst tmp;
+
+	while(task->head != null) {
+		task->head = (tmp = task->head)->next;
+		tmp->func->(tmp->arg);
+		mem:free(tmp);
+	}
+
+	task->tail = &task->head;
+};
+
+
+/**
+ * Timer manager structure.
+ *   @inst: The instance list.
+ */
+tydef[export] st:sys:timer {
+	pt:st:sys:timer:inst inst;
+};
+
+/**
+ * Timer instance structure.
+ *   @usec: The expiration time in microseconds.
+ *   @func: The callback function.
+ *   @arg: The argument.
+ *   @next: The next instance.
+ */
+tydef[export] st:sys:timer:inst {
+	//TODO use a tree, it would be faster
+	i64 usec;
+	pt:ty:sys:task func;
+	pt:void arg;
+
+	pt:st:sys:timer:inst next;
+};
+
+
+/**
+ * Create a timer manager.
+ *   &returns: The timer manager.
+ */
+def[export] pt:st:sys:timer() sys:timer_new = {
+	return mem:make(st:sys:timer{ null });
+};
+
+/**
+ * Delete a timer manager.
+ *   @timer: The timer manager.
+ */
+def[export] void(pt:st:sys:timer timer) sys:timer_delete = {
+	var pt:st:sys:timer:inst cur, tmp;
+
+	cur = timer->inst;
+	while(cur != null) {
+		cur = (tmp = cur)->next;
+		mem:free(tmp);
+	}
+
+	mem:free(timer);
+};
+
+
+/**
+ * Add a timer to the timer manager.
+ *   @timer: The timer manager.
+ *   @usec: The time to fire in microseconds.
+ *   @func: The function.
+ *   @arg: The argument.
+ */
+def[export] void(pt:st:sys:timer timer, i64 usec, pt:ty:sys:task func, pt:void arg) sys:timer_add = {
+	timer->inst = mem:make(st:sys:timer:inst{ usec, func, arg, timer->inst });
+};
+
+/**
+ * Add a delay timer to the timer manager.
+ *   @timer: The timer manager.
+ *   @usec: The delay in microseconds.
+ *   @func: The function.
+ *   @arg: The argument.
+ */
+def[export] void(pt:st:sys:timer timer, i64 usec, pt:ty:sys:task func, pt:void arg) sys:timer_delay = {
+	return sys:timer_add(timer, tm:usec() + usec, func, arg);
+};
+
+/**
+ * Retrieve the first (earliest) time from the timer manager.
+ *   @timer: The timer manager.
+ *   &returns: The first time (or i64 min if none).
+ */
+def[export] i64(pt:st:sys:timer timer) sys:timer_first = {
+	var i64 tm;
+	var pt:st:sys:timer:inst inst;
+
+	tm = m:i64_max;
+	for(inst = timer->inst; inst != null; inst = inst->next)
+		tm = m:min_i64(tm, inst->usec);
+
+	return tm;
+};
+
+/**
+ * Compute the delay to the first timer, returning zero if the first item has
+ * past.
+ *   @timer: The timer manager.
+ *   &returns: The number of microseconds until the first timer.
+ */
+def[export] u64(pt:st:sys:timer timer) sys:timer_until = {
+	var i64 now, first;
+
+	now = tm:usec();
+	first = sys:timer_first(timer);
+
+	return (first > now) ? (first - now) : 0;
+};
+
+/**
+ * Process all expired timers.
+ *   @timer: The timers.
+ */
+def[export] void(pt:st:sys:timer timer) sys:timer_proc = {
+	var i64 now;
+	var pt:st:sys:timer:inst tmp;
+	var pt:pt:st:sys:timer:inst inst = &timer->inst;
+
+	now = tm:usec();
+	while(*inst != null) {
+		if((*inst)->usec <= now) {
+			tmp = *inst;
+			*inst = tmp->next;
+
+			tmp->func->(tmp->arg);
+			mem:free(tmp);
+		}
+		else
+			inst = &(*inst)->next;
+	}
+};
+
+
+/**
+ * Scheduler structure.
+ *   @run: The run flag.
+ *   @task: The task manager.
+ *   @poll: The poll manager.
+ *   @timer: The timer manager.
+ */
+tydef[export] st:sys:sched {
+	bool run;
+	pt:st:sys:task task;
+	pt:st:sys:poll poll;
+	pt:st:sys:timer timer;
+};
+
+/**
+ * Create a scheduler.
+ *   &returns: The scheduler.
+ */
+def[export] pt:st:sys:sched() sys:sched_new = {
+	return mem:make(st:sys:sched{ false, sys:task_new(), sys:poll_new(), sys:timer_new() });
+};
+
+/**
+ * Delete a scheduler.
+ *   @sched: The scheduler.
+ */
+def[export] void(pt:st:sys:sched sched) sys:sched_delete = {
+	sys:task_delete(sched->task);
+	sys:poll_delete(sched->poll);
+	sys:timer_delete(sched->timer);
+	mem:free(sched);
+};
+
+
+/**
+ * Run the scheduler until termination requested.
+ *   @sched: The scheduler.
+ */
+def[export] void(pt:st:sys:sched sched) sys:sched_run = {
+	sched->run = true;
+
+	while(sched->run) {
+		var i64 wait;
+
+		//sys:timer_proc(sched->timer);
+		sys:task_run(sched->task);
+		sys:poll_wait(sched->poll, -1);
+		//sys:poll_wait(sched->poll, i64{sys:timer_until(sched->timer)});
+	}
+};
+
+/**
+ * Halt the scheduler.
+ *   @sched: The scheduler.
+ */
+def[export] void(pt:st:sys:sched sched) sys:sched_halt = {
+	sched->run = false;
+};
+
+/**
+ * Terminate the scheduler, a version useful in polling callbacks.
+ *   @fd: Unused file descriptor.
+ *   @got: Unused event mask.
+ *   @sched: The scheduler.
+ */
+def[export] void(i32 fd, u16 got, pt:st:sys:sched sched) sys:sched_term = {
+	sched->run = false;
+};
+
+
+//def[export] void(pt:st:sys:sched sched, 

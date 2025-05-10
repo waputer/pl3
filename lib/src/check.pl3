@@ -507,6 +507,7 @@ def void(pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr, pt:st:pl3:sig sig) c
 
 		case ev:pl3:op1:pos:
 		case ev:pl3:op1:neg:
+		case ev:pl3:op1:not:
 			if(!pl3:type_is_int(op1->in->type) && !pl3:type_is_unk(op1->in->type))
 				return ctx_err(ctx, "%C: Cannot use arithmetic on non-numeric type '%C'.", pl3:meta_call(&expr->meta), pl3:type_call(&op1->in->type));
 
@@ -760,8 +761,10 @@ def void(pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr, pt:st:pl3:sig sig) c
 		nest = env_map(ctx->unit);
 		onerr env_delete(nest);
 
-		for(param = func->sig->param; param != null; param = param->next)
-			env_name_param(&nest, param);
+		for(param = func->sig->param; param != null; param = param->next) {
+			if(param->id != null)
+				env_name_param(&nest, param);
+		}
 
 		ctx_block(ctx, &nest, func->block, func->sig);
 		pl3:type_replace(&expr->type, pl3:type_sig(pl3:sig_copy(func->sig)));
@@ -776,7 +779,7 @@ def void(pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr, pt:st:pl3:sig sig) c
 		var cpt:char find, id = ref->id, post;
 
 		// TODO the whole thing below is a mess
-		find = str:rchr(id, ':');
+		find = str:chr(id, ':');
 		if(find == null)
 			return ctx_err(ctx, "%C: Invalid enumerated type. Missing ':'.", pl3:meta_call(&expr->meta));
 
@@ -806,7 +809,6 @@ def void(pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr, pt:st:pl3:sig sig) c
 
 		ref->val = pl3:enum_find(decl->data.enum, post);
 		if(ref->val == null) {
-			print("first: %s vs %s\n", decl->data.enum->val->id, post);
 			fatal("%C: Unknown value '%s' for enumerator '%s'", pl3:meta_call(&expr->meta), post, name);
 			mem:free(pre); //FIXME error handling
 			mem:free(name);
@@ -919,7 +921,7 @@ def void(pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr, pt:st:pl3:sig sig) c
 		if(pl3:agg_find(agg, offset->id, null, &idx) == null)
 			return ctx_err(ctx, "%C: Type '%C' does not have memeber '%s'.", pl3:meta_call(&expr->meta), pl3:type_call(&offset->type), offset->id);
 
-		offset->val = i32{pl3:agg_off(agg, idx)};
+		offset->val = i32{pl3:agg_off(agg, idx, &pl3:arch_x64)};
 	} break;
 
 	case ev:pl3:expr:parent: {
@@ -945,7 +947,7 @@ def void(pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr, pt:st:pl3:sig sig) c
 		if(!chk_same(ptr->type, type))
 			return ctx_err(ctx, "%C: Type mismatch between '%C' and '%C'.", pl3:meta_call(&parent->expr->meta), pl3:type_call(&parent->expr->type), pl3:type_call(&ptr->type));
 
-		parent->off = i32{pl3:agg_off(agg, idx)};
+		parent->off = i32{pl3:agg_off(agg, idx, &pl3:arch_x64)};
 		pl3:type_replace(&expr->type, pl3:type_ptr(pl3:ptr_new(pl3:type_copy(parent->type), ptr->mut)));
 	} break;
 
@@ -1314,9 +1316,6 @@ def void(pt:st:ctx ctx, pt:st:env env, st:pl3:type type, pt:st:pl3:meta meta, bo
 	switch(type.tag) {
 		fatal("FIXME stub");
 		break;
-
-	case ev:pl3:type:alias:
-		fatal("FIXME stub");
 
 	case ev:pl3:type:name:
 		break;

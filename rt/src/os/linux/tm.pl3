@@ -9,3 +9,16 @@ def[export] i64() tm:usec = {
 
 	return 1000000 * tv.sec + tv.usec;
 };
+
+
+/**
+ * Sleep for a number of microseconds.
+ *   @usec: The number of microseconds.
+ */
+def[export] void(u64 usec) sys:usleep = {
+	var st:os:timespec ts;
+
+	ts.nano = 1000 * (usec % 1000000);
+	ts.sec = usec / 1000000;
+	os:nanosleep(&ts, null);
+};

@@ -1,0 +1,197 @@
+tydef[export] ty:os:thread = void(pt:void, pt:void, u32);
+def[export,extern] i32(u32 stack, pt:ty:os:thread func, pt:void arg) os_thread;
+def[export,extern] i32(pt:i32, i32, i32) bi_cmp_xchg32;
+
+/**
+ * Thread function.
+ *   @arg: The argument.
+ *   &returns: The thread return value.
+ */
+tydef[export] ty:sys:thread:func = pt:void(pt:void arg);
+
+/**
+ * Thread status enumerator.
+ *   @run: Running.
+ *   @exit: Exited with return value.
+ *   @join: Waiting for thread exit.
+ *   @wake: Thead exited, waking join.
+ *   @detach: Detached state.
+ */
+def[export] i32 sys:thread:run = 0,
+                sys:thread:exit = 1,
+                sys:thread:join = 2,
+                sys:thread:wake = 3,
+                sys:thread:detach = 4;
+
+/**
+ * Thread structure.
+ *   @func: The thread function.
+ *   @arg: The function argument.
+ *   @pid; The process ID.
+ *   @stat: The thread status.
+ *   @ret: The return value.
+ */
+tydef[export] st:sys:thread {
+	pt:ty:sys:thread:func func;
+	pt:void arg;
+
+	i32 pid;
+	i32 stat;
+	pt:void ret;
+};
+
+
+/**
+ * Create a thread.
+ *   @func: The callback fnction.
+ *   @arg: The callback argument.
+ *   @opt: Optional. The thread options structure.
+ *   &returns: The thread.
+ */
+def[export] pt:st:sys:thread(pt:ty:sys:thread:func func, pt:void arg, cpt:void opts) sys:thread_new = {
+	var pt:st:sys:thread thread;
+
+	thread = mem:make(st:sys:thread{ func, arg, sys:thread:run, 0, null });
+	thread->pid = os_thread(4*1024*1024, &thread_func, thread);
+
+	return thread;
+};
+
+/**
+ * Join a thread.
+ *   @thread: The thread.
+ *   &returns: The thread exit value.
+ */
+def[export] pt:void(pt:st:sys:thread thread) sys:thread_join = {
+	var i64 err;
+	var i32 stat;
+	var pt:void ret;
+
+	stat = bi_cmp_xchg32(&thread->stat, sys:thread:run, sys:thread:join);
+	if(stat == sys:thread:run)
+		os:futex(&thread->stat, os:FUTEX_WAIT, sys:thread:join, null, null, 0);
+
+	ret = thread->ret;
+	mem:free(thread);
+
+	return ret;
+};
+
+/**
+ * Deatach from a thread.
+ *   @thread: The thread.
+ */
+def[export] void(pt:st:sys:thread thread) sys:thread_detach = {
+	var i32 stat;
+
+	stat = bi_cmp_xchg32(&thread->stat, sys:thread:detach, sys:thread:join);
+	if(stat == sys:thread:exit)
+		mem:free(thread);
+};
+
+
+/**
+ * Thread processing function.
+ *   @thread: The thread.
+ *   @stack: The stack pointer.
+ *   @sz: The size.
+ *   &noreturn
+ */
+def void(pt:st:sys:thread thread, pt:void stack, u32 sz) thread_func = {
+	var i32 stat;
+
+	thread->ret = thread->func->(thread->arg);
+
+	stat = bi_cmp_xchg32(&thread->stat, sys:thread:run, sys:thread:exit);
+	if(stat == sys:thread:join) {
+		thread->stat = sys:thread:wake;
+		os:futex(&thread->stat, os:FUTEX_WAKE, 1, null, null, 0);
+	}
+	else if(stat == sys:thread:detach)
+		mem:free(thread);
+
+	os:munmap(stack, u64{sz});
+	os:exit(0);
+};
+
+
+/**
+ * Event object.
+ *   @fd: The file descriptor.
+ *   @func: The callback function.
+ *   @arg: The argument.
+ */
+tydef[export] st:sys:evt {
+	i32 fd;
+
+	pt:st:sys:sched sched;
+	pt:ty:sys:task func;
+	pt:void arg;
+};
+
+/**
+ * Create an event.
+ *   &returns: The event.
+ */
+def[export] e:str[pt:st:sys:evt]() sys:evt_new = {
+	var i32 fd;
+
+	fd = os:eventfd(0);
+	if(fd < 0)
+		e:fmt("Failed to create event.");
+
+	return mem:make(st:sys:evt{ fd, null, null, null });
+};
+
+/**
+ * Delete an event.
+ *   @evt: The event.
+ */
+def[export] void(pt:st:sys:evt evt) sys:evt_delete = {
+	os:close(evt->fd);
+	mem:free(evt);
+};
+
+
+/**
+ * Wait on an event.
+ *   @evt: The event.
+ */
+def[export] void(pt:st:sys:evt evt) sys:evt_wait = {
+	var u64 val;
+
+	os:read(evt->fd, &val, 8);
+};
+
+/**
+ * Signal an event.
+ *   @evt: The event.
+ */
+def[export] void(pt:st:sys:evt evt) sys:evt_signal = {
+	os:write(evt->fd, getref(u64{1}), 8);
+};
+
+/**
+ * Attach an event to a scheduler.
+ *   @evt: The event.
+ *   @sched: The scheduler.
+ *   @func: The callback function.
+ *   @arg: The argument.
+ */
+def[export] void(pt:st:sys:evt evt, pt:st:sys:sched sched, pt:ty:sys:task func, pt:void arg) sys:evt_attach = {
+	evt->sched = sched;
+	evt->func = func;
+	evt->arg = arg;
+	sys:poll_add(sched->poll, evt->fd, sys:poll:rd, &evt_poll, evt);
+};
+
+/**
+ * Polling callback for the event.
+ *   @fd: The file descriptor.
+ *   @got: The gotten event..
+ *   @evt: The event object.
+ */
+def void(i32 fd, u16 mask, pt:st:sys:evt evt) evt_poll = {
+	evt->func->(evt->arg);
+};
+

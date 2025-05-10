@@ -62,7 +62,7 @@ tydef[export] st:io:file {
  *   &returns: The file.
  */
 def[export] e:str[st:io:file](cpt:char path, u32 flags) io:open = {
-	var i64 fd;
+	var i32 fd;
 	var u64 osflags = 0;
 
 	switch(flags & 0x30000) {

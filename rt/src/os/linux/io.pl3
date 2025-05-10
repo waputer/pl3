@@ -1,6 +1,6 @@
 
 def[export] e:str[pt:char](cpt:char path) io:std_open = {
-	var i64 fd;
+	var i32 fd;
 
 	fd = os:open(path, 0, 0);
 	if(fd < 0)
@@ -14,7 +14,7 @@ def[export] e:str[pt:char](cpt:char path) io:std_open = {
  *   @ptr: The pointer.
  */
 def[export] e:str[void](pt:void ptr) io:std_close = {
-	var i64 fd = i64{ptr};
+	var i32 fd = i32{ptr};
 	
 	os:close(fd);
 };
@@ -27,7 +27,8 @@ def[export] e:str[void](pt:void ptr) io:std_close = {
  *   &returns: Bytes read or negative on error.
  */
 def[export] e:str[u32](pt:void ptr, pt:void buf, u32 size) io:std_read = {
-	var i64 ret, fd = i64{ptr};
+	var i64 ret;
+	var i32 fd = i32{ptr};
 
 	ret = os:read(fd, buf, u64{size});
 	if(ret < 0)
@@ -48,7 +49,8 @@ def[export] e:str[i32](pt:void ptr, u32 id, pt:void arg) io:std_ctrl = {
  *   &returns: Bytes written or negative on error.
  */
 def[export] e:str[u32](pt:void ptr, cpt:void buf, u32 size) io:std_write = {
-	var i64 ret, fd = i64{ptr};
+	var i64 ret;
+	var i32 fd = i32{ptr};
 	
 	ret = os:write(fd, buf, u64{size});
 	if(ret < 0)
@@ -70,7 +72,7 @@ def[export] st:io:file io:stderr = { 2, &io:std_iface };
  *   @fd: The file descriptor.
  *   &returns: The file.
  */
-def[export] st:io:file(i64 fd) io:raw_file = {
+def[export] st:io:file(i32 fd) io:raw_file = {
 	return st:io:file{ pt:void{fd}, &io:raw_iface };
 };
 
@@ -82,7 +84,8 @@ def[export] st:io:file(i64 fd) io:raw_file = {
  *   &returns: Bytes read or negative on error.
  */
 def[export] e:str[u32](pt:void ptr, pt:void buf, u32 size) io:raw_read = {
-	var i64 ret, fd = i64{ptr};
+	var i64 ret;
+	var i32 fd = i32{ptr};
 
 	ret = os:read(fd, buf, u64{size});
 	if(ret < 0)
@@ -99,7 +102,8 @@ def[export] e:str[u32](pt:void ptr, pt:void buf, u32 size) io:raw_read = {
  *   &returns: Bytes written or negative on error.
  */
 def[export] e:str[u32](pt:void ptr, cpt:void buf, u32 size) io:raw_write = {
-	var i64 ret, fd = i64{ptr};
+	var i64 ret;
+	var i32 fd = i32{ptr};
 	
 	ret = os:write(fd, buf, u64{size});
 	if(ret < 0)
@@ -142,7 +146,7 @@ def[export] e:str[i32](pt:void ptr, u32 id, pt:void arg) io:raw_ctrl = {
  *   @ptr: The pointer.
  */
 def[export] e:str[void](pt:void ptr) io:raw_close = {
-	os:close(i64{ptr});
+	os:close(i32{ptr});
 };
 
 /*

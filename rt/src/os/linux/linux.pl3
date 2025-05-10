@@ -1,3 +1,62 @@
+def[export] i32 os:FUTEX_WAIT = 0,
+                os:FUTEX_WAKE = 1;
+
+/**
+ * Error values.
+ *   @EINTR: System call interrupted.
+ */
+def[export] i64 os:EPERM   = 1,
+                os:ENOENT  = 2,
+                os:ESRCH   = 3,
+                os:EINTR   = 4,
+                os:EIO     = 5,
+                os:ENXIO   = 6,
+                os:E2BIG   = 7,
+                os:ENOEXEC = 8,
+                os:EBADF   = 9,
+                os:ECHILD  = 10,
+                os:EAGAIN  = 11,
+                os:ENOMEM  = 12,
+                os:EACCES  = 13,
+                os:EFAULT  = 14,
+                os:ENOTBLK = 15,
+                os:EBUSY   = 16,
+                os:EEXIST  = 17,
+                os:EXDEV   = 18,
+                os:ENODEV  = 19,
+                os:ENOTDIR = 20,
+                os:EISDIR  = 21,
+                os:EINVAL  = 22,
+                os:ENFILE  = 23,
+                os:EMFILE  = 24,
+                os:ENOTTY  = 25,
+                os:ETXTBSY = 26,
+                os:EFBIG   = 27,
+                os:ENOSPC  = 28,
+                os:ESPIPE  = 29,
+                os:EROFS   = 30,
+                os:EMLINK  = 31,
+                os:EPIPE   = 32,
+                os:EDOM    = 33,
+                os:ERANGE  = 34;
+
+/**
+ * Polling definitions.
+ *   @POLLIN: Read.
+ *   @POLLPRI: Exception condition.
+ *   @POLLOUT: Write.
+ *   @POLLERR: Error.
+ *   @POLLHUP: Hang up.
+ *   @POLLNVAL: Invalid.
+ */
+def[export] u16 os:POLLIN   = 0x0001,
+                os:POLLPRI  = 0x0002,
+                os:POLLOUT  = 0x0004,
+                os:POLLERR  = 0x0008,
+                os:POLLHUP  = 0x0010,
+                os:POLLNVAL = 0x0020;
+
+
 /**
  * Memory protection flags.
  */
@@ -5,6 +64,12 @@ def[export] u64 os:PROT_READ  = 0x01,
                 os:PROT_WRITE = 0x02,
                 os:PROT_EXEC  = 0x04;
 
+/**
+ * Standard files.
+ */
+def[export] i32 os:STDIN  = 0,
+                os:STDOUT = 1,
+		os:STDERR = 2;
 /**
  * Mapping flags.
  */
@@ -28,6 +93,26 @@ def[export] u64 os:O_RDONLY = 0x0000,
 def[export] u64 os:SEEK_SET = 0,
                 os:SEEK_CUR = 1,
 		os:SEEK_END = 2;
+
+
+/**
+ * Poll descriptor structure.
+ *   @fd: The file descriptor.
+ *   @events, revents: The requested and received events.
+ */
+tydef[export] st:os:pollfd {
+	i32 fd;
+	u16 events, revents;
+};
+
+/**
+ * Timespec structure.
+ *   @sec, nano: The number of seconds and nanoseconds.
+ */
+tydef[export] st:os:timespec {
+	u64 sec, nano;
+};
+
 
 /**
  * Exit the program with the given code.
@@ -80,16 +165,16 @@ def[export] i64(pt:void addr, u64 len) os:munmap = {
  *   @mode: The mode bits (if needed).
  *   &returns: The file descriptor or an error.
  */
-def[export] i64(cpt:char path, u64 flags, u64 mode) os:open = {
-	return bi:syscall(2, i64{path}, i64{flags}, i64{mode}, 0, 0, 0);
+def[export] i32(cpt:char path, u64 flags, u64 mode) os:open = {
+	return i32{bi:syscall(2, i64{path}, i64{flags}, i64{mode}, 0, 0, 0)};
 };
 
 /**
  * Close a file.
  *   @fd: The file descriptor.
  */
-def[export] void(i64 fd) os:close = {
-	bi:syscall(3, fd, 0, 0, 0, 0, 0);
+def[export] void(i32 fd) os:close = {
+	bi:syscall(3, i64{fd}, 0, 0, 0, 0, 0);
 };
 
 /**
@@ -99,8 +184,8 @@ def[export] void(i64 fd) os:close = {
  *   @size: The size in bytes.
  *   &returns: The number of bytes read.
  */
-def[export] i64(i64 fd, pt:char buf, u64 size) os:read = {
-	return bi:syscall(0, fd, i64{buf}, i64{size}, 0, 0, 0);
+def[export] i64(i32 fd, pt:void buf, u64 size) os:read = {
+	return bi:syscall(0, i64{fd}, i64{buf}, i64{size}, 0, 0, 0);
 };
 
 /**
@@ -110,8 +195,8 @@ def[export] i64(i64 fd, pt:char buf, u64 size) os:read = {
  *   @size: The size in bytes.
  *   &returns: The number of bytes written.
  */
-def[export] i64(i64 fd, cpt:char buf, u64 size) os:write = {
-	return bi:syscall(1, fd, i64{buf}, i64{size}, 0, 0, 0);
+def[export] i64(i32 fd, cpt:void buf, u64 size) os:write = {
+	return bi:syscall(1, i64{fd}, i64{buf}, i64{size}, 0, 0, 0);
 };
 
 /**
@@ -144,4 +229,116 @@ tydef[export] st:os:linux:tv {
  */
 def[export] i64(pt:st:os:linux:tv tv) os:linux:gettimeofday = {
 	return bi:syscall(96, i64{tv}, 0, 0, 0, 0, 0);
+};
+
+
+/**
+ * Fork the process.
+ *   &returns: The PID or zero.
+ */
+def[export] i32() os:fork = {
+	return i32{bi:syscall(57, 0, 0, 0, 0, 0, 0)}; //FIXME syscall
+};
+
+/**
+ * Fast fork the process.
+ *   &returns: The PID or zero.
+ */
+def[export] i32() os:vfork = {
+	return i32{bi:syscall(58, 0, 0, 0, 0, 0, 0)}; //FIXME syscall
+};
+
+/**
+ * Execute a program image.
+ *   @path: The path.
+ *   @args: The arguments.
+ *   @env: The environment.
+ *   &noreturn
+ */
+def[export] void(cpt:char path, cpt:cpt:char args, cpt:cpt:char env) os:execve = {
+	bi:syscall(59, i64{path}, i64{args}, i64{env}, 0, 0, 0); //FIXME syscall
+};
+
+/**
+ * Wait for a process.
+ *   @type: The ID type.
+ *   @id: The identifier (e.g. pid).
+ *   @info: The information structure.
+ *   @opt: The option.
+ *   &returns: THe id of the terminated child, -1 on error.
+ */
+def[export] i64(i64 type, i64 id, pt:void info, i64 opt) os:waitid = {
+	return bi:syscall(247, type, id, i64{info}, opt, 0, 0); //FIXME syscall
+};
+
+/**
+ * Poll file descriptors.
+ *   @fds: The set of descriptors.
+ *   @cnt: The number of descriptors.
+ *   @msec: The number of milliseconds until timeout (negative for infinite).
+ *   &returns: The number of descriptors active or negative error.
+ */
+def[export] i64(pt:st:os:pollfd fds, u32 cnt, i32 msec) os:poll = {
+	return bi:syscall(7, i64{fds}, i64{cnt}, i64{msec}, 0, 0, 0);
+};
+
+/**
+ * Create a pair of pipe descriptors.
+ *   @fd: Out. The two created descriptors.
+ *   &returns: Negative on error.
+ */
+def[export] i64(pt:i32 fd) os:pipe = {
+	return bi:syscall(22, i64{fd}, 0, 0, 0, 0, 0);
+};
+
+/**
+ * Duplicate a file descriptor to a new number.
+ *   @old: The old number.
+ *   @new: The new number.
+ *   &returns: Negative on error.
+ */
+def[export] i64(i32 old, i32 new) os:dup2 = {
+	return bi:syscall(33, i64{old}, i64{new}, 0, 0, 0, 0);
+};
+
+/**
+ * Sleep with nanosecond precision.
+ *   @ts: The amount to sleep.
+ *   @rem: Out. The amount remaining if woken up early.
+ *   &returns: Negative on error.
+ */
+def[export] i64(cpt:st:os:timespec ts, pt:st:os:timespec rem) os:nanosleep = {
+	return bi:syscall(35, i64{ts}, i64{rem}, 0, 0, 0, 0);
+};
+
+/**
+ * Send a signal to a process.
+ *   @pid: The PID.
+ *   @sig: The signal.
+ *   &returns: Negative on error.
+ */
+def[export] i64(i32 pid, i32 sig) os:kill = {
+	return bi:syscall(62, i64{pid}, i64{sig}, 0, 0, 0, 0);
+};
+
+/**
+ * Execute a fast user mutex.
+ *   @mem: The memory location.
+ *   @op: The operation.
+ *   @val: The value.
+ *   @ts: The timeout.
+ *   @mem2: The second memory location.
+ *   @val2: The second value.
+ *   &returns: The futex status, depends on `op`.
+ */
+def[export] i64(pt:i32 mem, i32 op, i32 val, cpt:st:os:timespec ts, pt:void mem2, i32 val2) os:futex = {
+	return bi:syscall(202, i64{mem}, i64{op}, i64{val}, i64{ts}, i64{mem2}, i64{val2});
+};
+
+/**
+ * Create an event file descriptor.
+ *   @val: The initial value.
+ */
+def[export] i32(u32 val) os:eventfd = {
+	return i32{bi:syscall(284, i64{val}, 0, 0, 0, 0, 0)};
 };

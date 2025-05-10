@@ -315,8 +315,8 @@ def[export] void(pt:st:pl3:buf buf) pl3:buf_delete = {
  *   @tag: The tag.
  *   @data: The value data.
  */
-tydef[export] en:pl3:lit { none, "null", "bool", u8v, i8v, u16v, i16v, u32v, i32v, u64v, i64v, int, ptr, str };
-tydef[export] un:pl3:lit { bool boolv; u8 u8v; i8 i8v; u16 u16v; i16 i16v; u32 u32v; i32 i32v; u64 u64v; i64 i64v; pt:st:m:int int; pt:st:pl3:buf buf; };
+tydef[export] en:pl3:lit { none, "null", "bool", u8v, i8v, u16v, i16v, u32v, i32v, u64v, i64v, int, "fp32", "fp64", flt, ptr, str };
+tydef[export] un:pl3:lit { bool boolv; u8 u8v; i8 i8v; u16 u16v; i16 i16v; u32 u32v; i32 i32v; u64 u64v; i64 i64v; fp32 fp32v; fp64 fp64v; fp64 flt; pt:st:m:int int; pt:st:pl3:buf buf; };
 tydef[export] st:pl3:lit {
 	en:pl3:lit tag;
 	un:pl3:lit data;
@@ -392,6 +392,15 @@ def[export] pt:st:pl3:lit(pt:st:m:int int) pl3:lit_int = {
 };
 
 /**
+ * Create an float literal.
+ *   @flt: The float value.
+ *   &returns: The literal.
+ */
+def[export] pt:st:pl3:lit(fp64 flt) pl3:lit_flt = {
+	return pl3:lit_new(ev:pl3:lit:flt, un:pl3:lit{ .flt = flt });
+};
+
+/**
  * Create a string literal.
  *   @buf: The string data buffer.
  *   &returns: The literal.
@@ -414,6 +423,17 @@ def[export] void(pt:st:pl3:lit lit) pl3:lit_clear = {
 	lit->tag = ev:pl3:lit:none;
 };
 
+
+/**
+ * Change a literal to a boolean.
+ *   @lit: The literal.
+ *   @boolv: The value.
+ */
+def[export] void(pt:st:pl3:lit lit, bool boolv) pl3:lit_put_bool = {
+	pl3:lit_clear(lit);
+	lit->tag = ev:pl3:lit:bool;
+	lit->data.boolv = boolv;
+};
 
 /**
  * Change a literal to an unsigned 8-bit integer.
@@ -503,6 +523,28 @@ def[export] void(pt:st:pl3:lit lit, i64 i64v) pl3:lit_put_i64 = {
 	lit->data.i64v = i64v;
 };
 
+/**
+ * Change a literal to a 32-bit float.
+ *   @lit: The literal.
+ *   @val: The value.
+ */
+def[export] void(pt:st:pl3:lit lit, fp32 val) pl3:lit_put_fp32 = {
+	pl3:lit_clear(lit);
+	lit->tag = ev:pl3:lit:fp32;
+	lit->data.fp32v = val;
+};
+
+/**
+ * Change a literal to a 64-bit float.
+ *   @lit: The literal.
+ *   @val: The value.
+ */
+def[export] void(pt:st:pl3:lit lit, fp64 val) pl3:lit_put_fp64 = {
+	pl3:lit_clear(lit);
+	lit->tag = ev:pl3:lit:fp64;
+	lit->data.fp64v = val;
+};
+
 
 /**
  * Fill a literal with a given type.
@@ -513,6 +555,7 @@ def[export] void(pt:st:pl3:lit lit, st:pl3:type type) pl3:lit_fill = {
 	switch(lit->tag) {
 	case ev:pl3:lit:int:
 		switch(pl3:type_root(type).tag) {
+		case ev:pl3:type:bool: pl3:lit_put_bool(lit, m:int_get_u8(lit->data.int) > 0); break;
 		case ev:pl3:type:u8: pl3:lit_put_u8(lit, m:int_get_u8(lit->data.int)); break;
 		case ev:pl3:type:i8: pl3:lit_put_i8(lit, m:int_get_i8(lit->data.int)); break;
 		case ev:pl3:type:u16: pl3:lit_put_u16(lit, m:int_get_u16(lit->data.int)); break;
@@ -532,6 +575,16 @@ def[export] void(pt:st:pl3:lit lit, st:pl3:type type) pl3:lit_fill = {
 			pl3:lit_put_i32(lit, m:int_get_i32(lit->data.int)); // FIXME actual type
 		} break;
 
+		default: fatal("FIXME lit fill %u (1)", pl3:type_root(type).tag);
+		}
+
+		break;
+
+	case ev:pl3:lit:flt:
+		switch(pl3:type_root(type).tag) {
+		//case ev:pl3:type:fp32: pl3:lit_put_fp32(lit, fp32{lit->data.flt}); break;
+		case ev:pl3:type:fp32: pl3:lit_put_fp32(lit, cast_fp64tofp32(lit->data.flt)); break;
+		case ev:pl3:type:fp64: pl3:lit_put_fp64(lit, lit->data.flt); break;
 		default: fatal("FIXME lit fill %u", pl3:type_root(type).tag);
 		}
 
@@ -562,9 +615,12 @@ def[export] st:pl3:type(pt:st:pl3:lit lit) pl3:lit_type = {
 	case ev:pl3:lit:u64v: return pl3:type_u64;
 	case ev:pl3:lit:i64v: return pl3:type_i64;
 	case ev:pl3:lit:int: return pl3:type_unk;
+	case ev:pl3:lit:fp32: return pl3:type_fp32;
+	case ev:pl3:lit:fp64: return pl3:type_fp64;
+	case ev:pl3:lit:flt: return pl3:type_unk;
 	case ev:pl3:lit:ptr: return pl3:type_ptr(pl3:ptr_new(pl3:type_void, true));
 	case ev:pl3:lit:str: return pl3:type_ptr(pl3:ptr_new(pl3:type_u8, false));
-	default: fatal("FIXME");
+	default: fatal("FIXME pl3:lit_type");
 	}
 };
 

@@ -121,6 +121,7 @@ def[export] void(pt:st:lex:parse parse, i32 id) lex:rule_quote2 = {
  *   @parse: The parser.
  *   @id: The identifier.
  */
+// FIXME have a seperate floating-point one
 def[export] void(pt:st:lex:parse parse, i32 id) lex:rule_num = {
 	def e:str[pt:st:lex:token](pt:st:lex:parse parse, pt:void arg) func = {
 		var u32 i;
@@ -131,8 +132,12 @@ def[export] void(pt:st:lex:parse parse, i32 id) lex:rule_num = {
 			return null;
 
 		i = 1;
-		while(lex:is_alnum(lex:ch_get(parse, i)) || (lex:ch_get(parse, i) == '.'))
-			i++;
+		while(lex:is_alnum(lex:ch_get(parse, i)) || (lex:ch_get(parse, i) == '.')) {
+			if((lex:ch_get(parse, i) == 'e') && (lex:ch_get(parse, i + 1) == '-'))
+				i += 2;
+			else
+				i++;
+		}
 
 		return e:get(lex:tok_new(parse, i32{arg}, i, null, 0));
 	};

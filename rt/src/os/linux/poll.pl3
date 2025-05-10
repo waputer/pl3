@@ -1,0 +1,184 @@
+/**
+ * Event callback function.
+ *   @fd: The file descriptor.
+ *   @got: The recieved events.
+ *   @arg: The provided argument.
+ */
+tydef[export] ty:sys:poll = void(i32 fd, u16 got, pt:void arg);
+
+/**
+ * Poll instance structure.
+ *   @fd: The file descriptor.
+ *   @req, got: The requested an gotten events.
+ *   @func: The callback function
+ *   @arg: The callback argument.
+ *   @node: The tree node.
+ */
+tydef[export] st:sys:inst {
+	i32 fd;
+	u16 req, got;
+	pt:ty:sys:poll func;
+	pt:void arg;
+
+	st:avl:node node;
+};
+
+/**
+ * Poll structure.
+ *   @root: The event root.
+ */
+tydef[export] st:sys:poll {
+	st:avl:root root;
+};
+
+
+/**
+ * Polling mask values.
+ *   @rd: Read.
+ *   @wr: Write.
+ *   @hup: Hang up/disconnect.
+ *   @err: Error.
+ */
+def[export] u16 sys:poll:rd  = 0x01,
+                sys:poll:wr  = 0x02,
+                sys:poll:hup = 0x04,
+                sys:poll:err = 0x08;
+
+
+/**
+ * Create a poll manager.
+ *   &returns: The poll manager.
+ */
+def[export] pt:st:sys:poll() sys:poll_new = {
+	return mem:make(st:sys:poll{ avl:root_new(&avl:cmp_i32) });
+};
+
+/**
+ * Delete a poll manager.
+ *   @poll: The poll manager.
+ */
+def[export] void(pt:st:sys:poll poll) sys:poll_delete = {
+	avl:root_delete(&poll->root, offsetof(st:sys:inst, node), &mem:free);
+	mem:free(poll);
+};
+
+
+/**
+ * Add a file descriptor to a poll manager.
+ *   @poll: The poll manager.
+ *   @fd: The file descriptor.
+ *   @req: The requested events.
+ *   @func: The callback function.
+ *   @arg: The callback argument.
+ */
+def[export] void(pt:st:sys:poll poll, i32 fd, u16 req, pt:ty:sys:poll func, pt:void arg) sys:poll_add = {
+	var pt:st:sys:inst inst;
+
+	inst = mem:new(st:sys:inst);
+	inst->fd = fd;
+	inst->req = req;
+	inst->func = func;
+	inst->arg = arg;
+	inst->node = avl:node(&inst->fd);
+	avl:root_add(&poll->root, &inst->node);
+};
+
+/**
+ * Remove a file descriptor from a poll manager.
+ *   @poll: The poll manager.
+ *   @fd: The file descriptor.
+ */
+def[export] void(pt:st:sys:poll poll, i32 fd) sys:poll_rem = {
+	var pt:st:avl:node node;
+
+	node = avl:root_rem(&poll->root, &fd);
+	if(node == null)
+		return;
+	
+	mem:free(getparent(node, st:sys:inst, node));
+};
+
+def[export] u16(i32 fd, u16 req, i64 nano) sys:poll1 = {
+	var st:os:pollfd set;
+
+	set = st:os:pollfd{ fd, msk2evt(req), 0 };
+	os:poll(&set, 1, timeout(nano));
+
+	return evt2msk(set.revents);
+};
+
+/**
+ * Wait for a polled event.
+ *   @poll: The poll manager.
+ *   @nano: The time to wait in nanoseconds. Negative indicates infinite
+ *     timeout. Zero returns immediately, even if no descriptors are ready.
+ */
+def[export] void(pt:st:sys:poll poll, i64 nano) sys:poll_wait = {
+	var u32 i;
+	var pt:st:os:pollfd set;
+	var pt:st:avl:node node;
+	var pt:st:sys:inst inst;
+
+	set = mem:alloc(poll->root.cnt * sizeof(st:os:pollfd));
+
+	node = avl:root_first(&poll->root);
+	for(i = 0; i < poll->root.cnt; i++) {
+		inst = getparent(node, st:sys:inst, node);
+		set[i].fd = inst->fd;
+		set[i].events = msk2evt(inst->req);
+		node = avl:node_next(node);
+	}
+
+	os:poll(set, poll->root.cnt, timeout(nano));
+
+	for(i = 0; i < poll->root.cnt; i++) {
+		if(set[i].revents == 0)
+			continue;
+
+		node = avl:root_get(&poll->root, &set[i].fd);
+		if(node == null)
+			continue;
+
+		inst = getparent(node, st:sys:inst, node);
+		inst->func->(inst->fd, evt2msk(set[i].revents), inst->arg);
+	}
+
+	mem:free(set);
+};
+
+
+/**
+ * Calculate teh poll timeout.
+ *   @nano: The timeout nano seconds.
+ *   &returns; The timeout in milliseconds.
+ */
+def i32(i64 nano) timeout = {
+	if(nano < 0)
+		return -1;
+	else if(nano == 0)
+		return 0;
+	else if(nano > (1000000 * i64{m:i32_max}))
+		return m:i32_max;
+	else {
+		print("val=%u\n", i32{nano / 1000000});
+		return i32{nano / 1000000};
+	}
+};
+
+def u16(u16 evt) evt2msk = {
+	var u16 mask = 0;
+
+	if((evt & os:POLLIN) != 0)
+		mask |= sys:poll:rd;
+
+	return mask;
+};
+
+def u16(u16 msk) msk2evt = {
+	var u16 evt = 0;
+
+	if((msk & sys:poll:rd) != 0)
+		evt |= os:POLLIN;
+
+	return msk;
+};

@@ -1031,8 +1031,12 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_term = {
 		pl3:meta_delete(meta);
 		return expr;
 	}
-	else if((tok = e:get(lex:tok_try(ctx->lex, tok_num))) != null)
-		return pl3:expr_lit(pl3:lit_int(e:get(m:int_parse(tok->str, 0))), meta);
+	else if((tok = e:get(lex:tok_try(ctx->lex, tok_num))) != null) {
+		if(str:chr(tok->str, '.') != null)
+			return pl3:expr_lit(pl3:lit_flt(str_get_fp64(tok->str)), meta);
+		else
+			return pl3:expr_lit(pl3:lit_int(e:get(m:int_parse(tok->str, 0))), meta);
+	}
 	else if((tok = e:get(lex:tok_try(ctx->lex, tok_quote1))) != null) {
 		if(tok->sz != 1)
 			e:fmt("%C: Invalid character %s.", pl3:meta_call(&meta), tok->str);
@@ -1552,6 +1556,8 @@ def e:str[bool](pt:st:ctx ctx) ctx_istype = {
 	case tok_i32:
 	case tok_u64:
 	case tok_i64:
+	case tok_fp32:
+	case tok_fp64:
 	case tok_pt:
 	case tok_cpt:
 	case tok_ty:

@@ -39,6 +39,41 @@ def[export] void(pt:st:pl3:name name) pl3:name_delete = {
 
 
 /**
+ * Retrieve the alignment of a named type.
+ *   @name: The named type.
+ *   @arch: The architecture.
+ *   &returns: The alignment.
+ */
+def[export] u32(pt:st:pl3:name name, cpt:st:pl3:arch arch) pl3:name_align = {
+	switch(name->decl->tag) {
+	case ev:pl3:tydecl:alias: return pl3:type_align(name->decl->data.alias->type, arch);
+	case ev:pl3:tydecl:struct: return pl3:agg_align(name->decl->data.agg, arch);
+	case ev:pl3:tydecl:union: return pl3:agg_align(name->decl->data.agg, arch);
+	case ev:pl3:tydecl:enum: return 4; //FIXME custom sized enums
+	}
+
+	unreachable();
+};
+
+/**
+ * Retrieve the size of a named type.
+ *   @name: The named type.
+ *   @arch: The architecture.
+ *   &returns: The size in bytes.
+ */
+def[export] u32(pt:st:pl3:name name, cpt:st:pl3:arch arch) pl3:name_size = {
+	switch(name->decl->tag) {
+	case ev:pl3:tydecl:alias: return pl3:type_size(name->decl->data.alias->type, arch);
+	case ev:pl3:tydecl:struct: return pl3:agg_sum(name->decl->data.agg, arch);
+	case ev:pl3:tydecl:union: return pl3:agg_max(name->decl->data.agg, arch);
+	case ev:pl3:tydecl:enum: return 4; //FIXME custom sized enums
+	}
+
+	unreachable();
+};
+
+
+/**
  * Read a name from a file.
  *   @rd: The reader.
  *   &returns: The name.
@@ -62,7 +97,7 @@ def[export] e:str[void](pt:st:pl3:name name, pt:st:pl3:wr wr) pl3:name_write = {
  *   @tag: The tag.
  *   @data: The data.
  */
-tydef[export] en:pl3:type { unk, "void", "bool", "u8", "i8", "u16", "i16", "u32", "i32", "u64", "i64", "fp32", "fp64", ptr, arr, name, alias, sig, err, args, annot };
+tydef[export] en:pl3:type { unk, "void", "bool", "u8", "i8", "u16", "i16", "u32", "i32", "u64", "i64", "fp32", "fp64", ptr, arr, name, UNUSED1, sig, err, args, annot };
 tydef[export] un:pl3:type { pt:st:pl3:ptr ptr; pt:st:pl3:arr arr; pt:st:pl3:name name; pt:st:pl3:agg agg; pt:st:pl3:sig sig; pt:st:pl3:err err; pt:st:pl3:annot annot; };
 tydef[export] st:pl3:type {
 	en:pl3:type tag;
@@ -508,12 +543,77 @@ def[export] pt:st:pl3:agg(st:pl3:type type, pt:en:pl3:tydecl tag) pl3:type_get_a
 };
 
 
+tydef[export] st:pl3:arch {
+	u32 ptr;
+};
+/**
+ * Retrieve the alignment of a type.
+ *   @type: The type.
+ *   @arch: The architecture.
+ *   &returns: The alignment.
+ */
+def[export] u32(st:pl3:type type, cpt:st:pl3:arch arch) pl3:type_align = {
+	switch(pl3:type_root(type).tag) {
+	case ev:pl3:type:unk: return 1;
+	case ev:pl3:type:void: return 1;
+	case ev:pl3:type:bool: return 1;
+	case ev:pl3:type:u8: return 1;
+	case ev:pl3:type:i8: return 1;
+	case ev:pl3:type:u16: return 2;
+	case ev:pl3:type:i16: return 2;
+	case ev:pl3:type:u32: return 4;
+	case ev:pl3:type:i32: return 4;
+	case ev:pl3:type:u64: return 8;
+	case ev:pl3:type:i64: return 8;
+	case ev:pl3:type:fp32: return 4;
+	case ev:pl3:type:fp64: return 8;
+	case ev:pl3:type:ptr: return arch->ptr;
+	case ev:pl3:type:arr: return pl3:type_align(type.data.arr->type, arch);
+	case ev:pl3:type:name: return pl3:name_align(type.data.name, arch);
+	case ev:pl3:type:sig: return 8; // TODO this does't seem right
+	case ev:pl3:type:err: return arch->ptr; // FIXME not righ
+	case ev:pl3:type:args: return arch->ptr; // TODO this does't seem right
+	}
+
+	unreachable();
+};
+
 /**
  * Retrieve the size for a type.
  *   @type: The type.
+ *   @arch: The architecture.
  *   &returns: The size in bytes.
  */
-def[export] u32(st:pl3:type type) pl3:type_size = {
+def[export] u32(st:pl3:type type, cpt:st:pl3:arch arch) pl3:type_size = {
+	switch(pl3:type_root(type).tag) {
+	case ev:pl3:type:unk: return 0;
+	case ev:pl3:type:void: return 0;
+	case ev:pl3:type:bool: return 1;
+	case ev:pl3:type:u8: return 1;
+	case ev:pl3:type:i8: return 1;
+	case ev:pl3:type:u16: return 2;
+	case ev:pl3:type:i16: return 2;
+	case ev:pl3:type:u32: return 4;
+	case ev:pl3:type:i32: return 4;
+	case ev:pl3:type:u64: return 8;
+	case ev:pl3:type:i64: return 8;
+	case ev:pl3:type:fp32: return 4;
+	case ev:pl3:type:fp64: return 8;
+	case ev:pl3:type:ptr: return arch->ptr;
+	case ev:pl3:type:arr: {
+		var pt:st:pl3:arr arr = pl3:type_get_arr(type);
+
+		return arr->len * pl3:type_size(arr->type, arch);
+	}
+	case ev:pl3:type:name: return pl3:name_size(pl3:type_get_name(type), arch);
+	case ev:pl3:type:sig: return 0;
+	case ev:pl3:type:err: fatal("stub");
+	case ev:pl3:type:args: fatal("stub");
+	case ev:pl3:type:annot: fatal("stub");
+	}
+
+	unreachable();
+
 	var pt:st:pl3:agg agg;
 	var pt:st:pl3:arr arr;
 	var en:pl3:tydecl tag;
@@ -521,13 +621,13 @@ def[export] u32(st:pl3:type type) pl3:type_size = {
 	agg = pl3:type_get_agg(type, &tag);
 	if(agg != null) {
 		switch(tag) {
-		case ev:pl3:tydecl:struct: return pl3:agg_sum(agg);
-		case ev:pl3:tydecl:union: return pl3:agg_max(agg);
+		case ev:pl3:tydecl:struct: return pl3:agg_sum(agg, arch);
+		case ev:pl3:tydecl:union: return pl3:agg_max(agg, arch);
 		default: unreachable();
 		}
 	}
 	else if((arr = pl3:type_get_arr(type)) != null)
-		return arr->len * pl3:type_size(arr->type);
+		return arr->len * pl3:type_size(arr->type, arch);
 	else {
 		switch(pl3:type_root(type).tag) {
 		case ev:pl3:type:unk: return 0;
@@ -1043,31 +1143,80 @@ def[export] i32(pt:st:pl3:agg agg, cpt:char id) pl3:agg_idx = {
 /**
  * Sum the entire size of the aggregate.
  *   @agg: The aggregate.
+ *   @arch: The architecture.
  *   &returns: The size.
  */
-def[export] u32(pt:st:pl3:agg agg) pl3:agg_sum = {
+def[export] u32(pt:st:pl3:agg agg, cpt:st:pl3:arch arch) pl3:agg_sum = {
 	var pt:st:pl3:memb memb;
 	var pt:st:pl3:field field;
-	var u32 sz = 0;
-
-	for(memb = agg->memb; memb != null; memb = memb->next) {
-		for(field = memb->field; field != null; field = field->next)
-			sz += pl3:type_size(memb->type);
-	}
-
-	return sz;
-};
-
-def[export] u32(pt:st:pl3:agg agg) pl3:agg_max = {
-	var pt:st:pl3:memb memb;
-	var pt:st:pl3:field field;
-	var u32 t, sz = 0;
+	var u32 sz = 0, align = pl3:agg_align(agg, arch);
 
 	for(memb = agg->memb; memb != null; memb = memb->next) {
 		for(field = memb->field; field != null; field = field->next) {
-			t = pl3:type_size(memb->type);
-			if(t > sz)
-				sz = t;
+			sz = m:align_u32(sz, pl3:type_align(memb->type, arch));
+			sz += pl3:type_size(memb->type, arch);
+		}
+	}
+
+	return m:align_u32(sz, align);
+};
+
+def[export] u32(pt:st:pl3:agg agg, cpt:st:pl3:arch arch) pl3:agg_max = {
+	var pt:st:pl3:memb memb;
+	var pt:st:pl3:field field;
+	var u32 sz = 0, align = pl3:agg_align(agg, arch);
+
+	for(memb = agg->memb; memb != null; memb = memb->next) {
+		for(field = memb->field; field != null; field = field->next)
+			sz = m:max_u32(sz, pl3:type_size(memb->type, arch));
+	}
+
+	return m:align_u32(sz, pl3:agg_align(agg, arch));
+};
+
+/**
+ * Compute the offset of a field for the aggregate.
+ *   @agg: The aggregate.
+ *   @idx: The field inex.
+ *   @arch: The achitecture.
+ *   &returns: The size.
+ */
+def[export] u32(pt:st:pl3:agg agg, u32 idx, cpt:st:pl3:arch arch) pl3:agg_off = {
+	var pt:st:pl3:memb memb;
+	var pt:st:pl3:field field;
+	var u32 sz = 0, cur, align;
+
+	for(memb = agg->memb; memb != null; memb = memb->next) {
+		for(field = memb->field; field != null; field = field->next) {
+			switch(pl3:type_root(memb->type).tag) {
+			case ev:pl3:type:unk: align = 1; break;
+			case ev:pl3:type:void: align = 1; break;
+			case ev:pl3:type:bool: align = 1; break;
+			case ev:pl3:type:u8: align = 1; break;
+			case ev:pl3:type:i8: align = 1; break;
+			case ev:pl3:type:u16: align = 2; break;
+			case ev:pl3:type:i16: align = 2; break;
+			case ev:pl3:type:u32: align = 4; break;
+			case ev:pl3:type:i32: align = 4; break;
+			case ev:pl3:type:u64: align = 8; break;
+			case ev:pl3:type:i64: align = 8; break;
+			case ev:pl3:type:fp32: align = 4; break;
+			case ev:pl3:type:fp64: align = 8; break;
+			case ev:pl3:type:ptr: align = 8; break;
+			case ev:pl3:type:arr: align = 1; break;
+			case ev:pl3:type:sig: align = 1; break;
+			case ev:pl3:type:err: align = 1; break;
+			default: align = 1;
+			}
+
+			cur = pl3:type_size(memb->type, arch);
+			if((sz % align) > 0)
+				sz += align - (sz % align);
+
+			if(idx-- == 0)
+				return sz;
+			//sz = (sz + align - 1) & ~(align - 1); // FIXME this is better
+			sz += cur;
 		}
 	}
 
@@ -1075,26 +1224,20 @@ def[export] u32(pt:st:pl3:agg agg) pl3:agg_max = {
 };
 
 /**
- * Compute the offset of a field for the aggregate.
- *   @agg: The aggregate.
- *   @idx: The field inex.
- *   &returns: The size.
+ * Retrieve the alignment of an aggregate type.
+ *   @agg: The aggregate type.
+ *   @arch: The architecture.
+ *   &returns: The alignment.
  */
-def[export] u32(pt:st:pl3:agg agg, u32 idx) pl3:agg_off = {
+def[export] u32(pt:st:pl3:agg agg, cpt:st:pl3:arch arch) pl3:agg_align = {
+	var u32 align = 1;
 	var pt:st:pl3:memb memb;
 	var pt:st:pl3:field field;
-	var u32 sz = 0;
 
-	for(memb = agg->memb; memb != null; memb = memb->next) {
-		for(field = memb->field; field != null; field = field->next) {
-			if(idx-- == 0)
-				return sz;
+	for(memb = agg->memb; memb != null; memb = memb->next)
+		align = m:max_u32(align, pl3:type_align(memb->type, arch));
 
-			sz += pl3:type_size(memb->type);
-		}
-	}
-
-	return sz;
+	return align;
 };
 
 

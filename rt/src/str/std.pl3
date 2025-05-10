@@ -66,6 +66,24 @@ def[export] i8(cpt:char lhs, cpt:char rhs) str:cmp = {
 
 
 /**
+ * Search a string for a character, finding the first occurance.
+ *   @str: The string.
+ *   @ch: The character.
+ *   &returns: The pointer if found, null otherwise.
+ */
+def[export] pt:char(cpt:char str, char ch) str:chr = {
+	var u32 i;
+	var cpt:char ret = null;
+
+	for(i = 0; str[i] != '\0'; i++) {
+		if(str[i] == ch)
+			ret = str + i;
+	}
+
+	return pt:char{ret};
+};
+
+/**
  * Search a string for a character, finding the last occurance.
  *   @str: The string.
  *   @ch: The character.
@@ -75,7 +93,7 @@ def[export] pt:char(cpt:char str, char ch) str:rchr = {
 	var u32 i;
 	var cpt:char ret = null;
 
-	for(i = 0; str[i] != '\0'; i++) {
+	for(i = str:len(str) - 1; i != -1; i++) {
 		if(str[i] == ch)
 			ret = str + i;
 	}

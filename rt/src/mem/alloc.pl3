@@ -55,6 +55,20 @@ def[export] pt:void(u32 sz) mem:alloc = {
 };
 
 /**
+ * Allocate memory and initialize it to zero.
+ *   @sz: The allocation size in bytes.
+ *   &returns: The memory pointer.
+ */
+def[export] pt:void(u32 sz) mem:create = {
+	var pt:void ptr;
+
+	ptr = mem:alloc(sz);
+	mem:zero(ptr, sz);
+
+	return ptr;
+};
+
+/**
  * Duplicate memory.
  *   @ptr: The object pointer.
  *   @sz: The size.

@@ -20,16 +20,16 @@ tydef[export] ty:lex:func = e:str[pt:st:lex:token](pt:st:lex:parse parse, pt:voi
  *   @tok: The token list.
  */
 tydef[export] st:lex:parse {
-	st:io:file file;
-	pt:char path;
-	pt:i16 buf;
-	u32 idx, sz;
-	bool trim;
+	st:io:file file; //0-16
+	pt:char path; // 16-24
+	pt:i16 buf; //24-32
+	u32 idx, sz; //32-40
+	bool trim; //40-41
 
-	u32 lin, col;
+	u32 lin, col; //44-52
 
-	pt:st:lex:rule rule;
-	pt:pt:st:lex:rule irule;
+	pt:st:lex:rule rule; //52-60
+	pt:pt:st:lex:rule irule; //60-68
 
 	pt:st:lex:token tok;
 	pt:pt:st:lex:token itok;
@@ -236,6 +236,13 @@ def[export] st:io:call(pt:st:lex:parse parse) lex:loc = {
 	return st:io:call{ &func, parse };
 };
 
+def[export] st:io:call(pt:st:lex:token tok) lex:tok_loc = {
+	def e:str[void](st:io:file file, cpt:st:lex:token tok) func = {
+		io:fmt(file, "%s:%u:%u", tok->file, tok->lin + 1, tok->col + 1);
+	};
+
+	return st:io:call{ &func, tok};
+};
 
 /**
  * Create a token from the current parser buffer.
@@ -353,8 +360,8 @@ def[export] e:str[pt:st:lex:token](pt:st:lex:parse parse, i32 id) lex:tok_try = 
 	var pt:st:lex:token tok;
 
 	tok = e:get(lex:tok_get(parse, 0));
-	if((tok == null) || (tok->id != id))
-		return null;
+	if((tok == null) || (tok->id != id)) {
+		return null; }
 
 	lex:tok_adv(parse);
 	return tok;

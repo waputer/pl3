@@ -70,6 +70,8 @@ def[export] void(cpt:char fmt, ...) fatal = {
 	io:fmtv(io:stderr, fmt, &args);
 	io:fmt(io:stderr, "\n");
 
+	os:exit(1);
+
 	bi:btrace(&trace, 16 * sizeof(pt:void));
 	//bi:btrace_dump(&trace, 6 * sizeof(pt:void));
 

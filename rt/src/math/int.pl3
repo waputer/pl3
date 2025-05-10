@@ -130,7 +130,6 @@ def[export] pt:st:m:int(u32 v) m:int_u32 = {
 /**
  * Normalize the integer by removing leading zeros and negative zero.
  *   @int: The integer.
- *   &returns: The integer.
  */
 def[export] void(pt:st:m:int int) m:int_norm = {
 	var u32 i;
@@ -371,7 +370,7 @@ def[export] pt:st:m:int(pt:st:m:int lhs, u32 rhs) m:int_sub_u32 = {
  *   @rhs: The right-hand side as a 32-bit integer.
  *   &returns: The result.
  */
-def void(pt:st:m:int lhs, u32 val) m:int_mul_u32 = {
+def[export] void(pt:st:m:int lhs, u32 val) m:int_mul_u32 = {
 	var u32 i, t, c = 0;
 
 	lhs = m:int_take(lhs);
@@ -769,6 +768,9 @@ def[export] st:io:call(pt:st:m:int int) m:int_dec = {
 		int = m:int_copy(arg);
 		i = 10 * int->len + 1;
 
+		if(int->neg)
+			io:wr_ch(file, '-');
+
 		buf = mem:alloc(i);
 		i--; // FIXME: predecrement
 		buf[i] = '\0';
@@ -836,7 +838,7 @@ def[export] u64(cpt:st:m:int int) m:int_get_u64 = {
 	else if(int->len == 1)
 		return int->neg ? -u64{int->arr[0]} : u64{int->arr[0]};
 	else
-		return (int->neg ? -1 : 1) * u64{int->arr[0]} | (u64{int->arr[1]} << 32);
+		return (int->neg ? -1 : 1) * (u64{int->arr[0]} | (u64{int->arr[1]} << 32));
 };
 
 def[export] i64(cpt:st:m:int int) m:int_get_i64 = {

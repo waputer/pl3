@@ -562,7 +562,7 @@ def[export] i8(cpt:void lhs, cpt:void rhs) avl:cmp_ptr = {
 };
 
 /**
- * Pointer comparison function.
+ * Unsigned 32-bit integer comparison function.
  *   @lhs: The left-hand side.
  *   @rhs: The right-hand side.
  *   &returns: Their order.
@@ -577,7 +577,22 @@ def[export] i8(cpt:void lhs, cpt:void rhs) avl:cmp_u32 = {
 };
 
 /**
- * Pointer comparison function.
+ * Signed 32-bit integer comparison function.
+ *   @lhs: The left-hand side.
+ *   @rhs: The right-hand side.
+ *   &returns: Their order.
+ */
+def[export] i8(cpt:void lhs, cpt:void rhs) avl:cmp_i32 = {
+	if(*cpt:u32{lhs} > *cpt:u32{rhs})
+		return 1;
+	else if(*cpt:u32{lhs} < *cpt:u32{rhs})
+		return -1;
+	else
+		return 0;
+};
+
+/**
+ * Unsigned 64-bit integer Pointer comparison function.
  *   @lhs: The left-hand side.
  *   @rhs: The right-hand side.
  *   &returns: Their order.

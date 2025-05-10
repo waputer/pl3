@@ -27,7 +27,11 @@ def[export] void(pt:pt:char args) run = {
 	var u32 rd, chk, gen;
 
 	for(i = 1; args[i] != null; i++) {
-		if(str:equal(args[i], "-o")) {
+		if(str:equal(args[i], "--version")) {
+			print("pl3-1.0.0-dev3\n");
+			os:exit(0);
+		}
+		else if(str:equal(args[i], "-o")) {
 			i++;
 			if(args[i] == null)
 				fatal("Unexpected end of arguments.");
@@ -67,9 +71,8 @@ def[export] void(pt:pt:char args) run = {
 	{
 		mark = tm:usec();
 
-		for(iter = list; iter != null; iter = iter->next) {
+		for(iter = list; iter != null; iter = iter->next)
 			e:req(pl3:parse(iter->path, pl3:top_unit(top)));
-		}
 
 		rd = u32{tm:usec() - mark};
 		//print("parse %ums\n", rd / 1000);
