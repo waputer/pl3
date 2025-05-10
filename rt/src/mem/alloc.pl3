@@ -108,7 +108,7 @@ def[export] pt:void(pt:void ptr, u32 sz) mem:realloc = {
  */
 def[export] void(pt:void ptr) mem:free = {
 	mem:cnt--;
-	return mem:sys_free(ptr);
+	mem:sys_free(ptr);
 };
 
 /**

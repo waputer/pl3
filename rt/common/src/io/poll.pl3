@@ -1,0 +1,47 @@
+/**
+ * Poll events.
+ *   @rd: Read.
+ *   @wr: Write.
+ *   @err: Error.
+ */
+def[export] u16 io:poll:rd  = 0x0001,
+                io:poll:wr  = 0x0002,
+                io:poll:err = 0x0004;
+
+/**
+ * Polling structure.
+ *   @kd: The kernel descriptor.
+ *   @req, got: The requesed and gotten events.
+ */
+tydef[export] st:io:poll {
+	i32 kd;
+	u16 req, got;
+};
+
+
+/**
+ * Poll an I/O set for events.
+ *   @set: The poll set.
+ *   @cnt: The number of elements in the set.
+ *   @to: The timeout in icroseconds.
+ *   &returns: The number of active descriptors.
+ */
+def[export] e:str[u32](pt:st:io:poll set, u32 cnt, i64 to) io:poll = {
+	return os:poll(set, cnt, to);
+};
+
+/**
+ * Poll a single file descriptor.
+ *   @kd: The kernel descriptor.
+ *   @req: The requested events.
+ *   @to: The timeout in icroseconds.
+ *   &returns: The received events or zero if timeout.
+ */
+def[export] e:str[u16](i32 kd, u16 req, i64 to) io:poll1 = {
+	var st:io:poll poll = { kd, req, 0 };
+
+	if(e:get(io:poll(&poll, 1, to)) == 0)
+		return 0;
+	
+	return poll.got;
+};

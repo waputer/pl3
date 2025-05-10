@@ -254,7 +254,7 @@ def[export] e:str[i8](st:io:file file) io:rd_i8 = {
 };
 
 /**
- * Read an unsigned 16-bit integer in its entirety.
+ * Read an unsigned, 16-bit integer in its entirety.
  *   @file: The file.
  *   &returns: The value.
  */
@@ -267,7 +267,20 @@ def[export] e:str[u16](st:io:file file) io:rd_u16 = {
 };
 
 /**
- * Read an unsigned 32-bit integer in its entirety.
+ * Read a signed, 16-bit integer in its entirety.
+ *   @file: The file.
+ *   &returns: The value.
+ */
+def[export] e:str[i16](st:io:file file) io:rd_i16 = {
+	var i16 val;
+
+	e:get(io:rd_buf(file, &val, sizeof(val)));
+
+	return val;
+};
+
+/**
+ * Read an unsigned, 32-bit integer in its entirety.
  *   @file: The file.
  *   &returns: The value.
  */
@@ -280,12 +293,38 @@ def[export] e:str[u32](st:io:file file) io:rd_u32 = {
 };
 
 /**
- * Read an unsigned 64-bit integer in its entirety.
+ * Read a signed, 32-bit integer in its entirety.
+ *   @file: The file.
+ *   &returns: The value.
+ */
+def[export] e:str[i32](st:io:file file) io:rd_i32 = {
+	var i32 val;
+
+	e:get(io:rd_buf(file, &val, sizeof(val)));
+
+	return val;
+};
+
+/**
+ * Read an unsigned, 64-bit integer in its entirety.
  *   @file: The file.
  *   &returns: The value.
  */
 def[export] e:str[u64](st:io:file file) io:rd_u64 = {
 	var u64 val;
+
+	e:get(io:rd_buf(file, &val, sizeof(val)));
+
+	return val;
+};
+
+/**
+ * Read a signed, 64-bit integer in its entirety.
+ *   @file: The file.
+ *   &returns: The value.
+ */
+def[export] e:str[i64](st:io:file file) io:rd_i64 = {
+	var i64 val;
 
 	e:get(io:rd_buf(file, &val, sizeof(val)));
 
@@ -384,10 +423,55 @@ def[export] e:str[void](st:io:file file, u8 val) io:wr_u8 = {
 };
 
 /**
+ * Write a signed, 16-bit integer to a file.
+ *   @file: The file.
+ *   @val: The value
+ */
+def[export] e:str[void](st:io:file file, i16 val) io:wr_i16 = {
+	e:get(io:wr_buf(file, &val, sizeof(val)));
+};
+
+/**
+ * Write an unsigned, 16-bit integer to a file.
+ *   @file: The file.
+ *   @val: The value
+ */
+def[export] e:str[void](st:io:file file, u16 val) io:wr_u16 = {
+	e:get(io:wr_buf(file, &val, sizeof(val)));
+};
+
+/**
+ * Write a signed, 32-bit integer to a file.
+ *   @file: The file.
+ *   @val: The value
+ */
+def[export] e:str[void](st:io:file file, i32 val) io:wr_i32 = {
+	e:get(io:wr_buf(file, &val, sizeof(val)));
+};
+
+/**
  * Write an unsigned, 32-bit integer to a file.
  *   @file: The file.
  *   @val: The value
  */
 def[export] e:str[void](st:io:file file, u32 val) io:wr_u32 = {
+	e:get(io:wr_buf(file, &val, sizeof(val)));
+};
+
+/**
+ * Write a signed, 64-bit integer to a file.
+ *   @file: The file.
+ *   @val: The value
+ */
+def[export] e:str[void](st:io:file file, i64 val) io:wr_i64 = {
+	e:get(io:wr_buf(file, &val, sizeof(val)));
+};
+
+/**
+ * Write an unsigned, 64-bit integer to a file.
+ *   @file: The file.
+ *   @val: The value
+ */
+def[export] e:str[void](st:io:file file, u64 val) io:wr_u64 = {
 	e:get(io:wr_buf(file, &val, sizeof(val)));
 };

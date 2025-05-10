@@ -100,3 +100,14 @@ def[export] pt:char(cpt:char str, char ch) str:rchr = {
 
 	return pt:char{ret};
 };
+def[export] pt:char(cpt:char str, u32 max) str:ndup = {
+	var u32 len;
+	var pt:char ret;
+
+	len = m:min_u32(str:len(str), max);
+	ret = mem:alloc(len + 1);
+	mem:copy(ret, str, len);
+	ret[len] = '\0';
+
+	return ret;
+};

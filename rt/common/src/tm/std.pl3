@@ -1,0 +1,23 @@
+/**
+ * Retrieve the system time in seconds.
+ *   &returns: The time in microseconds.
+ */
+def[export] i64() tm:sec = {
+	return tm:usec() / 1000000;
+};
+
+/**
+ * Retrieve the system time in microseconds.
+ *   &returns: The time in microseconds.
+ */
+def[export] i64() tm:usec = {
+	return os:usec();
+};
+
+/**
+ * Sleep for a given number of microseconds.
+ *   @usec: The number of microseconds to sleep.
+ */
+def[export] void(u64 usec) tm:usleep = {
+	os:usleep(usec);
+};

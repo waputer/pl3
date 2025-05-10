@@ -83,11 +83,13 @@ def[export] e:str[void](pt:st:pl3:enum enum, pt:st:pl3:wr wr) pl3:enum_write = {
  * Enumerated value structure.
  *   @id: The identifier.
  *   @expr: The expression, if given.
+ *   @meta: The metadata.
  *   @next: The next enumerated value.
  */
 tydef[export] st:pl3:enval {
 	pt:char id;
 	pt:st:pl3:expr expr;
+	st:pl3:meta meta;
 
 	pt:st:pl3:enval next;
 };
@@ -96,10 +98,11 @@ tydef[export] st:pl3:enval {
  * Create an enumerator value. 
  *   @id: The identifier.
  *   @expr: Optional. Consumed. The expression.
+ *   @meta: Consumed. The metadata.
  *   &returns: The enumerated value.
  */
-def[export] pt:st:pl3:enval(pt:char id, pt:st:pl3:expr expr) pl3:enval_new = {
-	return mem:make(st:pl3:enval{ id, expr, null });
+def[export] pt:st:pl3:enval(pt:char id, pt:st:pl3:expr expr, st:pl3:meta meta) pl3:enval_new = {
+	return mem:make(st:pl3:enval{ id, expr, meta, null });
 };
 
 /**
@@ -109,6 +112,7 @@ def[export] pt:st:pl3:enval(pt:char id, pt:st:pl3:expr expr) pl3:enval_new = {
 def[export] void(pt:st:pl3:enval val) pl3:enval_delete = {
 	mem:free(val->id);
 	pl3:expr_erase(val->expr);
+	pl3:meta_delete(val->meta);
 	mem:free(val);
 };
 
@@ -135,6 +139,9 @@ def[export] e:str[void](pt:st:pl3:enval val, pt:st:pl3:wr wr) pl3:enval_write = 
 	io:wr_str32(wr->file, val->id);
 
 	io:wr_u8(wr->file, 0);
+	if(val->expr != null) {
+		//fatal("FIXME stub enval_write\n");
+	}
 	/* FIXME this
 	if(val->expr != null) {
 		io:wr_u8(wr->file, 1);
@@ -143,6 +150,7 @@ def[export] e:str[void](pt:st:pl3:enval val, pt:st:pl3:wr wr) pl3:enval_write = 
 	else
 		io:wr_u8(wr->file, 0);
 	*/
+	pl3:meta_write(val->meta, wr);
 };
 
 /**
@@ -162,7 +170,7 @@ def[export] e:str[pt:st:pl3:enval](pt:st:pl3:rd rd) pl3:enval_read = {
 	else
 		expr = null;
 
-	return pl3:enval_new(id, expr);
+	return pl3:enval_new(id, expr, e:get(pl3:meta_read(rd)));
 };
 
 

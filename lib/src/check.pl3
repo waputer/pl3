@@ -73,10 +73,22 @@ def void(pt:st:ctx ctx, pt:st:env env, pt:st:pl3:stmt stmt, bool pub) foo = {
 
 		if(((decl->flags & pl3:decl:pub) != 0) == pub) {
 			for(bind = decl->bind; bind != null; bind = bind->next) {
-				if(env_name_find(env, bind->id) != null)
-					return ctx_err(ctx, "%C: Duplication declaration of '%s'.", pl3:meta_call(&stmt->meta), bind->id);
+				var pt:st:name name;
 
-				env_name_bind(env, decl, bind);
+				name = env_name_find(env, bind->id);
+				if(name != null) {
+					if((name->decl->flags & pl3:decl:ext) != 0) {
+						name->bind->redef = true;
+						name->decl = decl;
+						name->bind = bind;
+					}
+					else if((decl->flags & pl3:decl:ext) != 0)
+						bind->redef = true;
+					else
+						return ctx_err(ctx, "%C: Duplication declaration of '%s'.", pl3:meta_call(&stmt->meta), bind->id);
+				}
+				else
+					env_name_bind(env, decl, bind);
 			}
 		}
 	} break;
@@ -508,7 +520,7 @@ def void(pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr, pt:st:pl3:sig sig) c
 		case ev:pl3:op1:pos:
 		case ev:pl3:op1:neg:
 		case ev:pl3:op1:not:
-			if(!pl3:type_is_int(op1->in->type) && !pl3:type_is_unk(op1->in->type))
+			if(!pl3:type_is_int(op1->in->type) && !pl3:type_is_fp(op1->in->type) && !pl3:type_is_unk(op1->in->type))
 				return ctx_err(ctx, "%C: Cannot use arithmetic on non-numeric type '%C'.", pl3:meta_call(&expr->meta), pl3:type_call(&op1->in->type));
 
 			pl3:type_replace(&expr->type, pl3:type_copy(op1->in->type));
@@ -832,6 +844,26 @@ def void(pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr, pt:st:pl3:sig sig) c
 
 		// FIXME : check return type to match what we e:get
 		pl3:type_replace(&expr->type, pl3:type_copy(err->suc));
+	} break;
+
+	case ev:pl3:expr:eign: {
+		var pt:st:pl3:expr sub;
+		var pt:st:pl3:err err;
+
+		sub = expr->data.expr;
+		ctx_expr(ctx, env, sub, sig);
+
+		err = pl3:type_get_err(sub->type);
+		if(err == null)
+			return ctx_err(ctx, "%C: Call to `e:ign` requires an error type.", pl3:meta_call(&sub->meta));
+
+		if(!pl3:type_is_void(err->suc))
+			return ctx_err(ctx, "%C: Call to `e:ign` requires void error type.", pl3:meta_call(&sub->meta));
+		
+	} break;
+
+	case ev:pl3:expr:ewarn: {
+		fatal("stub");
 	} break;
 
 	case ev:pl3:expr:ereq: {

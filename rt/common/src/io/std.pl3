@@ -1,0 +1,151 @@
+/**
+ * Create an I/O object from a kernel descriptor.
+ *   @kd: The descriptor.
+ *   &returns: The I/O.
+ */
+def[export] st:io(i32 kd) io:std = {
+	return st:io{ pt:void{kd}, &io:stdfunc };
+};
+
+def e:str[void](pt:void ref, u32 id, pt:void arg) io:stdfunc = {
+	var i32 kd = i32{ref};
+
+	switch(id) {
+	case io:id:close:
+		e:get(os:close(kd));
+		break;
+
+	case io:id:read: {
+		var pt:st:io:read read = arg;
+
+		read->tot = e:get(os:read(kd, read->dst, read->sz));
+	} break;
+
+	case io:id:write: {
+		var pt:st:io:write write = arg;
+
+		write->tot = e:get(os:write(kd, write->src, write->sz));
+	} break;
+
+	case io:id:seek: {
+		var pt:st:io:seek seek = arg;
+
+		e:get(os:seek(kd, seek->whence, seek->off));
+	} break;
+
+	case io:id:tell: {
+		var pt:st:io:tell tell = arg;
+
+		tell->off = u64{e:get(os:seek(kd, io:seek:cur, 0))};
+	} break;
+
+	default:
+		e:fmt("Unsupported I/O message.");
+	}
+};
+
+def[export] st:io io:stdin = st:io{ 0, &io:stdfunc },
+                  io:stdout = st:io{ 1, &io:stdfunc },
+                  io:stderr = st:io{ 2, &io:stdfunc };
+
+
+/**
+ * Aligned I/O structure.
+ *   @io: The underlying I/O.
+ *   @wid: The width.
+ *   @idx: The current index.
+ *   @tmp: The temporary buffer.
+ */
+tydef st:align {
+	st:io io;
+
+	i32 wid;
+	u32 idx;
+
+	pt:u8 tmp;
+};
+
+/**
+ * Create an aligned I/O. Negative widths are left-aligned, and positive
+ * widths are right aligned.
+ *   @io: The I/O to wrap.
+ *   @wid: The width, may be negative for left-alignment.
+ *   &returns: The new I/O.
+ */
+def[export] st:io(st:io io, i32 wid) io:align = {
+	def e:str[void](pt:st:align align, u32 id, pt:void arg) func = {
+		var u32 abs;
+
+		abs = m:abs_i32(align->wid);
+
+		switch(id) {
+		case io:id:write: {
+			var pt:st:io:write wr = pt:st:io:write{ arg };
+			var u32 sz = wr->sz;
+			var pt:u8 src = pt:u8{ wr->src };
+
+			wr->tot = sz;
+
+			if(align->wid > 0) {
+				while((sz > 0) && (align->idx < abs)) {
+					align->tmp[align->idx++] = *src++;
+					sz--;
+				}
+
+				if(align->idx != abs)
+					return;
+
+				e:get(io:write(align->io, align->tmp, align->idx));
+				mem:free(align->tmp);
+				align->idx = 0;
+				align->wid = 0;
+				align->tmp = null;
+
+				if(sz > 0)
+					e:get(io:write(align->io, src, sz));
+			}
+			else if(align->wid < 0) {
+				while((sz > 0) && (align->idx < abs)) {
+					align->tmp[align->idx++] = *src++;
+					sz--;
+				}
+
+				if(align->idx != abs)
+					return;
+
+				e:get(io:write(align->io, align->tmp, align->idx));
+				mem:free(align->tmp);
+				align->idx = 0;
+				align->wid = 0;
+				align->tmp = null;
+
+				if(sz > 0)
+					e:get(io:write(align->io, src, sz));
+			}
+			else
+				e:get(io:write(align->io, wr->src, wr->sz));
+		} break;
+
+		case io:id:close:
+			if(align->idx < abs) {
+				var u32 i;
+
+				if(align->wid < 0)
+					e:get(io:write(align->io, align->tmp, align->idx));
+
+				for(i = 0; i < abs - align->idx; i++)
+					e:get(io:wr_ch(align->io, ' '));
+
+				if(align->wid > 0)
+					e:get(io:write(align->io, align->tmp, align->idx));
+			}
+
+			mem:erase(align->tmp);
+			mem:free(align);
+			break;
+		}
+	};
+
+	return st:io{ mem:make(st:align{ io, wid, 0, (wid != 0) ? mem:alloc(m:abs_i32(wid)) : 0 }), &func };
+};
+

@@ -1,0 +1,31 @@
+tydef[export] ty:algo:cmp = i8(cpt:void lhs, cpt:void rhs, pt:void arg);
+
+//FIXME comments and docs
+def[export] void(pt:void base, u32 cnt, u32 sz, pt:ty:algo:cmp cmp, pt:void arg) algo:qsort = {
+	var u32 i, j;
+	var pt:void pivot;
+
+	if(cnt <= 1)
+		return;
+
+	pivot = base;
+
+	j = 1;
+	for(i = 1; i < cnt; i++) {
+		if(cmp->(pivot, base + i * sz, arg) > 0) {
+			if(i != j)
+				mem:swap(base + j * sz, base + i * sz, sz);
+
+			j++;
+		}
+	}
+
+	j--;
+	mem:swap(base, base + j * sz, sz);
+
+	if(j > 0)
+		algo:qsort(base, j, sz, cmp, arg);
+
+	if(j < cnt)
+		algo:qsort(base + (j + 1) * sz, cnt - (j + 1), sz, cmp, arg);
+};

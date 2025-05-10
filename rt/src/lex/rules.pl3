@@ -67,7 +67,29 @@ def e:str[pt:st:lex:token](pt:st:lex:parse parse, i32 id, char delim) getquote =
 		if(lex:ch_get(parse, i) == '\\') {
 			i++;
 			if(lex:ch_get(parse, i) == 'x') {
-				fatal("FIXME");
+				var u8 byte;
+				var i16 ch;
+
+				i++;
+				ch = lex:ch_get(parse, i);
+				if((ch >= '0') && (ch <= '9'))
+					byte = (u8{ch} - '0') << 4;
+				else if((ch >= 'a') && (ch <= 'f'))
+					byte = (u8{ch} - 'a' + 10) << 4;
+				else if((ch >= 'A') && (ch <= 'F'))
+					byte = (u8{ch} - 'A' + 10) << 4;
+
+				i++;
+				ch = lex:ch_get(parse, i);
+				if((ch >= '0') && (ch <= '9'))
+					byte |= u8{ch} - '0';
+				else if((ch >= 'a') && (ch <= 'f'))
+					byte |= u8{ch} - 'a' + 10;
+				else if((ch >= 'A') && (ch <= 'F'))
+					byte |= u8{ch} - 'A' + 10;
+
+				mem:buf_u8(&buf, byte);
+				i++;
 			}
 			else {
 				switch(lex:ch_get(parse, i)) {
@@ -85,7 +107,7 @@ def e:str[pt:st:lex:token](pt:st:lex:parse parse, i32 id, char delim) getquote =
 			}
 		}
 		else if(lex:ch_get(parse, i) < 0)
-			e:fmt("Unterminated quote.");
+			e:fmt("Unterminated quote val=%ddlkjflsjl.", i32{lex:ch_get(parse, i)});
 		else if(lex:ch_get(parse, i) == i16{delim})
 			break;
 		else

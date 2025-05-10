@@ -1,0 +1,53 @@
+/**
+ * Mode flags
+ *   @perm: Permission mask.
+ *   @read: Read.
+ *   @write: Write.
+ *   @rdwr: Both read and write.
+ *   @create: Create the file.
+ *   @trunc: Truncate the file, if it exists.
+ *   @excl: Fail if the file exists.
+ *   @direct: Direct access (no buffering).
+ */
+def[export] u32 io:mode:perm   = 0x00FFFF,
+                io:mode:read   = 0x010000,
+                io:mode:write  = 0x020000,
+                io:mode:rdwr   = 0x030000,
+                io:mode:create = 0x040000,
+                io:mode:append = 0x080000,
+                io:mode:trunc  = 0x100000,
+                io:mode:excl   = 0x200000,
+                io:mode:direct = 0x400000;
+
+def[export] u8 io:whence:set = 0x01,
+               io:whence:cur = 0x02,
+               io:whence:end = 0x03;
+
+/**
+ * I/O function type.
+ *   @ref: The I/O refernce.
+ *   @id; The message identifier.
+ *   @arg: The argument.
+ */
+tydef[export] ty:io = e:str[void](pt:void ref, u32 id, pt:void arg);
+
+/**
+ * I/O type.
+ *   @ref: The reference.
+ *   @func: The function.
+ */
+tydef[export] st:io {
+	pt:void ref;
+	pt:ty:io func;
+};
+
+/**
+ * Open an I/O.
+ *   @path: The path.
+ *   @mode: The mode.
+ *   &returns: The I/O.
+ */
+def[export] e:str[st:io](cpt:char path, u32 mode) io:open = {
+	return io:std(e:get(os:open(path, mode)));
+};
+

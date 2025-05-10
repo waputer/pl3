@@ -47,6 +47,22 @@ def[export] u32(pt:st:pl3:list list) pl3:list_len = {
 	return n;
 };
 
+/**
+ * Retrieve the expression if the initializer list is a valid cast.
+ *   @list: The list.
+ *   &returns; The expression if a valid cast, null otherwise.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:list list) pl3:list_cast = {
+	if(list->init == null)
+		return null;
+	else if(list->init->next != null)
+		return null;
+	else if(list->init->tag != ev:pl3:init:expr)
+		return null;
+
+	return list->init->data.expr;
+};
+
 
 /**
  * Initializer list element.

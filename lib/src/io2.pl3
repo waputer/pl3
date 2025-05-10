@@ -1,0 +1,204 @@
+/**
+ * Write structure.
+ *   @file: The file.
+ */
+tydef[export] st:pl3:wr {
+	st:io:file file;
+};
+
+/**
+ * Reader structure.
+ *   @file: The file.
+ */
+tydef[export] st:pl3:rd {
+	st:io:file file;
+};
+
+
+/**
+ * Magic value.
+ */
+def[export] ar[16]:u8 pl3:magic = { 0x07, 0xb4, 0xec, 0x9a, 0x58, 0x15, 0xbc, 0x2b, 0x93, 0x60, 0x79, 0x23, 0x95, 0x4a, 0x4e, 0x04 };
+
+
+/**
+ * Export the top-level declarations
+ *   @top: The top-level.
+ *   @path: The output path.
+ */
+def[export] e:str[void](pt:st:pl3:top top, cpt:char path) pl3:export = {
+	var st:pl3:wr wr;
+	var pt:st:pl3:unit unit;
+	var pt:st:pl3:stmt stmt;
+
+	wr.file = e:get(io:open(path, 0644 | io:mode:create | io:mode:trunc | io:mode:write));
+	onerr io:close(wr.file);
+
+	e:get(io:wr_buf(wr.file, &pl3:magic, sizeof(pl3:magic)));
+	e:get(io:wr_i8(wr.file, 1));
+
+	for(unit = top->unit; unit != null; unit = unit->next) {
+		for(stmt = unit->stmt; stmt != null; stmt = stmt->next) {
+			switch(stmt->tag) {
+			case ev:pl3:stmt:decl: {
+				var pt:st:pl3:bind bind;
+				var pt:st:pl3:decl decl = stmt->data.decl;
+
+				if((decl->flags & pl3:decl:exp) == 0)
+					break;
+
+				e:get(io:wr_i8(wr.file, i8{ev:pl3:stmt:decl}));
+				//e:get(io:wr_u32(wr.file, decl->flags));
+				e:get(io:wr_u32(wr.file, pl3:decl:pub | pl3:decl:ext));
+				e:get(pl3:attr_write(decl->attr, &wr));
+				e:get(pl3:type_write(decl->type, &wr));
+				//pl3:meta_write(decl->meta, &wr);
+
+				for(bind = decl->bind; bind != null; bind = bind->next) {
+					e:get(io:wr_u8(wr.file, u8{true}));
+					e:get(io:wr_str32(wr.file, bind->id));
+
+					if((bind->expr != null) && (bind->expr->tag != ev:pl3:expr:func)) {
+						e:get(io:wr_u8(wr.file, 1));
+						e:get(pl3:expr_write(bind->expr, &wr));
+					}
+					else
+						e:get(io:wr_u8(wr.file, 0));
+
+					e:get(pl3:meta_write(bind->meta, &wr));
+				}
+
+				io:wr_u8(wr.file, u8{false});
+			} break;
+
+			case ev:pl3:stmt:tydecl: {
+				var pt:st:pl3:tydecl decl = stmt->data.tydecl;
+
+				if((decl->flags & pl3:decl:exp) == 0)
+					break;
+
+				e:get(io:wr_i8(wr.file, i8{ev:pl3:stmt:tydecl}));
+				e:get(io:wr_str32(wr.file, decl->id));
+				//e:get(io:wr_u32(wr.file, decl->flags));
+				e:get(io:wr_u32(wr.file, pl3:decl:pub));
+				e:get(pl3:attr_write(decl->attr, &wr));
+				e:get(io:wr_u8(wr.file, u8{decl->tag}));
+
+				switch(decl->tag) {
+				case ev:pl3:tydecl:alias: pl3:alias_write(decl->data.alias, &wr); break;
+				case ev:pl3:tydecl:struct: pl3:agg_write(decl->data.agg, &wr); break;
+				case ev:pl3:tydecl:union: pl3:agg_write(decl->data.agg, &wr); break;
+				case ev:pl3:tydecl:enum: pl3:enum_write(decl->data.enum, &wr); break;
+				}
+			} break;
+			}
+		}
+	}
+	
+	io:wr_i8(wr.file, -1);
+	io:wr_u8(wr.file, 0);
+
+	io:close(wr.file);
+};
+
+
+/**
+ * Write an alias to a file.
+ *   @alias: The alias.
+ *   @wr: The writer.
+ */
+def[export] e:str[void](pt:st:pl3:alias alias, pt:st:pl3:wr wr) pl3:alias_write = {
+	e:get(pl3:type_write(alias->type, wr));
+};
+
+/**
+ * Write an aggregate to a file.
+ *   @agg: The aggregate.
+ *   @wr: The writer.
+ */
+def[export] e:str[void](pt:st:pl3:agg agg, pt:st:pl3:wr wr) pl3:agg_write = {
+	var pt:st:pl3:memb memb;
+
+	e:get(io:wr_str32(wr->file, agg->id));
+
+	for(memb = agg->memb; memb != null; memb = memb->next) {
+		e:get(io:wr_u8(wr->file, 1));
+		e:get(pl3:memb_write(memb, wr));
+	}
+
+	e:get(io:wr_u8(wr->file, 0));
+};
+
+
+/**
+ * Read a field from a file.
+ *   @rd: The reader.
+ *   &returns: The field.
+ */
+def[export] e:str[pt:st:pl3:field](pt:st:pl3:rd rd) pl3:field_read = {
+	return pl3:field_new(e:get(io:rd_str32(rd->file)));
+};
+
+/**
+ * Write a field to a file.
+ *   @field: The field.
+ *   @wr: The writer.
+ */
+def[export] e:str[void](pt:st:pl3:field field, pt:st:pl3:wr wr) pl3:field_write = {
+	e:get(io:wr_str32(wr->file, field->id));
+};
+
+
+/**
+ * Read an aggregate from a file.
+ *   @rd: The reader.
+ *   &returns: The aggregate.
+ */
+def[export] e:str[pt:st:pl3:agg](pt:st:pl3:rd rd) pl3:agg_read = {
+	var pt:char id;
+	var pt:st:pl3:memb memb = null;
+	var pt:pt:st:pl3:memb imemb = &memb;
+
+	id = e:get(io:rd_str32(rd->file));
+	onerr mem:free(id);
+
+	while(e:get(io:rd_u8(rd->file)) > 0) {
+		*imemb = e:get(pl3:memb_read(rd));
+		imemb = &(*imemb)->next;
+	}
+
+	return pl3:agg_new(id, memb);
+};
+
+
+/**
+ * Aggregate structure.
+ *   @id: The identifier.
+ *   @memb: The member list.
+ */
+tydef[export] st:pl3:agg {
+	pt:char id;
+	pt:st:pl3:memb memb;
+};
+
+/**
+ * Member structure.
+ *   @type: The type.
+ *   @field: The field list.
+ *   @next: The next member.
+ */
+tydef[export] st:pl3:memb {
+	st:pl3:type type;
+	pt:st:pl3:field field;
+	pt:st:pl3:memb next;
+};
+
+/**
+ * Field structure.
+ *   @id: The identifier.
+ *   @next: The next field.
+ */
+tydef[export] st:pl3:field {
+	pt:char id;
+	pt:st:pl3:field next;
+};

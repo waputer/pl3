@@ -5,7 +5,7 @@
  *   @type: The type information.
  *   @meta: The metadata information.
  */
-tydef[export] en:pl3:expr { lit, ident, enum, op1, op2, index, comp, call, elem, func, tern, enref, size, offset, parent, "arrlen", "getref", vinit, vget, eget, ereq };
+tydef[export] en:pl3:expr { lit, ident, enum, op1, op2, index, comp, call, elem, func, tern, enref, size, offset, parent, "arrlen", "getref", vinit, vget, eget, eign, ewarn, ereq };
 tydef[export] un:pl3:expr { pt:char id; pt:st:pl3:lit lit; pt:st:pl3:ident ident; pt:st:pl3:op1 op1; pt:st:pl3:op2 op2; pt:st:pl3:index index; pt:st:pl3:comp comp; pt:st:pl3:call call; pt:st:pl3:elem elem; pt:st:pl3:func func; pt:st:pl3:tern tern; pt:st:pl3:enref enref; pt:st:pl3:expr expr; pt:st:pl3:size size; pt:st:pl3:offset offset; pt:st:pl3:parent parent; pt:st:pl3:arrlen len; pt:st:pl3:vget vget; };
 tydef[export] st:pl3:expr {
 	en:pl3:expr tag;
@@ -53,6 +53,8 @@ def[export] void(pt:st:pl3:expr expr) pl3:expr_delete = {
 	case ev:pl3:expr:vget: pl3:vget_delete(expr->data.vget); break;
 	case ev:pl3:expr:eget: pl3:expr_delete(expr->data.expr); break;
 	case ev:pl3:expr:ereq: pl3:expr_delete(expr->data.expr); break;
+	case ev:pl3:expr:eign: pl3:expr_delete(expr->data.expr); break;
+	case ev:pl3:expr:ewarn: pl3:expr_delete(expr->data.expr); break;
 	}
 
 	pl3:type_delete(expr->type);
@@ -279,6 +281,89 @@ def[export] pt:st:pl3:expr(pt:st:pl3:expr expr, st:pl3:meta meta) pl3:expr_ereq 
 	return pl3:expr_new(ev:pl3:expr:ereq, un:pl3:expr{ .expr = expr }, meta);
 };
 
+/**
+ * Create an error ignore expression.
+ *   @func: Consumed. The function.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:expr expr, st:pl3:meta meta) pl3:expr_eign = {
+	return pl3:expr_new(ev:pl3:expr:eign, un:pl3:expr{ .expr = expr }, meta);
+};
+
+/**
+ * Create an error warning expression.
+ *   @func: Consumed. The function.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:expr expr, st:pl3:meta meta) pl3:expr_ewarn = {
+	return pl3:expr_new(ev:pl3:expr:eign, un:pl3:expr{ .expr = expr }, meta);
+};
+
+
+/**
+ * Read an expression from a file.
+ *   @rd: The reader.
+ *   &returns: The expression.
+ */
+def[export] e:str[pt:st:pl3:expr](pt:st:pl3:rd rd) pl3:expr_read = {
+	var en:pl3:expr tag;
+	var un:pl3:expr data;
+	var st:pl3:type type;
+	var st:pl3:meta meta;
+
+	tag = en:pl3:expr{e:get(io:rd_u8(rd->file))};
+
+	switch(tag) {
+	case ev:pl3:expr:lit: data.lit = e:get(pl3:lit_read(rd)); break;
+	case ev:pl3:expr:op1: data.op1 = e:get(pl3:op1_read(rd)); break;
+
+	case ev:pl3:expr:comp:
+		break;
+
+	default:
+		fatal("FIXME stub");
+	}
+
+	type = e:get(pl3:type_read(rd));
+	onerr pl3:type_delete(type);
+
+	meta = e:get(pl3:meta_read(rd));
+	onerr pl3:meta_delete(meta);
+
+	if(tag == ev:pl3:expr:comp || tag == ev:pl3:expr:op2) {
+	 //FIXME
+		pl3:type_delete(type);
+		return null;
+		}
+
+	return mem:make(st:pl3:expr{ tag, data, type, meta });
+};
+
+/**
+ * Write an expression to a file.
+ *   @expr: The expression.
+ *   @wr: The writer.
+ */
+def[export] e:str[void](pt:st:pl3:expr expr, pt:st:pl3:wr wr) pl3:expr_write = {
+	e:get(io:wr_u8(wr->file, u8{expr->tag}));
+
+	switch(expr->tag) {
+	case ev:pl3:expr:lit: e:get(pl3:lit_write(expr->data.lit, wr)); break;
+	case ev:pl3:expr:op1: e:get(pl3:op1_write(expr->data.op1, wr)); break;
+	case ev:pl3:expr:comp:
+	case ev:pl3:expr:op2: //FIXME
+		break;
+
+	default:
+		fatal("FIXME stub %u", expr->tag);
+	}
+
+	e:get(pl3:type_write(expr->type, wr));
+	e:get(pl3:meta_write(expr->meta, wr));
+};
+
 
 /**
  * Buffer structure.
@@ -307,321 +392,6 @@ def[export] pt:st:pl3:buf(pt:u8 arr, u32 sz) pl3:buf_new = {
 def[export] void(pt:st:pl3:buf buf) pl3:buf_delete = {
 	mem:free(buf->arr);
 	mem:free(buf);
-};
-
-
-/**
- * Literal structure.
- *   @tag: The tag.
- *   @data: The value data.
- */
-tydef[export] en:pl3:lit { none, "null", "bool", u8v, i8v, u16v, i16v, u32v, i32v, u64v, i64v, int, "fp32", "fp64", flt, ptr, str };
-tydef[export] un:pl3:lit { bool boolv; u8 u8v; i8 i8v; u16 u16v; i16 i16v; u32 u32v; i32 i32v; u64 u64v; i64 i64v; fp32 fp32v; fp64 fp64v; fp64 flt; pt:st:m:int int; pt:st:pl3:buf buf; };
-tydef[export] st:pl3:lit {
-	en:pl3:lit tag;
-	un:pl3:lit data;
-};
-
-/**
- * Create a literal.
- *   @tag: The tag.
- *   @data: The data.
- *   &returns: The literal.
- */
-def[export] pt:st:pl3:lit(en:pl3:lit tag, un:pl3:lit data) pl3:lit_new = {
-	return mem:make(st:pl3:lit{ tag, data });
-};
-
-/**
- * Delete a literal.
- *   @lit: The literal.
- */
-def[export] void(pt:st:pl3:lit lit) pl3:lit_delete = {
-	switch(lit->tag) {
-	case ev:pl3:lit:none: break;
-	case ev:pl3:lit:null: break;
-	case ev:pl3:lit:int: m:int_unref(lit->data.int); break;
-	case ev:pl3:lit:ptr: m:int_unref(lit->data.int); break;
-	case ev:pl3:lit:str: pl3:buf_delete(lit->data.buf); break;
-	}
-
-	mem:free(lit);
-};
-
-/**
- * Create a none literal.
- *   &returns: The literal.
- */
-def[export] pt:st:pl3:lit() pl3:lit_none = {
-	return pl3:lit_new(ev:pl3:lit:none, un:pl3:lit{});
-};
-
-/**
- * Create a null literal.
- *   &returns: The literal.
- */
-def[export] pt:st:pl3:lit() pl3:lit_null = {
-	return pl3:lit_new(ev:pl3:lit:null, un:pl3:lit{});
-};
-
-/**
- * Create a boolean literal.
- *   @boolv: The initial value.
- *   &returns: The literal.
- */
-def[export] pt:st:pl3:lit(bool boolv) pl3:lit_bool = {
-	return pl3:lit_new(ev:pl3:lit:bool, un:pl3:lit{ .boolv = boolv });
-};
-
-/**
- * Create an unsigned 8-bit literal
- *   @u8v: The value.
- *   &returns: The literal.
- */
-def[export] pt:st:pl3:lit(u8 u8v) pl3:lit_u8 = {
-	return pl3:lit_new(ev:pl3:lit:u8v, un:pl3:lit{ .u8v = u8v });
-};
-
-/**
- * Create an integer literal.
- *   @int: The integer value.
- *   &returns: The literal.
- */
-def[export] pt:st:pl3:lit(pt:st:m:int int) pl3:lit_int = {
-	return pl3:lit_new(ev:pl3:lit:int, un:pl3:lit{ .int = int });
-};
-
-/**
- * Create an float literal.
- *   @flt: The float value.
- *   &returns: The literal.
- */
-def[export] pt:st:pl3:lit(fp64 flt) pl3:lit_flt = {
-	return pl3:lit_new(ev:pl3:lit:flt, un:pl3:lit{ .flt = flt });
-};
-
-/**
- * Create a string literal.
- *   @buf: The string data buffer.
- *   &returns: The literal.
- */
-def[export] pt:st:pl3:lit(pt:st:pl3:buf buf) pl3:lit_str = {
-	return pl3:lit_new(ev:pl3:lit:str, un:pl3:lit{ .buf = buf });
-};
-
-
-/**
- * Clear the literal, setting it to none.
- *   @lit: The literal.
- */
-def[export] void(pt:st:pl3:lit lit) pl3:lit_clear = {
-	switch(lit->tag) {
-	case ev:pl3:lit:none: break;
-	case ev:pl3:lit:int: m:int_unref(lit->data.int); break;
-	}
-
-	lit->tag = ev:pl3:lit:none;
-};
-
-
-/**
- * Change a literal to a boolean.
- *   @lit: The literal.
- *   @boolv: The value.
- */
-def[export] void(pt:st:pl3:lit lit, bool boolv) pl3:lit_put_bool = {
-	pl3:lit_clear(lit);
-	lit->tag = ev:pl3:lit:bool;
-	lit->data.boolv = boolv;
-};
-
-/**
- * Change a literal to an unsigned 8-bit integer.
- *   @lit: The literal.
- *   @u8v: The value.
- */
-def[export] void(pt:st:pl3:lit lit, u8 u8v) pl3:lit_put_u8 = {
-	pl3:lit_clear(lit);
-	lit->tag = ev:pl3:lit:u8v;
-	lit->data.u8v = u8v;
-};
-
-/**
- * Change a literal to a signed 8-bit integer.
- *   @lit: The literal.
- *   @i8v: The value.
- */
-def[export] void(pt:st:pl3:lit lit, i8 i8v) pl3:lit_put_i8 = {
-	pl3:lit_clear(lit);
-	lit->tag = ev:pl3:lit:i8v;
-	lit->data.i8v = i8v;
-};
-
-/**
- * Change a literal to an unsigned 16-bit integer.
- *   @lit: The literal.
- *   @u16v: The value.
- */
-def[export] void(pt:st:pl3:lit lit, u16 u16v) pl3:lit_put_u16 = {
-	pl3:lit_clear(lit);
-	lit->tag = ev:pl3:lit:u16v;
-	lit->data.u16v = u16v;
-};
-
-/**
- * Change a literal to a signed 16-bit integer.
- *   @lit: The literal.
- *   @i16v: The value.
- */
-def[export] void(pt:st:pl3:lit lit, i16 i16v) pl3:lit_put_i16 = {
-	pl3:lit_clear(lit);
-	lit->tag = ev:pl3:lit:i16v;
-	lit->data.i16v = i16v;
-};
-
-/**
- * Change a literal to an unsigned 32-bit integer.
- *   @lit: The literal.
- *   @u32v: The value.
- */
-def[export] void(pt:st:pl3:lit lit, u32 u32v) pl3:lit_put_u32 = {
-	pl3:lit_clear(lit);
-	lit->tag = ev:pl3:lit:u32v;
-	lit->data.u32v = u32v;
-};
-
-/**
- * Change a literal to a signed 32-bit integer.
- *   @lit: The literal.
- *   @i32v: The value.
- */
-def[export] void(pt:st:pl3:lit lit, i32 i32v) pl3:lit_put_i32 = {
-	pl3:lit_clear(lit);
-	lit->tag = ev:pl3:lit:i32v;
-	lit->data.i32v = i32v;
-};
-
-/**
- * Change a literal to an unsigned 64-bit integer.
- *   @lit: The literal.
- *   @u64v: The value.
- */
-def[export] void(pt:st:pl3:lit lit, u64 u64v) pl3:lit_put_u64 = {
-	pl3:lit_clear(lit);
-	lit->tag = ev:pl3:lit:u64v;
-	lit->data.u64v = u64v;
-};
-
-/**
- * Change a literal to a signed 64-bit integer.
- *   @lit: The literal.
- *   @i64v: The value.
- */
-def[export] void(pt:st:pl3:lit lit, i64 i64v) pl3:lit_put_i64 = {
-	pl3:lit_clear(lit);
-	lit->tag = ev:pl3:lit:i64v;
-	lit->data.i64v = i64v;
-};
-
-/**
- * Change a literal to a 32-bit float.
- *   @lit: The literal.
- *   @val: The value.
- */
-def[export] void(pt:st:pl3:lit lit, fp32 val) pl3:lit_put_fp32 = {
-	pl3:lit_clear(lit);
-	lit->tag = ev:pl3:lit:fp32;
-	lit->data.fp32v = val;
-};
-
-/**
- * Change a literal to a 64-bit float.
- *   @lit: The literal.
- *   @val: The value.
- */
-def[export] void(pt:st:pl3:lit lit, fp64 val) pl3:lit_put_fp64 = {
-	pl3:lit_clear(lit);
-	lit->tag = ev:pl3:lit:fp64;
-	lit->data.fp64v = val;
-};
-
-
-/**
- * Fill a literal with a given type.
- *   @lit: The literal.
- *   @type: The type.
- */
-def[export] void(pt:st:pl3:lit lit, st:pl3:type type) pl3:lit_fill = {
-	switch(lit->tag) {
-	case ev:pl3:lit:int:
-		switch(pl3:type_root(type).tag) {
-		case ev:pl3:type:bool: pl3:lit_put_bool(lit, m:int_get_u8(lit->data.int) > 0); break;
-		case ev:pl3:type:u8: pl3:lit_put_u8(lit, m:int_get_u8(lit->data.int)); break;
-		case ev:pl3:type:i8: pl3:lit_put_i8(lit, m:int_get_i8(lit->data.int)); break;
-		case ev:pl3:type:u16: pl3:lit_put_u16(lit, m:int_get_u16(lit->data.int)); break;
-		case ev:pl3:type:i16: pl3:lit_put_i16(lit, m:int_get_i16(lit->data.int)); break;
-		case ev:pl3:type:u32: pl3:lit_put_u32(lit, m:int_get_u32(lit->data.int)); break;
-		case ev:pl3:type:i32: pl3:lit_put_i32(lit, m:int_get_i32(lit->data.int)); break;
-		case ev:pl3:type:u64: pl3:lit_put_u64(lit, m:int_get_u64(lit->data.int)); break;
-		case ev:pl3:type:i64: pl3:lit_put_i64(lit, m:int_get_i64(lit->data.int)); break;
-		case ev:pl3:type:ptr: lit->tag = ev:pl3:lit:ptr; break;
-
-		case ev:pl3:type:name: {
-			var pt:st:pl3:name name = pl3:type_get_name(type);
-
-			if(name->decl->tag != ev:pl3:tydecl:enum)
-				fatal("FIXME lit_fill error");
-
-			pl3:lit_put_i32(lit, m:int_get_i32(lit->data.int)); // FIXME actual type
-		} break;
-
-		default: fatal("FIXME lit fill %u (1)", pl3:type_root(type).tag);
-		}
-
-		break;
-
-	case ev:pl3:lit:flt:
-		switch(pl3:type_root(type).tag) {
-		//case ev:pl3:type:fp32: pl3:lit_put_fp32(lit, fp32{lit->data.flt}); break;
-		case ev:pl3:type:fp32: pl3:lit_put_fp32(lit, cast_fp64tofp32(lit->data.flt)); break;
-		case ev:pl3:type:fp64: pl3:lit_put_fp64(lit, lit->data.flt); break;
-		default: fatal("FIXME lit fill %u", pl3:type_root(type).tag);
-		}
-
-		break;
-
-	default:
-		fatal("FIXME lit fill2 %u", lit->tag);
-	}
-};
-
-
-/**
- * Retrieve the type for a literal.
- *   @lit: The literal.
- *   &returns: The type.
- */
-def[export] st:pl3:type(pt:st:pl3:lit lit) pl3:lit_type = {
-	switch(lit->tag) {
-	case ev:pl3:lit:none: return pl3:type_unk;
-	case ev:pl3:lit:null: return pl3:type_ptr(pl3:ptr_new(pl3:type_void, true));
-	case ev:pl3:lit:bool: return pl3:type_bool;
-	case ev:pl3:lit:u8v: return pl3:type_u8;
-	case ev:pl3:lit:i8v: return pl3:type_i8;
-	case ev:pl3:lit:u16v: return pl3:type_u16;
-	case ev:pl3:lit:i16v: return pl3:type_i16;
-	case ev:pl3:lit:u32v: return pl3:type_u32;
-	case ev:pl3:lit:i32v: return pl3:type_i32;
-	case ev:pl3:lit:u64v: return pl3:type_u64;
-	case ev:pl3:lit:i64v: return pl3:type_i64;
-	case ev:pl3:lit:int: return pl3:type_unk;
-	case ev:pl3:lit:fp32: return pl3:type_fp32;
-	case ev:pl3:lit:fp64: return pl3:type_fp64;
-	case ev:pl3:lit:flt: return pl3:type_unk;
-	case ev:pl3:lit:ptr: return pl3:type_ptr(pl3:ptr_new(pl3:type_void, true));
-	case ev:pl3:lit:str: return pl3:type_ptr(pl3:ptr_new(pl3:type_u8, false));
-	default: fatal("FIXME pl3:lit_type");
-	}
 };
 
 
@@ -698,7 +468,7 @@ def[export] void(pt:st:pl3:ident ident, pt:st:pl3:decl decl, pt:st:pl3:bind bind
  */
 tydef[export] en:pl3:op1 { pos, neg, not, lnot, preinc, predec, postinc, postdec, deref, addr };
 tydef[export] st:pl3:op1 {
-	en:pl3:expr tag;
+	en:pl3:op1 tag;
 	pt:st:pl3:expr in;
 };
 
@@ -708,7 +478,7 @@ tydef[export] st:pl3:op1 {
  *   @in: Consumed. The input expression.
  *   &returns: The binary operation.
  */
-def[export] pt:st:pl3:op1(en:pl3:expr tag, pt:st:pl3:expr in) pl3:op1_new = {
+def[export] pt:st:pl3:op1(en:pl3:op1 tag, pt:st:pl3:expr in) pl3:op1_new = {
 	return mem:make(st:pl3:op1{ tag, in });
 };
 
@@ -723,13 +493,39 @@ def[export] void(pt:st:pl3:op1 op1) pl3:op1_delete = {
 
 
 /**
+ * Read a unary operation.
+ *   @rd: The reader.
+ *   &returns: The unary operation.
+ */
+def[export] e:str[pt:st:pl3:op1](pt:st:pl3:rd rd) pl3:op1_read = {
+	var en:pl3:op1 tag;
+	var pt:st:pl3:expr in;
+
+	tag = en:pl3:op1{e:get(io:rd_u8(rd->file))};
+	in = e:get(pl3:expr_read(rd));
+
+	return pl3:op1_new(tag, in);
+};
+
+/**
+ * Write a unary operation.
+ *   @op1: The unary operation.
+ *   @wr: The writer.
+ */
+def[export] e:str[void](pt:st:pl3:op1 op1, pt:st:pl3:wr wr) pl3:op1_write = {
+	e:get(io:wr_u8(wr->file, u8{ op1->tag }));
+	e:get(pl3:expr_write(op1->in, wr));
+};
+
+
+/**
  * Two-operand structure.
  *   @tag: The tag.
  *   @lhs, rhs: The left- and right-hand sides.
  */
 tydef[export] en:pl3:op2 { assign, add, addeq, sub, subeq, mul, muleq, div, diveq, rem, remeq, and, andeq, or, oreq, xor, xoreq, shl, shleq, shr, shreq, land, lor, eq, ne, lt, lte, gt, gte };
 tydef[export] st:pl3:op2 {
-	en:pl3:expr tag;
+	en:pl3:op2 tag;
 	pt:st:pl3:expr lhs, rhs;
 };
 
@@ -740,7 +536,7 @@ tydef[export] st:pl3:op2 {
  *   @rhs: Consumed. The right-hand side.
  *   &returns: The binary operation.
  */
-def[export] pt:st:pl3:op2(en:pl3:expr tag, pt:st:pl3:expr lhs, pt:st:pl3:expr rhs) pl3:op2_new = {
+def[export] pt:st:pl3:op2(en:pl3:op2 tag, pt:st:pl3:expr lhs, pt:st:pl3:expr rhs) pl3:op2_new = {
 	return mem:make(st:pl3:op2{ tag, lhs, rhs });
 };
 
@@ -1018,6 +814,18 @@ def[export] bool(en:pl3:op2 tag) pl3:op2_is_logic = {
 	}
 
 	unreachable();
+};
+
+/**
+ * Determien if an two-operand expression is pointer arithmetic.
+ *   @op2: The two-operand expression.
+ *   &returns: True if pointer arithmetic.
+ */
+def[export] bool(cpt:st:pl3:op2 op2) pl3:op2_is_modptr = {
+	if((op2->tag != ev:pl3:op2:add) && (op2->tag != ev:pl3:op2:addeq) && (op2->tag != ev:pl3:op2:sub) && (op2->tag != ev:pl3:op2:subeq))
+		return false;
+	
+	return pl3:type_is_ptr(op2->lhs->type) && !pl3:type_is_ptr(op2->rhs->type);
 };
 
 

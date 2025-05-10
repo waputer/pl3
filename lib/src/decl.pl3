@@ -4,11 +4,12 @@
  *   @pub: Public.
  *   @exp: Export.
  *   @ext: External.
+ *   @ign: Ignore (redefined).
  */
-def[export] u32 pl3:decl:mut = 0x1,
-                pl3:decl:pub = 0x2,
-                pl3:decl:exp = 0x4,
-                pl3:decl:ext = 0x8;
+def[export] u32 pl3:decl:mut = 0x01,
+                pl3:decl:pub = 0x02,
+                pl3:decl:exp = 0x04,
+                pl3:decl:ext = 0x08;
 
 /**
  * Declaration structure.

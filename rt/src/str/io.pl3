@@ -1,0 +1,42 @@
+
+
+
+def[export] st:io:file_iface io:str_rd_iface = { &io:str_rd_read, null, null, &io:str_rd_close };
+
+
+/**
+ * String reader structure.
+ *   @str: The string.
+ *   @idx, sz: The size.
+ */
+tydef[export] st:io:str_rd {
+	cpt:char str;
+	u32 idx, sz;
+};
+
+def[export] st:io:file(cpt:char str) str:reader = {
+	return st:io:file{ mem:make(st:io:str_rd{ str, 0, str:len(str) }), &io:str_rd_iface };
+};
+
+/**
+ * Read from a string reader.
+ *   @rd: The string reader.
+ *   @buf: The output buffer.
+ *   @sz: The number of bytes to read.
+ *   &returns: The number of bytes.
+ */
+def[export] e:str[u32](pt:st:io:str_rd rd, pt:void buf, u32 sz) io:str_rd_read = {
+	sz = m:min_u32(sz, rd->sz - rd->idx);
+	mem:copy(buf, rd->str + rd->idx, sz);
+	rd->idx += sz;
+
+	return sz;
+};
+
+/**
+ * Close the string eader.
+ *   @rd: The string reader.
+ */
+def[export] e:str[void](pt:st:io:str_rd rd) io:str_rd_close = {
+	mem:free(rd);
+};

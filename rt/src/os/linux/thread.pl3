@@ -148,6 +148,7 @@ def[export] e:str[pt:st:sys:evt]() sys:evt_new = {
  *   @evt: The event.
  */
 def[export] void(pt:st:sys:evt evt) sys:evt_delete = {
+	sys:evt_detach(evt);
 	os:close(evt->fd);
 	mem:free(evt);
 };
@@ -183,6 +184,14 @@ def[export] void(pt:st:sys:evt evt, pt:st:sys:sched sched, pt:ty:sys:task func, 
 	evt->func = func;
 	evt->arg = arg;
 	sys:poll_add(sched->poll, evt->fd, sys:poll:rd, &evt_poll, evt);
+};
+
+def[export] void(pt:st:sys:evt evt) sys:evt_detach = {
+	if(evt->sched == null)
+		return;
+
+	sys:poll_rem(evt->sched->poll, evt->fd);
+	evt->sched = null;
 };
 
 /**

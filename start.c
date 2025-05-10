@@ -196,6 +196,11 @@ int32_t os_thread(uint32_t stack, void (*func)(void *, void *, uint32_t), void *
 	return pid;
 }
 
+#include <math.h>
+float m_sqrt_fp32(float a) {
+	return __builtin_sqrtf(a);
+}
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>

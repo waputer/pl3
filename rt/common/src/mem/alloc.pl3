@@ -1,0 +1,98 @@
+/**
+ * Memory statistics.
+ *   @mem:cnt: The number of allocations.
+ */
+var[export] u32 mem:cnt = 0;
+
+
+/**
+ * Allocate memory.
+ *   @sz: The allocation size in bytes.
+ *   &returns: The memory pointer.
+ */
+def[export] pt:void(u32 sz) mem:alloc = {
+	mem:cnt++;
+
+	return os:alloc(sz);
+};
+
+/**
+ * Allocate memory and initialize it to zero.
+ *   @sz: The allocation size in bytes.
+ *   &returns: The memory pointer.
+ */
+def[export] pt:void(u32 sz) mem:create = {
+	var pt:void ptr;
+
+	ptr = mem:alloc(sz);
+	mem:zero(ptr, sz);
+
+	return ptr;
+};
+
+/**
+ * Duplicate memory.
+ *   @ptr: The object pointer.
+ *   @sz: The size.
+ *   &returns: The duplicated memory.
+ */
+def[export] pt:void(cpt:void ptr, u32 sz) mem:dup = {
+	var pt:void dup;
+
+	dup = mem:alloc(sz);
+	mem:copy(dup, ptr, sz);
+
+	return dup;
+};
+
+/**
+ * Reallocate memory. Any old data is copied to the new pointer.
+ *   @ptr: The memory pointer.
+ *   @sz: The new size.
+ *   &returns: The new pointer.
+ */
+def[export] pt:void(pt:void ptr, u32 sz) mem:realloc = {
+	return os:realloc(ptr, sz);
+};
+
+/**
+ * Free memory.
+ *   @ptr: The memory pointer.
+ */
+def[export] void(pt:void ptr) mem:free = {
+	mem:cnt--;
+	os:free(ptr);
+};
+
+/**
+ * Free memory if it is non-null.
+ *   @ptr: The pointer.
+ */
+def[export] void(pt:void ptr) mem:erase = {
+	if(ptr != null)
+		mem:free(ptr);
+};
+
+
+/**
+ * Set a pointer, freeing the previous value if non-null.
+ *   @dst: The destination pointer reference. Freed if non-null.
+ *   @src: The new source pointer.
+ */
+def[export] void(pt:pt:void dst, pt:void src) mem:set = {
+	if(*dst != null)
+		mem:free(*dst);
+	
+	*dst = src;
+};
+
+
+/**
+ * Check that all allocations are free and print out debug information if not.
+ */
+def[export] void() mem:assert = {
+	if(mem:cnt == 0)
+		return;
+
+	fatal("Missing %d allocations.", mem:cnt);
+};

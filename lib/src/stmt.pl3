@@ -286,59 +286,6 @@ def[export] e:str[void](pt:st:pl3:attr attr, pt:st:pl3:wr wr) pl3:attr_write = {
 
 
 /**
- * Bind structure.
- *   @id: The identifier.
- *   @expr: The expression.
- *   @meta: The metadata.
- *   @next: The next bind.
- */
-tydef[export] st:pl3:bind {
-	pt:char id;
-	pt:st:pl3:expr expr;
-	st:pl3:meta meta;
-
-	pt:st:pl3:bind next;
-};
-
-/**
- * Create a binding.
- *   @id: Consumed. The identifier.
- *   @expr: Optional. Consumed. The expression.
- *   @meta: Consumed. The metadata.
- *   &returns: The binding.
- */
-def[export] pt:st:pl3:bind(pt:char id, pt:st:pl3:expr expr, st:pl3:meta meta) pl3:bind_new = {
-	return mem:make(st:pl3:bind{ id, expr, meta, null });
-};
-
-/**
- * Delete a binding.
- *   @bind: The binding.
- */
-def[export] void(pt:st:pl3:bind bind) pl3:bind_delete = {
-	if(bind->expr != null)
-		pl3:expr_delete(bind->expr);
-
-	pl3:meta_delete(bind->meta);
-	mem:free(bind->id);
-	mem:free(bind);
-};
-
-/**
- * Delete all bindings in a list.
- *   @bind: The binding list.
- */
-def[export] void(pt:st:pl3:bind bind) pl3:bind_clear = {
-	var pt:st:pl3:bind tmp;
-
-	while(bind != null) {
-		bind = (tmp = bind)->next;
-		pl3:bind_delete(tmp);
-	}
-};
-
-
-/**
  * Type declaration structure.
  *   @id: The identifier.
  *   @pub, expr: The public and export flags.

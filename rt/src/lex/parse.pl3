@@ -1,3 +1,14 @@
+//FIXME REMOVE
+def[export] e:str[i16](st:io:file file) io:rd_byte0 = {
+	var u8 byte;
+	var u32 rd;
+
+	rd = e:get(io:read(file, &byte, 1));
+	return (rd == 0) ? -1 : i16{u16{byte}};
+};
+
+
+
 /**
  * Token parsing function.
  *   @parse: The parser.
@@ -20,16 +31,16 @@ tydef[export] ty:lex:func = e:str[pt:st:lex:token](pt:st:lex:parse parse, pt:voi
  *   @tok: The token list.
  */
 tydef[export] st:lex:parse {
-	st:io:file file; //0-16
-	pt:char path; // 16-24
-	pt:i16 buf; //24-32
-	u32 idx, sz; //32-40
-	bool trim; //40-41
+	st:io:file file;
+	pt:char path;
+	pt:i16 buf;
+	u32 idx, sz;
+	bool trim;
 
-	u32 lin, col; //44-52
+	u32 lin, col;
 
-	pt:st:lex:rule rule; //52-60
-	pt:pt:st:lex:rule irule; //60-68
+	pt:st:lex:rule rule;
+	pt:pt:st:lex:rule irule;
 
 	pt:st:lex:token tok;
 	pt:pt:st:lex:token itok;
@@ -81,31 +92,30 @@ tydef[export] st:lex:map {
 
 
 /**
- * Open a lexeme parser.
+ * Create a lexeme parser.
+ *   @file: The file.
  *   @path: The file path.
  *   @init: The initial buffer size.
  *   @trim: Trim flag. Automatically trims whitespace.
  *   &returns: The parser if successful, null on failure.
  */
-def[export] e:str[pt:st:lex:parse](cpt:char path, u32 init, bool trim) lex:open = {
-	var st:io:file file;
-	var pt:st:lex:parse parse;
+def[export] e:str[pt:st:lex:parse](st:io:file file, cpt:char path, u32 init, bool trim) lex:new = {
 	var u32 i;
-
-	file = e:get(io:open(path, io:mode:read));
-	onerr io:close(file);
+	var pt:st:lex:parse parse;
 
 	parse = mem:new(st:lex:parse);
 	parse->path = str:dup(path);
-
 	parse->file = file;
 	parse->buf = mem:alloc(init * sizeof(i16));
 	parse->idx = 0;
 	parse->sz = init;
 	parse->trim = trim;
 
-	for(i = 0; i < init; i++)
-		parse->buf[i] = e:get(io:rd_byte(parse->file));
+	for(i = 0; i < init; i++) {
+		parse->buf[i] = e:get(io:rd_byte0(parse->file));
+		if(parse->buf[i] < -1)
+			fatal("2 sdklfjsdklfjsdlfj");
+		}
 
 	parse->lin = parse->col = 0;
 
@@ -121,10 +131,26 @@ def[export] e:str[pt:st:lex:parse](cpt:char path, u32 init, bool trim) lex:open 
 };
 
 /**
- * Close a lexeme parser.
+ * Open a lexeme parser.
+ *   @path: The file path.
+ *   @init: The initial buffer size.
+ *   @trim: Trim flag. Automatically trims whitespace.
+ *   &returns: The parser if successful, null on failure.
+ */
+def[export] e:str[pt:st:lex:parse](cpt:char path, u32 init, bool trim) lex:open = {
+	var st:io:file file;
+
+	file = e:get(io:open(path, io:mode:read));
+	onerr io:close(file);
+
+	return lex:new(file, path, init, trim);
+};
+
+/**
+ * Delete a lexeme parser.
  *   @parse: The parser.
  */
-def[export] void(pt:st:lex:parse parse) lex:close = {
+def[export] void(pt:st:lex:parse parse) lex:delete = {
 	var pt:st:lex:rule rule;
 	var pt:st:lex:token tok;
 
@@ -138,10 +164,18 @@ def[export] void(pt:st:lex:parse parse) lex:close = {
 		lex:tok_delete(tok);
 	}
 
-	io:close(parse->file);
 	mem:free(parse->buf);
 	mem:free(parse->path);
 	mem:free(parse);
+};
+
+/**
+ * Close a lexeme parser.
+ *   @parse: The parser.
+ */
+def[export] void(pt:st:lex:parse parse) lex:close = {
+	io:close(parse->file);
+	lex:delete(parse);
 };
 
 
@@ -162,8 +196,11 @@ def[export] e:str[void](pt:st:lex:parse parse, u32 sz) lex:resize = {
 	mem:copy(buf, parse->buf + parse->idx, 2 * (parse->sz - parse->idx));
 	mem:copy(buf + parse->sz - parse->idx, parse->buf,  2 * parse->idx);
 
-	for(i = parse->sz; i < sz; i++)
-		buf[i] = e:get(io:rd_byte(parse->file));
+	for(i = parse->sz; i < sz; i++) {
+		buf[i] = e:get(io:rd_byte0(parse->file));
+		if(buf[i] < -1)
+			fatal("1 sdklfjsdklfjsdlfj");
+	}
 
 	mem:free(parse->buf);
 	parse->idx = 0;
@@ -204,7 +241,12 @@ def[export] e:str[i16](pt:st:lex:parse parse) lex:ch_pop = {
 	var i16 ch;
 
 	ch = parse->buf[parse->idx];
-	parse->buf[parse->idx] = e:get(io:rd_byte(parse->file));
+	var i16 tmp =e:get(io:rd_byte0(parse->file));
+	if(tmp < -1)
+		fatal("!! sdlfjsdlfjl");
+	parse->buf[parse->idx] = tmp;
+		if(parse->buf[parse->idx] < -1)
+			fatal("3 sdklfjsdklfjsdlfj");
 	parse->idx = (parse->idx + 1) % parse->sz;
 
 	if(ch == '\n') {

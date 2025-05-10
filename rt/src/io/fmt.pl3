@@ -296,6 +296,12 @@ def[export] e:str[void](st:io:file file, st:io:call call) io:fmt_call = {
 	return call.func->(file, pt:void{call.arg});
 };
 
+/**
+ * Create a digit.
+ *   @val: The integer value.
+ *   @base: The number base.
+ *   &returns: The digit.
+ */
 def char(u8 val, u8 base) mkdig = {
 	if(val >= 10)
 		return 'A' + (val - 10);

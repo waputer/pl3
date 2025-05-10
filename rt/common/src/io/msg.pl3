@@ -1,0 +1,111 @@
+
+/**
+ * Base I/O identifiers.
+ *   @close: Close (cleanup) the object.
+ */
+def[export] u32 io:id:close = 0;
+
+/**
+ * Close an I/O.
+ *   @io: The I/O.
+ */
+def[export] e:str[void](st:io io) io:close = {
+	e:get(io.func->(io.ref, io:id:close, null));
+};
+
+
+/**
+ * File read/write and positioning identifiers.
+ *   @read: Read from the object.
+ *   @write: Write to the object.
+ *   @seek: Seek to a psoition.
+ *   @tell: Get the current position.
+ */
+def[export] u32 io:id:read  = 0x100,
+                io:id:write = 0x101,
+                io:id:seek  = 0x102,
+                io:id:tell  = 0x103;
+
+/**
+ * Read structure.
+ *   @dst: The destination buffer.
+ *   @sz, tot: The read size and total read..
+ */
+tydef[export] st:io:read {
+	pt:void dst;
+	u32 sz, tot;
+};
+
+/**
+ * Read froman I/O.
+ *   @io: The I/O.
+ *   @dst: The destination buffer.
+ *   @sz: The buffer size in bytes.
+ *   &returns: The total read in bytes (may be less than `sz`).
+ */
+def[export] e:str[u32](st:io io, pt:void dst, u32 sz) io:read = {
+	var st:io:read data = { dst, sz, 0 };
+
+	e:get(io.func->(io.ref, io:id:read, &data));
+
+	return data.tot;
+};
+
+/**
+ * Write structure.
+ *   @src: The destination buffer.
+ *   @sz, tot: The write size and total written.
+ */
+tydef[export] st:io:write {
+	cpt:void src;
+	u32 sz, tot;
+};
+
+/**
+ * Write to an I/O.
+ *   @io: The I/O.
+ *   @src: The source buffer.
+ *   @sz: The buffer size in bytes.
+ *   &returns: The total written in bytes (may be less than `sz`).
+ */
+def[export] e:str[u32](st:io io, cpt:void src, u32 sz) io:write = {
+	var st:io:write data = { src, sz, 0 };
+
+	e:get(io.func->(io.ref, io:id:write, &data));
+
+	return data.tot;
+};
+
+
+tydef[export] st:io:seek {
+	u8 whence;
+	i64 off;
+};
+
+/**
+ * Seek values
+ *   @set: Relative from the beginning
+ *   @cur: Relative from the current position.
+ *   @end: Relative from the end.
+ */
+def[export] u8 io:seek:set = 0,
+               io:seek:cur = 1,
+               io:seek:end = 2;
+
+def[export] e:str[void](st:io io, u8 whence, i64 off) io:seek = {
+	var st:io:seek data = { whence, off };
+
+	e:get(io.func->(io.ref, io:id:seek, &data));
+};
+
+tydef[export] st:io:tell {
+	u64 off;
+};
+
+def[export] e:str[u64](st:io io) io:tell = {
+	var st:io:tell data = { 0 };
+
+	e:get(io.func->(io.ref, io:id:tell, &data));
+
+	return data.off;
+};

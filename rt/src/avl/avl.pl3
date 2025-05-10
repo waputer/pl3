@@ -257,7 +257,7 @@ def[export] void(pt:st:avl:root root, pt:st:avl:node rem) avl:root_elim = {
 		node = rem->parent;
 
 	if(node != null) {
-		while(true) { // FIXME: forever
+		for() {
 			node->bal -= bal;
 
 			if(node->bal > 1) {
@@ -347,7 +347,7 @@ def[export] pt:st:avl:node(pt:st:avl:root root, cpt:void ref) avl:root_rem = {
 		node = rem->parent;
 
 	if(node != null) {
-		while(true) { // FIXME: forever
+		for() {
 			node->bal -= bal;
 
 			if(node->bal > 1) {

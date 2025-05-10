@@ -1,0 +1,456 @@
+/**
+ * Standard callback function.
+ *   @arg: The argument.
+ */
+tydef[export] ty:sched:func = void(pt:void arg);
+
+/**
+ * Event callback function.
+ *   @fd: The file descriptor.
+ *   @got: The recieved events.
+ *   @arg: The provided argument.
+ */
+tydef[export] ty:sched:evt = void(i32 fd, u16 got, pt:void arg);
+
+
+/**
+ * Scheduler structure.
+ *   @run: The run flag.
+ *   @head: The head task.
+ *   @tail: The tail task.
+ *   @timer: The timer list.
+ *   @poll: The poll tree.
+ */
+tydef[export] st:sched { };
+tydef st:sched {
+	bool run;
+	pt:st:sched:task head;
+	pt:pt:st:sched:task tail;
+	pt:st:sched:timer timer;
+	st:avl:root poll;
+};
+
+/**
+ * Task structure.
+ *   @func: The callback function.
+ *   @arg: The function argument.
+ *   @next: The next task.
+ */
+tydef[export] st:sched:task { };
+tydef st:sched:task {
+	pt:ty:sched:func func;
+	pt:void arg;
+
+	pt:st:sched:task next;
+};
+
+/**
+ * Timer structure.
+ *   @usec: The expiration time in microseconds.
+ *   @func: The callback function.
+ *   @arg: The argument.
+ *   @next: The next instance.
+ */
+tydef[export] st:sched:timer { };
+tydef st:sched:timer {
+	//TODO use a tree, it would be faster
+	i64 usec;
+	pt:ty:sched:func func;
+	pt:void arg;
+
+	pt:st:sched:timer next;
+};
+
+/**
+ * Poll instance structure.
+ *   @kd: The kernel descriptor.
+ *   @req, got: The requested an gotten events.
+ *   @func: The callback function
+ *   @arg: The callback argument.
+ *   @node: The tree node.
+ */
+tydef[export] st:sched:poll { };
+tydef st:sched:poll {
+	i32 kd;
+	u16 req, got;
+	pt:ty:sched:evt func;
+	pt:void arg;
+
+	st:avl:node node;
+};
+
+
+/**
+ * Create a scheduler.
+ *   &returns: The scheduler.
+ */
+def[export] pt:st:sched() sched:new = {
+	var pt:st:sched sched;
+
+	sched = mem:new(st:sched);
+	sched->run = false;
+	sched->head = null;
+	sched->tail = &sched->head;
+	sched->timer = null;
+	sched->poll = avl:root_new(&avl:cmp_i32);
+
+	return sched;
+};
+
+/**
+ * Delete a scheduler.
+ *   @sched: The scheduler.
+ */
+def[export] void(pt:st:sched sched) sched:delete = {
+	{
+		var pt:st:sched:task cur, tmp;
+
+		cur = sched->head;
+		while(cur != null) {
+			cur = (tmp = cur)->next;
+			mem:free(tmp);
+		}
+	}
+
+	{
+		var pt:st:sched:timer cur, tmp;
+
+		cur = sched->timer;
+		while(cur != null) {
+			cur = (tmp = cur)->next;
+			mem:free(tmp);
+		}
+	}
+
+	avl:root_delete(&sched->poll, offsetof(st:sched:poll, node), &mem:free);
+	mem:free(sched);
+};
+
+
+/**
+ * Run the scheduler until termination requested.
+ *   @sched: The scheduler.
+ */
+def[export] void(pt:st:sched sched) sched:run = {
+	sched->run = true;
+
+	while(sched->run) {
+		var u64 wait;
+
+		do
+			sched:task_run(sched);
+		while(sched:timer_proc(sched) > 0);
+
+		wait = sched:timer_until(sched);
+		sched:poll_wait(sched, (wait < u64{m:i64_max}) ? i64{wait} : m:i64_max);
+	}
+};
+
+/**
+ * Halt the scheduler.
+ *   @sched: The scheduler.
+ */
+def[export] void(pt:st:sched sched) sched:halt = {
+	sched->run = false;
+};
+
+/**
+ * Terminate the scheduler, a version useful in polling callbacks.
+ *   @fd: Unused file descriptor.
+ *   @got: Unused event mask.
+ *   @sched: The scheduler.
+ */
+def[export] void(i32 fd, u16 got, pt:st:sched sched) sched:term = {
+	sched->run = false;
+};
+
+
+/**
+ * Add a task to the schduler.
+ *   @sched: The scheduler.
+ *   @func: The callback function.
+ *   @arg: The arguments.
+ */
+def[export] void(pt:st:sched sched, pt:ty:sched:func func, pt:void arg) sched:task_add = {
+	*sched->tail = mem:make(st:sched:task{ func, arg, null });
+	sched->tail = &(*sched->tail)->next;
+};
+
+/**
+ * Run a single task.
+ *   @sched: The scheduler.
+ */
+def[export] void(pt:st:sched sched) sched:task_once = {
+	var pt:st:sched:task task;
+
+	sched->head = (task = sched->head)->next;
+	if(sched->head == null)
+		sched->tail = &sched->head;
+
+	task->func->(task->arg);
+	mem:free(task);
+};
+
+/**
+ * Run all tasks until the queue is empty.
+ *   @sched: The scheduler.
+ */
+def[export] void(pt:st:sched sched) sched:task_run = {
+	var pt:st:sched:task task;
+
+	while(sched->head != null) {
+		sched->head = (task = sched->head)->next;
+		task->func->(task->arg);
+		mem:free(task);
+	}
+
+	sched->tail = &sched->head;
+};
+
+
+/**
+ * Add a timer to the scheduler.
+ *   @sched: The scheduler.
+ *   @usec: The time to fire in microseconds.
+ *   @func: The function.
+ *   @arg: The argument.
+ */
+def[export] void(pt:st:sched sched, i64 usec, pt:ty:sched:func func, pt:void arg) sched:timer_add = {
+	sched->timer = mem:make(st:sched:timer{ usec, func, arg, sched->timer });
+};
+
+/**
+ * Add a timer to the scheduler using a delay from now.
+ *   @sched: The scheduler.
+ *   @usec: The delay in microseconds.
+ *   @func: The function.
+ *   @arg: The argument.
+ */
+def[export] void(pt:st:sched sched, i64 usec, pt:ty:sched:func func, pt:void arg) sched:timer_delay = {
+	sched:timer_add(sched, tm:usec() + usec, func, arg);
+};
+
+/**
+ * Retrieve the first (earliest) time from the timer manager.
+ *   @sched: The scheduler.
+ *   &returns: The first time (or i64 min if none).
+ */
+def[export] i64(pt:st:sched sched) sched:timer_first = {
+	var i64 tm;
+	var pt:st:sched:timer timer;
+
+	tm = i64{m:i32_max} * i64{m:i32_max}; //FIXME should be i64_max
+	for(timer = sched->timer; timer != null; timer = timer->next)
+		tm = m:min_i64(tm, timer->usec);
+
+	return tm;
+};
+
+/**
+ * Compute the delay to the first timer, returning zero if the first item has
+ * past.
+ *   @sched: The scheduler.
+ *   &returns: The number of microseconds until the first timer.
+ */
+def[export] u64(pt:st:sched sched) sched:timer_until = {
+	var i64 now, first;
+
+	now = tm:usec();
+	first = sched:timer_first(sched);
+
+	return (first > now) ? (first - now) : 0;
+};
+
+/**
+ * Process all expired timers.
+ *   @timer: The timers.
+ *   &returns: The number of processed timers.
+ */
+def[export] u32(pt:st:sched sched) sched:timer_proc = {
+	var i64 now;
+	var pt:st:sched:timer tmp;
+	var pt:pt:st:sched:timer timer = &sched->timer;
+	var u32 cnt = 0;
+
+	now = tm:usec();
+	while(*timer != null) {
+		if((*timer)->usec <= now) {
+			tmp = *timer;
+			*timer = tmp->next;
+
+			tmp->func->(tmp->arg);
+			mem:free(tmp);
+			cnt++;
+		}
+		else
+			timer = &(*timer)->next;
+	}
+
+	return cnt;
+};
+
+/**
+ * Add a file descriptor to a poll manager.
+ *   @sched: The scheduler.
+ *   @kd: The kernel descriptor.
+ *   @req: The requested events.
+ *   @func: The callback function.
+ *   @arg: The callback argument.
+ */
+def[export] void(pt:st:sched sched, i32 kd, u16 req, pt:ty:sched:evt func, pt:void arg) sched:poll_add = {
+	var pt:st:sched:poll poll;
+
+	poll = mem:new(st:sched:poll);
+	poll->kd = kd;
+	poll->req = req;
+	poll->func = func;
+	poll->arg = arg;
+	poll->node = avl:node(&poll->kd);
+	avl:root_add(&sched->poll, &poll->node);
+};
+
+/**
+ * Remove a file descriptor from a poll manager.
+ *   @sched: The scheduler.
+ *   @fd: The file descriptor.
+ */
+def[export] void(pt:st:sched sched, i32 fd) sched:poll_rem = {
+	var pt:st:avl:node node;
+
+	node = avl:root_rem(&sched->poll, &fd);
+	if(node == null)
+		return;
+	
+	mem:free(getparent(node, st:sched:poll, node));
+};
+
+/**
+ * Wait for a polled event.
+ *   @sched: The scheduler.
+ *   @usec: The time to wait in microseconds. Negative indicates infinite
+ *     timeout. Zero returns immediately, even if no descriptors are ready.
+ */
+def[export] e:str[void](pt:st:sched sched, i64 usec) sched:poll_wait = {
+	var u32 i;
+	var pt:st:io:poll set;
+	var pt:st:sched:poll poll;
+	var pt:st:avl:node node;
+
+	set = mem:alloc(sched->poll.cnt * sizeof(st:io:poll));
+	onerr mem:free(set);
+
+	node = avl:root_first(&sched->poll);
+	for(i = 0; i < sched->poll.cnt; i++) {
+		poll = getparent(node, st:sched:poll, node);
+		set[i].kd = poll->kd;
+		set[i].req = poll->req;
+		node = avl:node_next(node);
+	}
+
+	e:get(os:poll(set, sched->poll.cnt, usec));
+
+	for(i = 0; i < sched->poll.cnt; i++) {
+		if(set[i].got == 0)
+			continue;
+
+		node = avl:root_get(&sched->poll, &set[i].kd);
+		if(node == null)
+			continue;
+
+		poll = getparent(node, st:sched:poll, node);
+		poll->func->(poll->kd, set[i].got, poll->arg);
+	}
+
+	mem:free(set);
+};
+
+
+/**
+ * Event object.
+ *   @kd: The kernel descriptor.
+ *   @sched: The scheduler.
+ *   @func: The callback function.
+ *   @arg: The argument.
+ */
+tydef[export] st:sched:event {
+	i32 kd;
+
+	pt:st:sched sched;
+	pt:ty:sched:func func;
+	pt:void arg;
+};
+
+
+/**
+ * Create an event.
+ *   &returns: The event.
+ */
+def[export] e:str[pt:st:sched:event]() sched:event_new = {
+	return mem:make(st:sched:event{ e:get(os:event(0)), null, null, null });
+};
+
+/**
+ * Delete an event.
+ *   @event: The event.
+ */
+def[export] void(pt:st:sched:event event) sched:event_delete = {
+	sched:event_detach(event);
+	os:close(event->kd);
+	mem:free(event);
+};
+
+
+/**
+ * Wait on an event.
+ *   @evt: The event.
+ */
+def[export] void(pt:st:sched:event evt) sched:event_wait = {
+	var u64 val;
+
+	os:read(evt->kd, &val, 8);
+};
+
+/**
+ * Signal an event.
+ *   @event: The event.
+ */
+def[export] void(pt:st:sched:event event) sched:event_signal = {
+	os:write(event->kd, getref(u64{1}), 8);
+};
+
+
+/**
+ * Attach an event to a scheduler.
+ *   @evt: The event.
+ *   @sched: The scheduler.
+ *   @func: The callback function.
+ *   @arg: The argument.
+ */
+def[export] void(pt:st:sched:event event, pt:st:sched sched, pt:ty:sched:func func, pt:void arg) sched:event_attach = {
+	event->sched = sched;
+	event->func = func;
+	event->arg = arg;
+	sched:poll_add(sched, event->kd, io:poll:rd, &event_func, event);
+};
+
+/**
+ * Detach an event from a scheduler.
+ *   @event: The event.
+ */
+def[export] void(pt:st:sched:event event) sched:event_detach = {
+	if(event->sched == null)
+		return;
+
+	sched:poll_rem(event->sched, event->kd);
+	event->sched = null;
+};
+
+/**
+ * Polling callback for the event.
+ *   @fd: The file descriptor.
+ *   @got: The gotten event..
+ *   @evt: The event object.
+ */
+def void(i32 fd, u16 mask, pt:st:sched:event event) event_func = {
+	event->func->(event->arg);
+};

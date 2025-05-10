@@ -1,0 +1,215 @@
+rt_src = rt/src/avl/avl.pl3
+         rt/src/os/linux/linux.pl3
+         rt/src/os/linux/io.pl3
+         rt/src/os/linux/mem.pl3
+         rt/src/os/linux/poll.pl3
+         rt/src/os/linux/sched.pl3
+         rt/src/os/linux/tm.pl3
+	 rt/src/os/linux/thread.pl3
+         rt/src/io/accum.pl3
+         rt/src/io/buf.pl3
+         rt/src/io/file.pl3
+         rt/src/io/fmt.pl3
+         rt/src/io/view.pl3
+         rt/src/lex/ch.pl3
+         rt/src/lex/parse.pl3
+         rt/src/lex/rules.pl3
+         rt/src/str/buf.pl3
+         rt/src/str/fmt.pl3
+         rt/src/str/io.pl3
+         rt/src/str/parse.pl3
+         rt/src/str/std.pl3
+         rt/src/math/flt.pl3
+         rt/src/math/int.pl3
+         rt/src/math/lim.pl3
+         rt/src/mem/alloc.pl3
+         rt/src/mem/buf.pl3
+         rt/src/mem/std.pl3
+         rt/src/avl/test.pl3
+         lib/src/dwarf.pl3
+         lib/src/elf.pl3;
+
+com_src = rt/common/src/avl/avl.pl3
+          rt/common/src/iface.pl3
+          rt/common/src/io/base.pl3
+          rt/common/src/io/call.pl3
+          rt/common/src/io/fmt.pl3
+          rt/common/src/io/mem.pl3
+          rt/common/src/io/msg.pl3
+          rt/common/src/io/poll.pl3
+          rt/common/src/io/rdwr.pl3
+          rt/common/src/io/std.pl3
+          rt/common/src/lex/ch.pl3
+          rt/common/src/lex/parse.pl3
+          rt/common/src/lex/rules.pl3
+          rt/common/src/math/algo.pl3
+          rt/common/src/math/int.pl3
+          rt/common/src/math/lim.pl3
+          rt/common/src/math/rand.pl3
+          rt/common/src/mem/alloc.pl3
+          rt/common/src/mem/std.pl3
+          rt/common/src/sched.pl3
+          rt/common/src/str/buf.pl3
+          rt/common/src/str/ch.pl3
+          rt/common/src/str/conv.pl3
+          rt/common/src/str/parse.pl3
+          rt/common/src/str/std.pl3
+          rt/common/src/tm/std.pl3;
+
+posix_src = rt/posix/src/inc.pl3
+            rt/posix/src/io.pl3
+            rt/posix/src/mem.pl3
+            rt/posix/src/tm.pl3
+            rt/posix/src/thread.pl3;
+
+lib_src = lib/src/bind.pl3
+          lib/src/check2.pl3
+          lib/src/enum.pl3
+          lib/src/decl.pl3
+          lib/src/expr.pl3
+          lib/src/io.pl3
+          lib/src/list.pl3
+          lib/src/lit.pl3
+          lib/src/llvm.pl3
+          lib/src/meta.pl3
+          lib/src/parse.pl3
+          lib/src/sig.pl3
+          lib/src/stmt.pl3
+          lib/src/top.pl3
+          lib/src/type.pl3;
+
+lib2_src = lib/src/bind.pl3
+           lib/src/check.pl3
+           lib/src/check2.pl3
+           lib/src/enum.pl3
+           lib/src/decl.pl3
+           lib/src/expr.pl3
+           lib/src/io2.pl3
+           lib/src/list.pl3
+           lib/src/lit.pl3
+           lib/src/llvm2.pl3
+           lib/src/meta2.pl3
+           lib/src/parse2.pl3
+           lib/src/sig.pl3
+           lib/src/stmt.pl3
+           lib/src/top2.pl3
+           lib/src/type2.pl3;
+ 
+bin_src = bin/src/run.pl3;
+
+bin2_src = bin/src/run2.pl3;
+
+ver = 1.0.0-dev4;
+bin = pl3-$ver;
+
+rt.common.o : $com_src {
+	./pl3 $com_src -o rt.common.ll -e rt.common.pl3mod;
+	llc -O0 rt.common.ll -o $@ -filetype=obj -relocation-model=pic;
+}
+
+## compiler build
+
+rt.o rt.pl3mod : $rt_src {
+	$pl3 $rt_src -o rt.ll -e rt.pl3mod;
+	llc -O0 rt.ll -o rt.o -filetype=obj -relocation-model=pic;
+}
+
+lib.o lib.pl3mod : $lib2_src rt.pl3mod {
+	$pl3 $lib2_src -o lib.ll -i rt.pl3mod -e lib.pl3mod;
+	llc -O0 lib.ll -o lib.o -filetype=obj -relocation-model=pic;
+}
+
+bin.o : $bin2_src rt.pl3mod lib.pl3mod {
+	$pl3 $bin2_src -o bin.ll -i rt.pl3mod -i lib.pl3mod;
+	llc -O0 bin.ll -o bin.o -filetype=obj -relocation-model=pic;
+}
+
+$bin : bin.o lib.o rt.o start.c {
+	gcc $^ -lm -o $@;
+}
+
+## check build
+
+rtchk.common.o rtchk.common.pl3mod : $com_src $bin {
+	./$bin $com_src -o rtchk.common.ll -e rtchk.common.pl3mod;
+	llc -O0 rtchk.common.ll -o rtchk.common.o -filetype=obj -relocation-model=pic;
+}
+
+rtchk.posix.o rtchk.posix.pl3mod : $posix_src rtchk.common.pl3mod $bin {
+	./$bin $posix_src -o rtchk.posix.ll -i rtchk.common.pl3mod -e rtchk.posix.pl3mod;
+	llc -O0 rtchk.posix.ll -o rtchk.posix.o -filetype=obj -relocation-model=pic;
+}
+
+libchk.o libchk.pl3mod : $lib_src rtchk.common.pl3mod rtchk.posix.pl3mod $bin {
+	./$bin $lib_src -o lib.ll -i rtchk.common.pl3mod -i rtchk.posix.pl3mod -e libchk.pl3mod;
+	llc -O0 lib.ll -o libchk.o -filetype=obj -relocation-model=pic;
+}
+
+binchk.o : $bin_src rtchk.common.pl3mod rtchk.posix.pl3mod libchk.pl3mod $bin {
+	./$bin $bin_src -o binchk.ll -i rtchk.common.pl3mod -i rtchk.posix.pl3mod -i libchk.pl3mod;
+	llc -O0 binchk.ll -o binchk.o -filetype=obj -relocation-model=pic;
+}
+
+pl3chk : binchk.o libchk.o rtchk.common.o rtchk.posix.o start.c rt/posix/src/start.c {
+	gcc $^ -lm -o $@ -lpthread;
+}
+
+## recheck build
+
+rtrechk.common.o rtrechk.common.pl3mod : $com_src pl3chk {
+	./pl3chk $com_src -o rtrechk.common.ll -e rtrechk.common.pl3mod;
+	llc -O0 rtrechk.common.ll -o rtrechk.common.o -filetype=obj -relocation-model=pic;
+}
+
+rtrechk.posix.o rtrechk.posix.pl3mod : $posix_src rtrechk.common.pl3mod pl3chk {
+	./pl3chk $posix_src -o rtrechk.posix.ll -i rtrechk.common.pl3mod -e rtrechk.posix.pl3mod;
+	llc -O0 rtrechk.posix.ll -o rtrechk.posix.o -filetype=obj -relocation-model=pic;
+}
+
+librechk.o librechk.pl3mod : $lib_src rtrechk.common.pl3mod rtrechk.posix.pl3mod pl3chk {
+	./pl3chk $lib_src -o lib.ll -i rtrechk.common.pl3mod -i rtrechk.posix.pl3mod -e librechk.pl3mod;
+	llc -O0 lib.ll -o librechk.o -filetype=obj -relocation-model=pic;
+}
+
+binrechk.o : $bin_src rtrechk.common.pl3mod rtrechk.posix.pl3mod librechk.pl3mod pl3chk {
+	./pl3chk $bin_src -o binrechk.ll -i rtrechk.common.pl3mod -i rtrechk.posix.pl3mod -i librechk.pl3mod;
+	llc -O0 binrechk.ll -o binrechk.o -filetype=obj -relocation-model=pic;
+}
+
+pl3rechk : binrechk.o librechk.o rtrechk.common.o rtrechk.posix.o start.c rt/posix/src/start.c {
+	gcc $^ -lm -o $@ -lpthread;
+}
+
+.all : pl3;
+
+.check : pl3rechk;
+
+.run : .all {
+	#./pl3chk uhg.pl3 -o uhg.ll;
+	#llc -O0 uhg.ll -o uhg.o -filetype=obj -relocation-model=pic;
+	#gcc rt/posix/src/start.c start.c uhg.o rtchk.common.o rtchk.posix.o -lm -lpthread -o uhg;
+	#./uhg;
+	#$pl3 foo.pl3 -o foo.ll -i lib.pl3mod -i rt.pl3mod;
+	#llc -O0 foo.ll -o foo.o -filetype=obj -relocation-model=pic;
+	#gcc rt/posix/src/start.c start.c foo.o rt.o lib.o -lm -lpthread -o foo;
+	#./foo;
+	#llc -O0 uhg.ll -o uhg.o -filetype=obj -relocation-model=pic;
+}
+
+# distribute
+
+.dist : pl3-${ver}-src.tar.xz;
+
+pl3-${ver}-src.tar.xz : Hammer hammer.sh Makefile start.c rt/posix/src/start.c $rt_src $com_src $posix_src $lib_src $lib2_src $bin_src $bin2_src LICENSE {
+	rm -rf pl3-${ver}-src;
+	mkdir pl3-${ver}-src;
+	cp -a --parents ${^.uniq()} pl3-${ver}-src;
+	tar -Jcf $@ pl3-${ver}-src;
+	rm -rf pl3-${ver}-src;
+}
+
+# clean
+
+.clean : {
+	rm -rf $*;
+}

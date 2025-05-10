@@ -39,7 +39,7 @@ def ar[]:st:lex:map keywords = {
 	{ tok_brk,    "break"     },
 	{ tok_cont,   "continue"  },
 	{ tok_sw,     "switch"    },
-	{ tok_cas,    "case"      },
+	{ tok_case,   "case"      },
 	{ tok_dflt,   "default"   },
 	{ tok_true,   "true"      },
 	{ tok_false,  "false"     },
@@ -54,6 +54,8 @@ def ar[]:st:lex:map keywords = {
 	{ tok_ei32,   "e:i32"     },
 	{ tok_eget,   "e:get"     },
 	{ tok_ereq,   "e:req"     },
+	{ tok_eign,   "e:ign"     },
+	{ tok_ewarn,  "e:warn"    },
 	{ tok_eret,   "e:ret"     },
 	{ tok_efmt,   "e:fmt"     },
 	{ tok_vty,    "ty:args"   },
@@ -163,7 +165,7 @@ def i32 tok_id     = 0x0100,
         tok_cont   = 0x0407,
         tok_brk    = 0x0408,
         tok_sw     = 0x0409,
-        tok_cas    = 0x040a,
+        tok_case   = 0x040a,
         tok_dflt   = 0x040b,
         tok_pt     = 0x0500,
         tok_cpt    = 0x0501,
@@ -211,9 +213,11 @@ def i32 tok_id     = 0x0100,
 	tok_ei32   = 0x0a02,
 	tok_eget   = 0x0a03,
 	tok_ereq   = 0x0a04,
-	tok_eret   = 0x0a05,
-	tok_efmt   = 0x0a06,
-	tok_onerr  = 0x0a07,
+	tok_eign   = 0x0a05,
+	tok_ewarn  = 0x0a06,
+	tok_eret   = 0x0a07,
+	tok_efmt   = 0x0a08,
+	tok_onerr  = 0x0a09,
 	tok_vty    = 0x0b00,
 	tok_vinit  = 0x0b01,
 	tok_vget   = 0x0b02,
@@ -302,6 +306,33 @@ def[export] e:str[void](cpt:char path, pt:st:pl3:unit unit) pl3:parse = {
 	pl3:str_delete(ctx.path);
 };
 
+def[export] e:str[void](st:io file, cpt:char path, pt:st:pl3:unit unit) pl3:parse_file = {
+	var st:ctx ctx;
+
+	ctx.lex = e:get(lex:new(file, path, 256, true));
+	onerr lex:close(ctx.lex);
+
+	ctx.path = pl3:str_new(str:dup(path));
+	onerr pl3:str_delete(ctx.path);
+
+	lex:rule_slashslash(ctx.lex, -1);
+	lex:rule_slashstar(ctx.lex, -2);
+	lex:rule_keywords(ctx.lex, *keywords, arrlen(keywords));
+	lex:rule_add(ctx.lex, &rule_prefix, null);
+	lex:rule_symbols(ctx.lex, *symbols, arrlen(symbols));
+	lex:rule_add(ctx.lex, &rule_ident, pt:void{tok_id});
+	lex:rule_num(ctx.lex, tok_num);
+	lex:rule_quote1(ctx.lex, tok_quote1);
+	lex:rule_quote2(ctx.lex, tok_quote2);
+	lex:rule_eos(ctx.lex, tok_eos);
+
+	e:get(ctx_top(&ctx, unit));
+
+	lex:delete(ctx.lex);
+	pl3:str_delete(ctx.path);
+};
+
+
 /**
  * Parse starting from the top.
  *   @ctx: The context.
@@ -334,7 +365,9 @@ def e:str[pt:st:pl3:stmt](pt:st:ctx ctx) ctx_stmt = {
 	meta = e:get(ctx_meta(ctx));
 	onerr pl3:meta_delete(meta);
 
-	if((data.decl = e:get(ctx_decl(ctx))) != null)
+	if(e:get(lex:tok_try(ctx->lex, ';')) != null)
+		return pl3:stmt_empty(meta);
+	else if((data.decl = e:get(ctx_decl(ctx))) != null)
 		return pl3:stmt_decl(data.decl, meta);
 	else if((data.tydecl = e:get(ctx_tydecl(ctx))) != null)
 		return pl3:stmt_tydecl(data.tydecl, meta);
@@ -531,7 +564,7 @@ def e:str[pt:st:pl3:stmt](pt:st:ctx ctx) ctx_stmt = {
 
 		return pl3:stmt_sw(pl3:sw_new(expr, stmt), meta);
 	}
-	else if(e:get(lex:tok_try(ctx->lex, tok_cas)) != null) {
+	else if(e:get(lex:tok_try(ctx->lex, tok_case)) != null) {
 		var pt:st:pl3:expr expr;
 
 		expr = e:get(ctx_expr(ctx));
@@ -1007,6 +1040,8 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_post = {
 };
 
 
+def[extern,export] fp64(cpt:char str) str_get_fp64; //FIXME
+
 /**
  * Parse a terminal expression.
  *   @ctx: The context.
@@ -1039,7 +1074,7 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_term = {
 	}
 	else if((tok = e:get(lex:tok_try(ctx->lex, tok_quote1))) != null) {
 		if(tok->sz != 1)
-			e:fmt("%C: Invalid character %s.", pl3:meta_call(&meta), tok->str);
+			e:fmt("%C: Invalid character '%s'.", pl3:meta_call(&meta), tok->str);
 
 		return pl3:expr_lit(pl3:lit_int(m:int_u32(u32{*cpt:u8{tok->data}})), meta);
 	}
@@ -1197,6 +1232,34 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_term = {
 			e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
 
 		return pl3:expr_eget(expr, meta);
+	}
+	else if((tok = e:get(lex:tok_try(ctx->lex, tok_eign))) != null) {
+		var pt:st:pl3:expr expr;
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
+			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
+
+		expr = e:get(ctx_expr(ctx));
+		onerr pl3:expr_delete(expr);
+
+		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+			e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
+
+		return pl3:expr_eign(expr, meta);
+	}
+	else if((tok = e:get(lex:tok_try(ctx->lex, tok_ewarn))) != null) {
+		var pt:st:pl3:expr expr;
+
+		if(e:get(lex:tok_try(ctx->lex, '(')) == null)
+			e:fmt("%C: Expected '('.", lex:loc(ctx->lex));
+
+		expr = e:get(ctx_expr(ctx));
+		onerr pl3:expr_delete(expr);
+
+		if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+			e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
+
+		return pl3:expr_ewarn(expr, meta);
 	}
 	else if((tok = e:get(lex:tok_try(ctx->lex, tok_ereq))) != null) {
 		var pt:st:pl3:expr expr;
@@ -1388,21 +1451,25 @@ def e:str[pt:st:pl3:tydecl](pt:st:ctx ctx) ctx_tydecl = {
 			for() {
 				var pt:char id;
 				var pt:st:lex:token tok;
+				var st:pl3:meta meta;
 
 				if(e:get(lex:tok_try(ctx->lex, '}')) != null)
 					break;
-				if((tok = e:get(lex:tok_try(ctx->lex, tok_quote2))) != null) {
+
+				meta = e:get(ctx_meta(ctx));
+				onerr pl3:meta_delete(meta);
+
+				if((tok = e:get(lex:tok_try(ctx->lex, tok_quote2))) != null)
 					id = mem:dup(tok->data, tok->sz); // TODO validate the string
-				}
 				else if((id = str:dup(e:get(ctx_id(ctx)))) == null)
 					e:fmt("%C: Expected enumerated value.", lex:loc(ctx->lex));
 
-				onerr mem:free(id);
+				onerr mem:free(id); // FIXME this won't cleanup properly
 
 				if(e:get(lex:tok_try(ctx->lex, '=')) != null)
 					fatal("FIXME stub");
 
-				*iter = pl3:enval_new(id, null);
+				*iter = pl3:enval_new(id, null, meta);
 				iter = &(*iter)->next;
 
 				if(e:get(lex:tok_try(ctx->lex, '}')) != null)
@@ -1429,9 +1496,9 @@ def e:str[pt:st:pl3:tydecl](pt:st:ctx ctx) ctx_tydecl = {
 			e:get(lex:tok_req(ctx->lex, ';', ";"));
 
 			if(pre == tok_st)
-				decl = pl3:tydecl_struct(str:dup(id), 0, attr, pl3:agg_new(str:fmt("st:%s", id), memb), meta);
+				decl = pl3:tydecl_struct(str:fmt("st:%s", id), 0, attr, pl3:agg_new(str:fmt("st:%s", id), memb), meta);
 			else if(pre == tok_un)
-				decl = pl3:tydecl_union(str:dup(id), 0, attr, pl3:agg_new(str:fmt("un:%s", id), memb), meta);
+				decl = pl3:tydecl_union(str:fmt("un:%s", id), 0, attr, pl3:agg_new(str:fmt("un:%s", id), memb), meta);
 			else
 				e:fmt("%C: Invalid aggregate declaration.", pl3:meta_call(&meta));
 		}
@@ -1582,7 +1649,9 @@ def e:str[bool](pt:st:ctx ctx) ctx_istype = {
  *   &returns: The type.
  */
 def e:str[st:pl3:type](pt:st:ctx ctx) ctx_base = {
-	var st:pl3:type type;
+	var st:pl3:type type = pl3:type_void;
+
+	onerr pl3:type_delete(type);
 
 	if(e:get(lex:tok_try(ctx->lex, tok_void)) != null)
 		type = pl3:type_void;
@@ -1615,20 +1684,28 @@ def e:str[st:pl3:type](pt:st:ctx ctx) ctx_base = {
 			e:fmt("%C: Expected ':'.", lex:loc(ctx->lex));
 
 		if(e:get(lex:tok_try(ctx->lex, '(')) != null) {
-			fatal("stub");
+			type = e:get(ctx_type(ctx));
+			if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+				e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
 		}
 		else
-			type = pl3:type_ptr(pl3:ptr_new(e:get(ctx_base(ctx)), true));
+			type = e:get(ctx_base(ctx));
+
+		type = pl3:type_ptr(pl3:ptr_new(type, true));
 	}
 	else if(e:get(lex:tok_try(ctx->lex, tok_cpt)) != null) {
 		if(e:get(lex:tok_try(ctx->lex, ':')) == null)
 			e:fmt("%C: Expected ':'.", lex:loc(ctx->lex));
 
 		if(e:get(lex:tok_try(ctx->lex, '(')) != null) {
-			fatal("stub");
+			type = e:get(ctx_type(ctx));
+			if(e:get(lex:tok_try(ctx->lex, ')')) == null)
+				e:fmt("%C: Expected ')'.", lex:loc(ctx->lex));
 		}
 		else
-			type = pl3:type_ptr(pl3:ptr_new(e:get(ctx_base(ctx)), false));
+			type = e:get(ctx_base(ctx));
+
+		type = pl3:type_ptr(pl3:ptr_new(type, false));
 	}
 	else if(e:get(lex:tok_try(ctx->lex, tok_ty)) != null) {
 		var cpt:char id;
@@ -1930,7 +2007,8 @@ def e:str[void]() build = {
 	 */
 
 	//e:get(pl3:parse("baz.pl3", pl3:top_unit(top)));
-	e:get(pl3:check_brief(top));
+	//e:get(pl3:check_brief(top));
+	e:get(pl3:check2(top));
 	e:get(pl3:llvm(top, "foo.ll"));
 
 	pl3:top_delete(top);

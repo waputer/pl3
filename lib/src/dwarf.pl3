@@ -274,12 +274,12 @@ def e:str[void](cpt:char path, pt:ty:dwarf:call call, pt:void arg) dwarf:parse_f
 	str = str:buf_new(256);
 
 	e:get(elf64:rd_hdr(file, &hdr));
-	e:get(elf64:rd_sect(file, &hdr, hdr.stridx, &str_sect));
+	e:get(elf64:rd_sect(file, &hdr, hdr.str_idx, &str_sect));
 	abbr_sect.off = info_sect.off = dstr_sect.off = 0;
 
 	for(i = 0; i < hdr.sect_cnt; i++) {
 		e:get(elf64:rd_sect(file, &hdr, i, &sect));
-		e:get(elf64:rd_str(file, &str_sect, sect.str, &str));
+		e:get(elf64:rd_str(file, &str_sect, sect.name, &str));
 
 		if(str:equal(str.arr, ".debug_abbrev"))
 			abbr_sect = sect;
@@ -292,16 +292,16 @@ def e:str[void](cpt:char path, pt:ty:dwarf:call call, pt:void arg) dwarf:parse_f
 	if((abbr_sect.off == 0) || (info_sect.off == 0) || (dstr_sect.off == 0))
 		e:fmt("Missing debugging information.");
 
-	info = io:view(file, info_sect.off, info_sect.size);
+	info = io:view(file, info_sect.off, info_sect.sz);
 	onerr io:close(info);
 
-	abbr = io:view(file, abbr_sect.off, abbr_sect.size);
+	abbr = io:view(file, abbr_sect.off, abbr_sect.sz);
 	onerr io:close(abbr);
 
-	dstr = io:view(file, dstr_sect.off, dstr_sect.size);
+	dstr = io:view(file, dstr_sect.off, dstr_sect.sz);
 	onerr io:close(dstr);
 
-	while(e:get(io:tell(info)) < info_sect.size) {
+	while(e:get(io:tell(info)) < info_sect.sz) {
 		var st:dwarf:head head;
 
 		e:get(io:rd_buf(info, &head, sizeof(head)));

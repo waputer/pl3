@@ -1,0 +1,49 @@
+def[export] void(bool cond) assert = { //FIXME where does this go
+	if(!cond)
+		fatal("Assert failure.");
+};
+
+/*
+ * misc
+ */
+def[export,extern] void(i32 code) os:exit;
+def[export,extern] void() os:abort;
+
+/*
+ * i/o
+ */
+def[export,extern] e:str[i32](cpt:char path, u32 mode) os:open;
+def[export,extern] e:str[void](i32 kd) os:close;
+
+def[export,extern] e:str[u32](i32 kd, pt:void dst, u32 sz) os:read;
+def[export,extern] e:str[u32](i32 kd, cpt:void src, u32 sz) os:write;
+
+def[export,extern] e:str[void](i32 kd, u64 sz) os:trunc;
+def[export,extern] e:str[u64](i32 kd, u8 whence, i64 off) os:seek;
+def[export,extern] e:str[u64](i32 kd) os:tell;
+
+def[export,extern] e:str[u32](pt:st:io:poll set, u32 cnt, i64 to) os:poll;
+
+def[export,extern] e:str[i32](u32 init) os:event;
+
+/*
+ * memory
+ */
+def[export, extern] pt:void(u32 sz) os:alloc;
+def[export, extern] pt:void(pt:void ptr, u32 sz) os:realloc;
+def[export, extern] void(pt:void ptr) os:free;
+
+/*
+ * time
+ */
+def[export, extern] u64() os:usec;
+def[export, extern] void(u64 usec) os:usleep;
+
+/*
+ * threads
+ */
+tydef[export] st:mt:thread { };
+tydef[export] ty:mt:thread = pt:st:mt:thread;
+def[export,extern] e:str[ty:mt:thread](pt:(pt:void(pt:void)), pt:void, pt:void) mt:thread_new;
+def[export,extern] pt:void(ty:mt:thread) mt:thread_join;
+def[export,extern] void(ty:mt:thread) mt:thread_detach;

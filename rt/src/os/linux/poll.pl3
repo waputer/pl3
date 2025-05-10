@@ -110,10 +110,10 @@ def[export] u16(i32 fd, u16 req, i64 nano) sys:poll1 = {
 /**
  * Wait for a polled event.
  *   @poll: The poll manager.
- *   @nano: The time to wait in nanoseconds. Negative indicates infinite
+ *   @msec: The time to wait in microseconds. Negative indicates infinite
  *     timeout. Zero returns immediately, even if no descriptors are ready.
  */
-def[export] void(pt:st:sys:poll poll, i64 nano) sys:poll_wait = {
+def[export] void(pt:st:sys:poll poll, i64 usec) sys:poll_wait = {
 	var u32 i;
 	var pt:st:os:pollfd set;
 	var pt:st:avl:node node;
@@ -129,7 +129,7 @@ def[export] void(pt:st:sys:poll poll, i64 nano) sys:poll_wait = {
 		node = avl:node_next(node);
 	}
 
-	os:poll(set, poll->root.cnt, timeout(nano));
+	os:poll(set, poll->root.cnt, timeout(usec));
 
 	for(i = 0; i < poll->root.cnt; i++) {
 		if(set[i].revents == 0)
@@ -149,20 +149,18 @@ def[export] void(pt:st:sys:poll poll, i64 nano) sys:poll_wait = {
 
 /**
  * Calculate teh poll timeout.
- *   @nano: The timeout nano seconds.
+ *   @nano: The timeout mircroseconds.
  *   &returns; The timeout in milliseconds.
  */
-def i32(i64 nano) timeout = {
-	if(nano < 0)
+def i32(i64 usec) timeout = {
+	if(usec < 0)
 		return -1;
-	else if(nano == 0)
+	else if(usec == 0)
 		return 0;
-	else if(nano > (1000000 * i64{m:i32_max}))
+	else if(usec > (1000 * i64{m:i32_max}))
 		return m:i32_max;
-	else {
-		print("val=%u\n", i32{nano / 1000000});
-		return i32{nano / 1000000};
-	}
+	else
+		return i32{(usec + 999) / 1000};
 };
 
 def u16(u16 evt) evt2msk = {

@@ -1,0 +1,39 @@
+/**
+ * I/O callback function.
+ *   @io: The I/O.
+ *   @arg: The argument.
+ */
+tydef[export] ty:io:call = e:str[void](st:io io, pt:void arg);
+
+/**
+ * I/O callback structure.
+ *   @func: The function.
+ *   @arg: The argument.
+ */
+tydef[export] st:io:call {
+	cpt:ty:io:call func;
+	cpt:void arg;
+};
+
+
+/**
+ * Process a callback.
+ *   @call: The callback.
+ *   @io: The I/O.
+ */
+def[export] e:str[void](st:io:call call, st:io io) io:call_proc = {
+	return call.func->(io, pt:void{call.arg});
+};
+
+/**
+ * Create a callback that prints a string.
+ *   @str: The string.
+ *   &returns: The callback.
+ */
+def[export] st:io:call(cpt:char str) io:call_str = {
+	def e:str[void](st:io io, cpt:char str) func = {
+		io:fmt(io, "%s", str);
+	};
+
+	return st:io:call{ &func, str };
+};

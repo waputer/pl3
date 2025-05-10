@@ -3,7 +3,7 @@
  *   @file: The file.
  */
 tydef[export] st:pl3:wr {
-	st:io:file file;
+	st:io file;
 };
 
 /**
@@ -11,7 +11,7 @@ tydef[export] st:pl3:wr {
  *   @file: The file.
  */
 tydef[export] st:pl3:rd {
-	st:io:file file;
+	st:io file;
 };
 
 
@@ -57,8 +57,15 @@ def[export] e:str[void](pt:st:pl3:top top, cpt:char path) pl3:export = {
 				for(bind = decl->bind; bind != null; bind = bind->next) {
 					e:get(io:wr_u8(wr.file, u8{true}));
 					e:get(io:wr_str32(wr.file, bind->id));
-					e:get(io:wr_u8(wr.file, u8{false}));
-					//e:get(pl3:meta_write(bind->meta, &wr));
+
+					if((bind->expr != null) && (bind->expr->tag != ev:pl3:expr:func)) {
+						e:get(io:wr_u8(wr.file, 1));
+						e:get(pl3:expr_write(bind->expr, &wr));
+					}
+					else
+						e:get(io:wr_u8(wr.file, 0));
+
+					e:get(pl3:meta_write(bind->meta, &wr));
 				}
 
 				io:wr_u8(wr.file, u8{false});
@@ -161,37 +168,4 @@ def[export] e:str[pt:st:pl3:agg](pt:st:pl3:rd rd) pl3:agg_read = {
 	}
 
 	return pl3:agg_new(id, memb);
-};
-
-
-/**
- * Aggregate structure.
- *   @id: The identifier.
- *   @memb: The member list.
- */
-tydef[export] st:pl3:agg {
-	pt:char id;
-	pt:st:pl3:memb memb;
-};
-
-/**
- * Member structure.
- *   @type: The type.
- *   @field: The field list.
- *   @next: The next member.
- */
-tydef[export] st:pl3:memb {
-	st:pl3:type type;
-	pt:st:pl3:field field;
-	pt:st:pl3:memb next;
-};
-
-/**
- * Field structure.
- *   @id: The identifier.
- *   @next: The next field.
- */
-tydef[export] st:pl3:field {
-	pt:char id;
-	pt:st:pl3:field next;
 };

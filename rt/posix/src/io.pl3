@@ -1,0 +1,259 @@
+/**
+ * Open a kernel descriptor.
+ *   @path: The path.
+ *   @mode: The mode.
+ *   &returns: The kernel descriptor.
+ */
+def[export] e:str[i32](cpt:char path, u32 mode) os:open = {
+	var u32 perm;
+	var i32 kd, flags = 0;
+
+	perm = mode & io:mode:perm;
+
+	if((mode & io:mode:rdwr) == io:mode:rdwr)
+		flags |= O_RDWR;
+	else if((mode & io:mode:write) == io:mode:write)
+		flags |= O_WRONLY;
+	else if((mode & io:mode:read) == io:mode:read)
+		flags |= O_RDONLY;
+	else
+		e:fmt("Invalid file open flags.");
+
+	if((mode & io:mode:create) != 0)
+		flags |= O_CREAT;
+
+	if((mode & io:mode:append) != 0)
+		flags |= O_APPEND;
+
+	if((mode & io:mode:trunc) != 0)
+		flags |= O_TRUNC;
+
+	if((mode & io:mode:excl) != 0)
+		flags |= O_EXCL;
+	
+	kd = open(path, flags, perm);
+	if(kd < 0)
+		e:fmt("Open failed (path=\"%s\"). %s (%d).", path, strerror(geterr()), geterr());
+	
+	return kd;
+};
+
+/**
+ * Close a kernel descriptor.
+ *   @kd: The descriptor.
+ */
+def[export] e:str[void](i32 kd) os:close = {
+	var i32 ret;
+
+	do
+		ret = close(kd);
+	while((ret < 0) && (geterr() == EINTR));
+
+	if(ret < 0)
+		e:fmt("Close failed. %s (%d).", strerror(geterr()));
+};
+
+/**
+ * Read from a kernel descriptor.
+ *   @kd: The descriptor.
+ *   @dst: The destination buffer.
+ *   @sz: The buffer size.
+ *   &returns: The number of bytes written.
+ */
+def[export] e:str[u32](i32 kd, pt:void dst, u32 sz) os:read = {
+	var i32 ret;
+
+	do
+		ret = read(kd, dst, u64{sz});
+	while((ret < 0) && (geterr() == EINTR));
+
+	if(ret < 0)
+		e:fmt("Write failed. %s (%d).", strerror(geterr()));
+
+	return u32{ret};
+};
+
+/**
+ * Write to a kernel descriptor.
+ *   @kd: The descriptor.
+ *   @src: The source buffer.
+ *   @sz: The buffer size.
+ *   &returns: The number of bytes written.
+ */
+def[export] e:str[u32](i32 kd, cpt:void src, u32 sz) os:write = {
+	var i32 ret;
+
+	do
+		ret = write(kd, src, u64{sz});
+	while((ret < 0) && (geterr() == EINTR));
+
+	if(ret < 0)
+		e:fmt("Write failed. %s (%d).", strerror(geterr()), geterr());
+
+	return u32{ret};
+};
+
+/**
+ * Seek on a kernel descriptor.
+ *   @kd: The descriptor.
+ *   @whence: The reference from which to seek.
+ *   @off: The offset in bytes.
+ */
+def[export] e:str[u64](i32 kd, u8 whence, i64 off) os:seek = {
+	var i32 map;
+	var i64 ret;
+
+	switch(whence) {
+	case io:seek:set: map = SEEK_SET; break;
+	case io:seek:cur: map = SEEK_CUR; break;
+	case io:seek:end: map = SEEK_END; break;
+	default: e:fmt("Invalid seek type.");
+	}
+
+	ret = lseek(kd, off, map);
+	if(ret == -1)
+		e:fmt("Seek failed. %s (%d).", strerror(geterr()), geterr());
+
+	return u64{ret};
+};
+
+/**
+ * Truncate a kernel descriptor to a given size.
+ *   @kd: The descriptor.
+ *   @sz: The buffer size.
+ */
+def[export] e:str[void](i32 kd, u64 sz) os:trunc = {
+	var i32 ret;
+
+	do
+		ret = ftruncate(kd, sz);
+	while((ret < 0) && (geterr() == EINTR));
+
+	if(ret < 0)
+		e:fmt("Truncate failed. %s (%d).", strerror(geterr()), geterr());
+};
+
+/**
+ * Create an event kernel descriptor.
+ *   @init: The initial value.
+ */
+def[export] e:str[i32](u32 init) os:event = {
+	var i32 kd;
+
+	kd = eventfd(init, 0);
+	if(kd < 0)
+		e:fmt("Failed to create event. %s (%d).", strerror(geterr()), geterr());
+	
+	return kd;
+};
+
+
+/**
+ * Poll an I/O set for events.
+ *   @set: The poll set.
+ *   @cnt: The number of elements in the set.
+ *   @to: The timeout in icroseconds.
+ *   &returns: The number of active descriptors.
+ */
+def[export] e:str[u32](pt:st:io:poll set, u32 cnt, i64 to) os:poll = {
+	var u32 i;
+	var i32 ret;
+	var pt:st:pollfd fds;
+
+	fds = mem:alloc(cnt * sizeof(st:pollfd));
+	onerr mem:free(fds);
+
+	for(i = 0; i < cnt; i++) {
+		fds[i].fd = set[i].kd;
+		fds[i].events = msk2evt(set[i].req);
+	}
+
+	do
+		ret = poll(fds, i32{cnt}, timeout(to));
+	while((ret == -1) && (geterr() == EINTR));
+
+	if(ret < 0)
+		e:fmt("Failed to poll. %s (%d).", strerror(geterr()), geterr());
+
+	for(i = 0; i < cnt; i++) {
+		if(fds[i].revents != 0)
+			set[i].got = evt2msk(fds[i].revents);
+	}
+
+	mem:free(fds);
+
+	return u32{i};
+};
+
+
+/**
+ * Convert an event bits to a I/O mask.
+ *   @evt: The event bits.
+ *   &returns: The I/O mask.
+ */
+def u16(u16 evt) evt2msk = {
+	var u16 mask = 0;
+
+	if((evt & POLLIN) != 0)
+		mask |= io:poll:rd;
+
+	if((evt & POLLOUT) != 0)
+		mask |= io:poll:wr;
+
+	if((evt & (POLLERR | POLLHUP)) != 0)
+		mask |= io:poll:err;
+
+	return mask;
+};
+
+/**
+ * Convert an I/O mask to event bits.
+ *   @msk: The I/O mask.
+ *   &returns: The event bits.
+ */
+def u16(u16 msk) msk2evt = {
+	var u16 evt = 0;
+
+	if((msk & io:poll:rd) != 0)
+		evt |= POLLIN;
+
+	if((msk & io:poll:wr) != 0)
+		evt |= POLLOUT;
+
+	if((msk & io:poll:err) != 0)
+		evt |= POLLERR | POLLHUP;
+
+	return evt;
+};
+
+/**
+ * Calculate the poll timeout.
+ *   @nano: The timeout mircroseconds.
+ *   &returns; The timeout in milliseconds.
+ */
+def i32(i64 usec) timeout = {
+	if(usec < 0)
+		return -1;
+	else if(usec == 0)
+		return 0;
+	else if(usec > (1000 * i64{m:i32_max}))
+		return m:i32_max;
+	else
+		return i32{(usec + 999) / 1000};
+};
+
+
+/**
+ * Exit with a status code.
+ *   @code: The status code.
+ */
+def[export] void(i32 code) os:exit = {
+	exit(code);
+};
+
+/**
+ * Abort the process.
+ */
+def[export] void(i32 code) os:abort = {
+	abort();
+};

@@ -1,0 +1,121 @@
+def[export] i32(pt:char buf, fp32 val) str:dig_fp32 = {
+	var u32 dig;
+	var i32 e = 0;
+
+	while(val > 10.0) {
+		e++;
+		val /= 10.0;
+	}
+
+	while(val < 1.0) {
+		e--;
+		val *= 10.0;
+	}
+
+	while(val >= 10.0) {
+		e++;
+		val /= 10.0;
+	}
+
+	while(val > 0.0) {
+		var u32 dig = u32{val};
+
+		*buf++ = char{dig + '0'};
+		val = 10.0 * (val - fp32{dig});
+	}
+
+	*buf = '\0';
+	return e + 1;
+};
+
+def[export] i32(pt:char buf, fp64 val) str:dig_fp64 = {
+	var u32 dig;
+	var i32 e = 0;
+	var pt:char orig = buf;
+
+	while(val < 1.0) {
+		e--;
+		val *= 10.0;
+	}
+
+	while(val >= 10.0) {
+		e++;
+		val /= 10.0;
+	}
+
+	while(val > 0.0) {
+		var u32 dig = u32{val};
+
+		*buf++ = char{dig + '0'};
+		val = 10.0 * (val - fp64{dig});
+
+		if((buf - orig) >= 17)
+			break;
+	}
+
+	*buf = '\0';
+	return e + 1;
+};
+
+
+/**
+ * Get an unsigned, 32-bit integer.
+ *   @str: The string.
+ *   @base: The base. Set to zero to autodetect.
+ *   &returns: The value.
+ */
+def[export] e:str[u32](cpt:char str, u8 base) str:get_u32 = {
+	var i8 dig;
+	var u32 ret = 0;
+	var cpt:char orig = str;
+
+	if(base > 36)
+		e:fmt("Base too large.");
+
+	if((str[0] == '0') && (str[1] == '\0'))
+		return 0;
+
+	if(base == 0) {
+		if((str[0] == '0') && (str[1] == 'x')) {
+			base = 16;
+			str += 2;
+		}
+		else if((str[0] == '0') && (str[1] == 'b')) {
+			base = 2;
+			str += 2;
+		}
+		else if(str[0] == '0') {
+			base = 8;
+			str += 1;
+		}
+		else
+			base = 10;
+	}
+	
+	ret = 0;
+	while(*str != '\0') {
+		dig = getdig(*str++);
+		if((dig < 0) || (dig >= i8{base}))
+			e:fmt("Invalid number '%s'.", orig);
+
+		ret = u32{base} * ret + u32{dig};
+	}
+
+	return ret;
+};
+
+/**
+ * Convert a single digit.
+ *   @ch: The character.
+ *   &returns: The digit, or negative if out of range.
+ */
+def i8(char ch) getdig = {
+	if((ch >= '0') && (ch <= '9'))
+		return i8{ch - '0'};
+	else if((ch >= 'a') && (ch <= 'z'))
+		return i8{ch - 'a' + 10};
+	else if((ch >= 'A') && (ch <= 'Z'))
+		return i8{ch - 'A' + 10};
+	else
+		return -1;
+};

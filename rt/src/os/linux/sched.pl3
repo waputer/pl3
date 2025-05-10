@@ -70,6 +70,22 @@ def[export] void(pt:st:sys:task task, pt:ty:sys:task func, pt:void arg) sys:task
 };
 
 /**
+ * Run a single task.
+ *   @task: The task manager.
+ */
+def[export] void(pt:st:sys:task task) sys:task_once = {
+	var pt:st:sys:task:inst tmp;
+
+	task->head = (tmp = task->head)->next;
+	if(task->head == null)
+		task->tail = &task->head;
+
+	tmp->func->(tmp->arg);
+	mem:free(tmp);
+
+};
+
+/**
  * Run all tasks.
  *   @task: The task manager.
  */
@@ -167,7 +183,7 @@ def[export] i64(pt:st:sys:timer timer) sys:timer_first = {
 	var i64 tm;
 	var pt:st:sys:timer:inst inst;
 
-	tm = m:i64_max;
+	tm = i64{m:i32_max} * i64{m:i32_max}; //FIXME should be i64_max
 	for(inst = timer->inst; inst != null; inst = inst->next)
 		tm = m:min_i64(tm, inst->usec);
 
@@ -192,10 +208,12 @@ def[export] u64(pt:st:sys:timer timer) sys:timer_until = {
 /**
  * Process all expired timers.
  *   @timer: The timers.
+ *   &returns: The number of processed timers.
  */
-def[export] void(pt:st:sys:timer timer) sys:timer_proc = {
+def[export] u32(pt:st:sys:timer timer) sys:timer_proc = {
 	var i64 now;
 	var pt:st:sys:timer:inst tmp;
+	var u32 cnt = 0;
 	var pt:pt:st:sys:timer:inst inst = &timer->inst;
 
 	now = tm:usec();
@@ -206,10 +224,13 @@ def[export] void(pt:st:sys:timer timer) sys:timer_proc = {
 
 			tmp->func->(tmp->arg);
 			mem:free(tmp);
+			cnt++;
 		}
 		else
 			inst = &(*inst)->next;
 	}
+
+	return cnt;
 };
 
 
@@ -255,12 +276,14 @@ def[export] void(pt:st:sys:sched sched) sys:sched_run = {
 	sched->run = true;
 
 	while(sched->run) {
-		var i64 wait;
+		var u64 wait;
 
-		//sys:timer_proc(sched->timer);
-		sys:task_run(sched->task);
-		sys:poll_wait(sched->poll, -1);
-		//sys:poll_wait(sched->poll, i64{sys:timer_until(sched->timer)});
+		do
+			sys:task_run(sched->task);
+		while(sys:timer_proc(sched->timer) > 0);
+
+		wait = sys:timer_until(sched->timer);
+		sys:poll_wait(sched->poll, (wait < u64{m:i64_max}) ? i64{wait} : m:i64_max);
 	}
 };
 

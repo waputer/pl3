@@ -1,9 +1,16 @@
 // TODO generic op: prefix
+def[export,extern] fp32(fp32 a) m_sqrt_fp32;
+def[export] fp32(fp32 a) m:pow2_fp32 = {
+	return a * a;
+};
 def[export] u32(u32 a, u32 b) m:max_u32 = {
 	return (a > b) ? a : b;
 };
 def[export] i32(i32 a, i32 b) m:max_i32 = {
 	return (a > b) ? a : b;
+};
+def[export] i32(i32 a, i32 b) m:min_i32 = {
+	return (a < b) ? a : b;
 };
 
 def[export] i64(i64 a, i64 b) m:max_i64 = {
