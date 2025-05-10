@@ -67,7 +67,7 @@ def[export] e:str[void](pt:st:pl3:top top, cpt:char path) pl3:llvm = {
 	e:get(io:fmt(file, "declare void @llvm.va_start(i8*)\n"));
 
 	// TODO syscall function kinda sucks
-	e:get(io:fmt(ctx.ext, "define hidden i64 @$syscall(i64, i64, i64, i64, i64, i64, i64, ...) local_unnamed_addr #0 {\n"));
+	e:get(io:fmt(ctx.ext, "define internal i64 @$syscall(i64, i64, i64, i64, i64, i64, i64, ...) local_unnamed_addr #0 {\n"));
 	e:get(io:fmt(ctx.ext, "\t%%8 = tail call i64 asm sideeffect \"syscall\", \"={ax},{ax},{di},{si},{dx},{r10},{r8},{r9},~{rcx},~{r11},~{memory},~{dirflag},~{fpsr},~{flags}\"(i64 %%0, i64 %%1, i64 %%2, i64 %%3, i64 %%4, i64 %%5, i64 %%6) #1\n"));
 	e:get(io:fmt(ctx.ext, "\tret i64 %%8\n"));
 	e:get(io:fmt(ctx.ext, "}\n"));
@@ -75,8 +75,51 @@ def[export] e:str[void](pt:st:pl3:top top, cpt:char path) pl3:llvm = {
 	for(unit = top->unit; unit != null; unit = unit->next) {
 		for(stmt = unit->stmt; stmt != null; stmt = stmt->next) {
 			if(stmt->tag == ev:pl3:stmt:decl) {
-				*ctx.idefer = mem:make(st:defer{ stmt->data.decl, null, null});
-				ctx.idefer = &(*ctx.idefer)->next;
+				var pt:st:pl3:bind bind;
+				var pt:st:pl3:decl decl = stmt->data.decl;
+
+				if(pl3:type_is_sig(decl->type)) {
+					for(bind = decl->bind; bind != null; bind = bind->next) {
+						if((decl->flags & pl3:decl:ext) != 0) {
+							var pt:st:pl3:sig sig = decl->type.data.sig;
+							var st:io:call param = call_pinfo(getref(st:pinfo{ &ctx, sig->param, sig->vlist })); //FIXME ugly
+
+							def e:str[void](st:io:file file, cpt:void arg) proc = {
+								e:get(io:fmt(file, "@\"%s\"", arg));
+							};
+
+							e:get(io:fmt(ctx.file, "declare %C @\"%s\"(%C)\n", call_type(&sig->ret), bind->id, param));
+							ref_put(&ctx, bind, st:io:call{ &proc, bind->id });
+							continue;
+						}
+
+						var pt:st:pl3:func func;
+						var pt:st:pl3:expr expr = bind->expr;
+
+						if(expr == null)
+							e:fmt("Internal error. Cannot have an uninitialized function variable.");
+						if(expr->tag != ev:pl3:expr:func)
+							e:fmt("Internal error. Invalid function variable.");
+
+						func = expr->data.func;
+						if((decl->flags & pl3:decl:exp) != 0)
+							ref_put(&ctx, func, ref_external(&ctx, bind));
+						else
+							ref_put(&ctx, bind, ref_uniq(&ctx, func));
+
+						*ctx.idefer = mem:make(st:defer{ decl, func, null });
+						ctx.idefer = &(*ctx.idefer)->next;
+					}
+				}
+				else {
+					for(bind = decl->bind; bind != null; bind = bind->next) {
+						if((decl->flags & (pl3:decl:exp | pl3:decl:ext)) != 0)
+							ref_external(&ctx, bind);
+					}
+
+					*ctx.idefer = mem:make(st:defer{ stmt->data.decl, null, null});
+					ctx.idefer = &(*ctx.idefer)->next;
+				}
 			}
 			else if(stmt->tag == ev:pl3:stmt:tydecl)
 				e:get(emit_tydecl(&ctx, stmt->data.tydecl));
@@ -95,11 +138,11 @@ def[export] e:str[void](pt:st:pl3:top top, cpt:char path) pl3:llvm = {
 
 		ctx.code = file;
 
-		if(decl != null)
+		if(decl != null && func == null)
 			e:get(ctx_top(&ctx, decl));
 
 		if(func != null)
-			e:get(ctx_func(&ctx, func));
+			e:get(ctx_func(&ctx, func, decl));
 	}
 
 	ctx_done(&ctx);
@@ -225,24 +268,24 @@ def e:str[void](pt:st:ctx ctx, pt:st:pl3:decl decl) ctx_top = {
 		if(decl->type.tag == ev:pl3:type:sig) {
 			if(bind->expr != null) {
 				var pt:st:pl3:func func;
-				var st:io:call id, sig;
 
 				if(bind->expr->tag != ev:pl3:expr:func)
 					e:fmt("Cannot emit non-function expression.");
 
 				func = bind->expr->data.func;
-				id = ref_func(ctx, func);
-				sig = call_sig(func->sig);
 
-				*ctx->idefer = mem:make(st:defer{ null, func, null});
+				*ctx->idefer = mem:make(st:defer{ bind, func, null});
 				ctx->idefer = &(*ctx->idefer)->next;
 
-				if(decl->exp)
-					e:get(io:fmt(ctx->file, "@\"%s\" = dso_local alias %C, %C* %C\n", bind->id, sig, sig, id));
-				else if(decl->pub)
-					e:get(io:fmt(ctx->file, "@\"%s\" = hidden alias %C, %C* %C\n", bind->id, sig, sig, id));
+				//if((decl->flags & pl3:decl:exp) != 0)
+					//e:get(io:fmt(ctx->file, "@\"%s\" = dso_local alias %C, %C* %C\n", bind->id, sig, sig, id));
+				//else if((decl->flags & pl3:decl:pub) != 0)
+					//e:get(io:fmt(ctx->file, "@\"%s\" = hidden alias %C, %C* %C\n", bind->id, sig, sig, id));
 
-				e:get(io:fmt(ctx->file, "%C = alias %C, %C* %C\n", ref_bind(ctx, bind), sig, sig, id));
+				if((decl->flags & pl3:decl:exp) != 0)
+					ref_put(ctx, func, ref_external(ctx, bind));
+				else
+					ref_put(ctx, bind, ref_uniq(ctx, func));
 			}
 			else {
 				var pt:st:pl3:sig sig = decl->type.data.sig;
@@ -272,13 +315,28 @@ def e:str[void](pt:st:ctx ctx, pt:st:pl3:decl decl) ctx_top = {
 				env = st:env{ &map, null, &scope };
 
 				calc = calc_expr(getref(st:calc{ ctx, &env, bind->expr }));
+
+				if((decl->flags & pl3:decl:exp) != 0)
+					ref_external(ctx, bind);
+
 				e:get(io:fmt(ctx->file, "%C = global %C %C, !dbg %C\n", ref_bind(ctx, bind), call_type(&decl->type), calc, dbg_bind(ctx, bind, decl)));
 
 				map_delete(map);
 				scope_delete(scope);
 			}
-			else
-				e:get(io:fmt(ctx->file, "%C = global %C zeroinitializer, !dbg %C\n", ref_bind(ctx, bind), call_type(&decl->type), dbg_bind(ctx, bind, decl)));
+			else {
+				if((decl->flags & pl3:decl:ext) != 0) {
+					e:get(io:fmt(ctx->file, "@\"%s\" = external dso_local global %C\n", bind->id, call_type(&decl->type)));
+					ref_external(ctx, bind);
+					//e:get(io:fmt(ctx->file, "%C = external alias %C, %C* @\"%s\"\n", ref_bind(ctx, bind), call_type(&decl->type), call_type(&decl->type), bind->id));
+				}
+				else if((decl->flags & pl3:decl:exp) != 0) {
+					e:get(io:fmt(ctx->file, "@\"%s\" = external global %C zeroinitializer, !dbg %C\n", bind->id, call_type(&decl->type), dbg_bind(ctx, bind, decl)));
+					ref_external(ctx, bind);
+				}
+				else
+					e:get(io:fmt(ctx->file, "%C = internal global %C zeroinitializer, !dbg %C\n", ref_bind(ctx, bind), call_type(&decl->type), dbg_bind(ctx, bind, decl)));
+			}
 		}
 	}
 };
@@ -289,7 +347,7 @@ def e:str[void](pt:st:ctx ctx, pt:st:pl3:decl decl) ctx_top = {
  *   @func: The function.
  *   @name: The name.
  */
-def e:str[void](pt:st:ctx ctx, pt:st:pl3:func func) ctx_func = {
+def e:str[void](pt:st:ctx ctx, pt:st:pl3:func func, pt:st:pl3:decl decl) ctx_func = {
 	var u32 i;
 	var st:map map;
 	var st:env env;
@@ -300,7 +358,7 @@ def e:str[void](pt:st:ctx ctx, pt:st:pl3:func func) ctx_func = {
 	var st:io:call sig, name;
 
 	sig = call_sig(func->sig);
-	name = ref_func(ctx, func);
+	name = ref_uniq(ctx, func);
 
 	ctx->vars = io:accum(&vars_buf, &vars_sz, 256);
 	ctx->code = io:accum(&code_buf, &code_sz, 256);
@@ -332,7 +390,10 @@ def e:str[void](pt:st:ctx ctx, pt:st:pl3:func func) ctx_func = {
 	io:close(ctx->vars);
 	io:close(ctx->code);
 
-	e:get(io:fmt(ctx->file, "define %C %C(%C) {\n", call_type(&func->sig->ret), name, call_pinfo(getref(st:pinfo{ ctx, func->sig->param, func->sig->vlist }))));
+	if(pt:void{name.func} != pt:void{&ext_proc})
+		e:get(io:fmt(ctx->file, "define internal %C %C(%C) {\n", call_type(&func->sig->ret), name, call_pinfo(getref(st:pinfo{ ctx, func->sig->param, func->sig->vlist }))));
+	else
+		e:get(io:fmt(ctx->file, "define %C %C(%C) {\n", call_type(&func->sig->ret), name, call_pinfo(getref(st:pinfo{ ctx, func->sig->param, func->sig->vlist }))));
 	e:get(io:write(ctx->file, vars_buf, vars_sz));
 	e:get(io:write(ctx->file, code_buf, code_sz));
 
@@ -391,6 +452,7 @@ def e:str[void](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:stmt stmt) ctx_stmt = {
 
 		if(pl3:type_is_sig(decl->type)) {
 			for(bind = decl->bind; bind != null; bind = bind->next) {
+				var pt:st:pl3:func func;
 				var pt:st:pl3:expr expr = bind->expr;
 
 				if(expr == null)
@@ -398,11 +460,17 @@ def e:str[void](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:stmt stmt) ctx_stmt = {
 				if(expr->tag != ev:pl3:expr:func)
 					e:fmt("Internal error. Invalid function variable.");
 
-				*ctx->idefer = mem:make(st:defer{ null, expr->data.func, null });
+				func = expr->data.func;
+				if((decl->flags & pl3:decl:exp) != 0)
+					ref_put(ctx, func, ref_external(ctx, bind));
+				else
+					ref_put(ctx, bind, ref_uniq(ctx, func));
+
+				*ctx->idefer = mem:make(st:defer{ bind, func, null });
 				ctx->idefer = &(*ctx->idefer)->next;
 			}
 		}
-		else if(!decl->mut) {
+		else if((decl->flags & pl3:decl:mut) == 0) {
 			*ctx->idefer = mem:make(st:defer{ decl, null, null });
 			ctx->idefer = &(*ctx->idefer)->next;
 		}
@@ -727,7 +795,7 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 			str = str:buf_done(&buf);
 			onerr mem:free(str);
 
-			e:get(io:fmt(ctx->ext, "@s%u = hidden local_unnamed_addr constant [%u x i8] c\"%s\", align 1\n", num, sz, str));
+			e:get(io:fmt(ctx->ext, "@s%u = internal local_unnamed_addr constant [%u x i8] c\"%s\", align 1\n", num, sz, str));
 			e:get(io:fmt(ctx->code, "\t%C = getelementptr inbounds [%u x i8], [%u x i8]* @s%u, i64 0, i64 0\n", tmp, sz, sz, num));
 
 			mem:free(str);
@@ -1544,14 +1612,12 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_exp
 		return ctx_expr(ctx, env, expr->data.enref->val->expr);
 
 	case ev:pl3:expr:func: {
-		//var st:io:call sig;
 		var pt:st:pl3:func func = expr->data.func;
 
 		*ctx->idefer = mem:make(st:defer{ null, func, null });
 		ctx->idefer = &(*ctx->idefer)->next;
 
-		//sig = call_sig(getref(st:siginfo{ ctx, func->sig }));
-		return ref_bind(ctx, pt:void{func});
+		return ref_uniq(ctx, func);
 	} break;
 
 	case ev:pl3:expr:vinit: {
@@ -1653,7 +1719,7 @@ def e:str[st:io:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_lef
 				else if(bind->expr->tag != ev:pl3:expr:func)
 					e:fmt("Internal error. Invalid function variable.");
 
-				return ref_func(ctx, bind->expr->data.func);
+				return ref_bind(ctx, bind);
 			}
 
 			ptr = bind;
@@ -2261,6 +2327,8 @@ def st:io:call(cpt:st:pl3:type type) call_type = {
 		case ev:pl3:type:u32: e:get(io:fmt(file, "i32")); break;
 		case ev:pl3:type:i64: e:get(io:fmt(file, "i64")); break;
 		case ev:pl3:type:u64: e:get(io:fmt(file, "i64")); break;
+		case ev:pl3:type:fp32: e:get(io:fmt(file, "float")); break;
+		case ev:pl3:type:fp64: e:get(io:fmt(file, "double")); break;
 
 		case ev:pl3:type:ptr:
 			e:get(io:fmt(file, "i8*"));
@@ -2468,7 +2536,7 @@ def st:io:call(cpt:st:calc info) calc_expr = {
 				str = str:buf_done(&buf);
 				onerr mem:free(str);
 
-				e:get(io:fmt(info->ctx->ext, "@s%u = hidden local_unnamed_addr constant [%u x i8] c\"%s\", align 1\n", num, sz, str));
+				e:get(io:fmt(info->ctx->ext, "@s%u = internal local_unnamed_addr constant [%u x i8] c\"%s\", align 1\n", num, sz, str));
 				e:get(io:fmt(file, "getelementptr inbounds([%u x i8], [%u x i8]* @s%u, i64 0, i64 0)", sz, sz, num));
 
 				mem:free(str);
@@ -2500,7 +2568,7 @@ def st:io:call(cpt:st:calc info) calc_expr = {
 				var st:io:call calc;
 				var st:pl3:link link = ident->data.link;
 
-				if(link.decl->mut)
+				if((link.decl->flags & pl3:decl:mut) != 0)
 					e:fmt("Internal error. Mutable variable used in constant expression.");
 
 				calc = calc_expr(getref(st:calc{ info->ctx, info->env, link.bind->expr }));
@@ -2745,7 +2813,7 @@ def[export] st:pl3:val(pt:st:pl3:expr expr) pl3:val_calc = {
 		if(ident->tag == ev:pl3:ident:link) {
 			var st:pl3:link link = ident->data.link;
 
-			if(!link.decl->mut)
+			if((link.decl->flags & pl3:decl:mut) == 0)
 				return pl3:val_calc(link.bind->expr);
 		}
 	} break;
@@ -2876,11 +2944,14 @@ def pt:st:ref(pt:st:ctx ctx, en:ref tag, cpt:void ptr) ref_get = {
  *   &returns: The name.
  */
 def st:io:call(pt:st:ctx ctx, cpt:st:pl3:func func) ref_func = {
+	return ref_bind(ctx, func);
+	/*
 	def e:str[void](st:io:file file, cpt:void arg) proc = {
 		e:get(io:fmt(file, "@\"$f%u\"", u32{arg}));
 	};
 
 	return st:io:call{ &proc, cpt:void{ref_get(ctx, ev:ref:func, func)->id} };
+	*/
 };
 
 /**
@@ -2893,11 +2964,67 @@ def st:io:call(pt:st:ctx ctx, cpt:st:pl3:bind bind) ref_bind = {
 	return ref_get(ctx, ev:ref:bind, bind)->call;
 };
 
-def void(pt:st:ctx ctx, cpt:void ptr, st:io:call call) ref_put = {
+
+def e:str[void](st:io:file file, cpt:st:pl3:bind bind) ext_proc = {
+	e:get(io:fmt(file, "@\"%s\"", bind->id));
+};
+def st:io:call(pt:st:ctx ctx, pt:st:pl3:bind bind) ref_external = {
+
+	return ref_put(ctx, bind, st:io:call{ &ext_proc, bind })->call;
+};
+
+
+/**
+ * Find a reference.
+ *   @ctx: The context.
+ *   @ptr: The pointer.
+ *   &returns: The reference or null if not found.
+ */
+def pt:st:ref(pt:st:ctx ctx, cpt:void ptr) ref_find = {
+	var pt:st:avl:node node;
+
+	node = avl:root_get(&ctx->refs, ptr);
+	if(node == null)
+		return null;
+
+	return getparent(node, st:ref, node);
+	
+};
+
+/**
+ * Add a reference.
+ *   @ctx: The context.
+ *   @ptr: The pointer.
+ *   @call: The call.
+ *   &jeturns: The reference.
+ */
+def pt:st:ref(pt:st:ctx ctx, cpt:void ptr, st:io:call call) ref_put = {
 	var pt:st:ref ref;
 
 	ref = mem:make(st:ref{ ctx->refs.cnt, call, ptr, avl:node(ptr) });
 	avl:root_add(&ctx->refs, &ref->node);
+
+	return ref;
+};
+
+/**
+ * Create a unique reference, if it doesn't exist already..
+ *   @ctx: The context.
+ *   @ptr: The pointer.
+ *   &returns: The call.
+ */
+def st:io:call(pt:st:ctx ctx, cpt:void ptr) ref_uniq = {
+	def e:str[void](st:io:file file, cpt:void arg) proc = {
+		e:get(io:fmt(file, "@\"$v%u\"", u32{arg}));
+	};
+
+	var pt:st:ref ref;
+
+	ref = ref_find(ctx, ptr);
+	if(ref == null)
+		ref = ref_put(ctx, ptr, st:io:call{ &proc, pt:void{ ctx->refs.cnt } });
+
+	return ref->call;
 };
 
 

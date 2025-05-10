@@ -1,0 +1,62 @@
+/**
+ * Declaration flags.
+ *   @mut: Mutable.
+ *   @pub: Public.
+ *   @exp: Export.
+ *   @ext: External.
+ */
+def[export] u32 pl3:decl:mut = 0x1,
+                pl3:decl:pub = 0x2,
+                pl3:decl:exp = 0x4,
+                pl3:decl:ext = 0x8;
+
+/**
+ * Declaration structure.
+ *   @mut, pub, exp: The mutability, public, and export flags.
+ *   @flags: The flags.
+ *   @attr: The attributes.
+ *   @type: The type.
+ *   @meta: The metadata.
+ *   @bind: The list of bindings.
+ */
+tydef[export] st:pl3:decl {
+	u32 flags;
+	pt:st:pl3:attr attr;
+
+	st:pl3:type type;
+	st:pl3:meta meta;
+
+	pt:st:pl3:bind bind;
+};
+
+/**
+ * Create a declaration.
+ *   @mut: The mutability flag.
+ *   @type: Consumed. The type.
+ *   @bind: Optional. Consumed. The bindings list.
+ *   &returns: The declaration.
+ */
+def[export] pt:st:pl3:decl(u32 flags, pt:st:pl3:attr attr, st:pl3:type type, st:pl3:meta meta, pt:st:pl3:bind bind) pl3:decl_new = {
+	if(pl3:attr_contains(attr, "public"))
+		flags |= pl3:decl:pub;
+
+	if(pl3:attr_contains(attr, "export"))
+		flags |= pl3:decl:exp | pl3:decl:pub;
+
+	if(pl3:attr_contains(attr, "extern"))
+		flags |= pl3:decl:ext;
+
+	return mem:make(st:pl3:decl{ flags, attr, type, meta, bind });
+};
+
+/**
+ * Delete a declaration.
+ *   @decl: The declaration.
+ */
+def[export] void(pt:st:pl3:decl decl) pl3:decl_delete = {
+	pl3:attr_clear(decl->attr);
+	pl3:type_delete(decl->type);
+	pl3:bind_clear(decl->bind);
+	pl3:meta_delete(decl->meta);
+	mem:free(decl);
+};

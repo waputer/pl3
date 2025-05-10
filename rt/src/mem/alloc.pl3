@@ -403,7 +403,7 @@ def void(pt:st:huge huge, pt:void ptr) huge_free = {
  *   @ptr: The pointer.
  *   &returns: The size.
  */
-def[export] u32(pt:st:huge bin, pt:void ptr) huge_size = {
+def u32(pt:st:huge bin, pt:void ptr) huge_size = {
 	return u32{bin->sz};
 };
 
@@ -458,7 +458,7 @@ def pt:void(u32 sz) sm_alloc = {
  *   @bin: The bin.
  *   @ptr: The pointer.
  */
-def[export] void(pt:st:sm_bin bin, pt:void ptr) sm_free = {
+def void(pt:st:sm_bin bin, pt:void ptr) sm_free = {
 	var pt:u16 off;
 	var pt:st:sm_mem mem, iter;
 
@@ -508,7 +508,7 @@ def[export] void(pt:st:sm_bin bin, pt:void ptr) sm_free = {
  *   @ptr: The pointer.
  *   &returns: The size.
  */
-def[export] u32(pt:st:sm_bin bin, pt:void ptr) sm_size = {
+def u32(pt:st:sm_bin bin, pt:void ptr) sm_size = {
 	var u16 off;
 	var pt:st:sm_mem mem;
 

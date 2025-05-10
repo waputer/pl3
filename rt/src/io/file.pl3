@@ -78,7 +78,7 @@ def[export] e:str[st:io:file](cpt:char path, u32 flags) io:open = {
 	if((flags & io:mode:trunc) != 0)
 		osflags |= os:O_TRUNC;
 
-	fd = os:open(path, osflags, 0777);
+	fd = os:open(path, osflags, u64{flags & 0777});
 	if(fd < 0)
 		e:fmt("Failed to open '%s'. (%d)", path, -fd); // TODO: better error info
 
@@ -228,12 +228,25 @@ def[export] e:str[void](st:io:file file, pt:void buf, u32 sz) io:rd_buf = {
 };
 
 /**
- * Read an unsigned 8-bit integer in its entirety.
+ * Read an unsigned, 8-bit integer in its entirety.
  *   @file: The file.
  *   &returns: The value.
  */
 def[export] e:str[u8](st:io:file file) io:rd_u8 = {
 	var u8 val;
+
+	e:get(io:rd_buf(file, &val, sizeof(val)));
+
+	return val;
+};
+
+/**
+ * Read a signed, 8-bit integer in its entirety.
+ *   @file: The file.
+ *   &returns: The value.
+ */
+def[export] e:str[i8](st:io:file file) io:rd_i8 = {
+	var i8 val;
 
 	e:get(io:rd_buf(file, &val, sizeof(val)));
 
@@ -291,6 +304,36 @@ def[export] e:str[u64](st:io:file file) io:rd_uleb128 = {
 	return v;
 };
 
+/**
+ * Read a string with a 32-bit length prefix from a file.
+ *   @file: The file.
+ *   &returns: The allocated string.
+ */
+def[export] e:str[pt:char](st:io:file file) io:rd_str32 = {
+	var u32 len;
+	var pt:char str;
+
+	len = e:get(io:rd_u32(file));
+
+	str = mem:alloc(len + 1);
+	onerr mem:free(str);
+
+	e:get(io:rd_buf(file, str, len));
+	str[len] = '\0';
+
+	return str;
+};
+
+
+/**
+ * Write a buffer to a file.
+ *   @file: The file.
+ *   @buf: The buffer.
+ *   @sz: The buffer size.
+ */
+def[export] e:str[void](st:io:file file, cpt:void buf, u32 sz) io:wr_buf = {
+	e:get(file.iface->write->(file.ref, buf, sz));
+};
 
 /**
  * Write a character to a file.
@@ -306,15 +349,45 @@ def[export] e:str[void](st:io:file file, char ch) io:wr_ch = {
  *   @file: The file.
  *   @str: The null terminated string.
  */
-def[export] void(st:io:file file, pt:char str) io:wr_str = {
-	file.iface->write->(file.ref, str, str:len(str));
+def[export] e:str[void](st:io:file file, pt:char str) io:wr_str = {
+	e:get(file.iface->write->(file.ref, str, str:len(str)));
 };
 
 /**
- * Write an unsiend 8-bit integer to a file.
+ * Write a string with a 32-bit length prefix to a file.
+ *   @file: The file.
+ *   @str: The string.
+ */
+def[export] e:str[void](st:io:file file, pt:char str) io:wr_str32 = {
+	var u32 len = str:len(str);
+
+	e:get(io:wr_u32(file, len));
+	e:get(io:wr_buf(file, str, len));
+};
+
+/**
+ * Write a signed, 8-bit integer to a file.
  *   @file: The file.
  *   @val: The value
  */
-def[export] void(st:io:file file, u8 val) io:wr_u8 = {
-	file.iface->write->(file.ref, &val, 1);
+def[export] e:str[void](st:io:file file, i8 val) io:wr_i8 = {
+	e:get(io:wr_buf(file, &val, sizeof(val)));
+};
+
+/**
+ * Write an unsigned, 8-bit integer to a file.
+ *   @file: The file.
+ *   @val: The value
+ */
+def[export] e:str[void](st:io:file file, u8 val) io:wr_u8 = {
+	e:get(io:wr_buf(file, &val, sizeof(val)));
+};
+
+/**
+ * Write an unsigned, 32-bit integer to a file.
+ *   @file: The file.
+ *   @val: The value
+ */
+def[export] e:str[void](st:io:file file, u32 val) io:wr_u32 = {
+	e:get(io:wr_buf(file, &val, sizeof(val)));
 };

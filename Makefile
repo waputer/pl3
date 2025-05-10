@@ -25,17 +25,22 @@ RT = rt/src/avl/avl.pl3 \
 
 SELF = self/src/check.pl3 \
        self/src/enum.pl3 \
+       self/src/decl.pl3 \
        self/src/expr.pl3 \
+       self/src/io.pl3 \
        self/src/list.pl3 \
        self/src/llvm.pl3 \
        self/src/meta.pl3 \
        self/src/parse.pl3 \
+       self/src/sig.pl3 \
        self/src/stmt.pl3 \
        self/src/top.pl3 \
        self/src/type.pl3
 
-VER     := 1.0.0-dev1
+VER     := 1.0.0-dev2
 PL3     := pl3
+RTOBJ   := rt.o
+RTMOD   := rt.pl3.mod
 BIN     := pl3-$(VER)
 CFLAGS  := -O2
 LDFLAGS :=
@@ -48,7 +53,7 @@ all:
 -include make.conf
 
 # top level rules
-all: $(BIN)
+all: $(BIN) rt.all start.o
 
 check: pl3-check
 
@@ -58,7 +63,7 @@ clean:
 dist: pl3-$(VER)-src.tar.xz
 
 # building the distribution
-pl3-$(VER)-src.tar.xz: Makefile main.c $(RT) $(SELF) LICENSE
+pl3-$(VER)-src.tar.xz: Makefile main.c start.c $(RT) $(SELF) self/src/run.pl3 LICENSE
 	rm -rf pl3-$(VER)-src
 	mkdir pl3-$(VER)-src
 	cp -a --parents $^ pl3-$(VER)-src
@@ -67,28 +72,38 @@ pl3-$(VER)-src.tar.xz: Makefile main.c $(RT) $(SELF) LICENSE
 
 # main build rules
 $(BIN): pl3.o main.c
-	gcc $^ -o $@
+	gcc -g $^ -o $@
 
-pl3.ll: $(RT) $(SELF) Makefile
-	$(PL3) $(RT) $(SELF) -o $@
+pl3.ll: $(RT) $(SELF) self/src/run.pl3 Makefile
+	$(PL3) $(RT) $(SELF) self/src/run.pl3 -o $@
+
+.PHONY: rt.all
+rt.all: $(RT) Makefile
+	./$(BIN) $(RT) -o rt.ll -e rt.pl3.mod
+	llc -O0 -filetype=obj -relocation-model=pic rt.ll -o rt.o
+
+rt.o rt.pl3.mod: rt.all
+
+start.o: start.c Makefile
+	gcc -c -O2 -fPIC start.c -o start.o
 
 # rules for creating the self-built compiler
 pl3-self: pl3-self.o main.c
 	gcc -O1 $^ -o $@
 
-pl3-self.ll: $(BIN) $(RT) $(SELF) Makefile
-	./$(BIN) $(RT) $(SELF) -o $@
+pl3-self.ll: $(BIN) $(RT) $(SELF) self/src/run.pl3 Makefile
+	./$(BIN) $(RT) $(SELF) self/src/run.pl3 -o $@
 
 # rules for creating the checked compiler
 pl3-check: pl3-check.o main.c
 	gcc -O1 $^ -o $@
 
-pl3-check.ll: pl3-self $(RT) $(SELF) Makefile
-	./pl3-self $(RT) $(SELF) -o $@
+pl3-check.ll: pl3-self $(RT) $(SELF) self/src/run.pl3 Makefile
+	./pl3-self $(RT) $(SELF) self/src/run.pl3 -o $@
 
 # template rules
 %.ll.opt: %.ll
 	$(OPT) $(OLVL) $< -o $@
 
-%.o: %.ll.opt
+%.o: %.ll
 	$(LLC) $(OLVL) -filetype=obj -relocation-model=pic $< -o $@

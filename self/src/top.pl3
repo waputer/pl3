@@ -50,3 +50,25 @@ def[export] void(pt:st:pl3:top top) pl3:top_delete = {
 def[export] pt:st:pl3:unit(pt:st:pl3:top top) pl3:top_unit = {
 	return top->unit = mem:make(st:pl3:unit{ null, top->unit });
 };
+
+
+/**
+ * Save a top-level.
+ *   @top: The top-level.
+ *   @file: The output file.
+ */
+def[export] e:str[void](pt:st:pl3:top top, st:io:file file) pl3:top_save = {
+	var pt:st:pl3:unit unit;
+
+	for(unit = top->unit; unit != null; unit = unit->next)
+		e:get(pl3:unit_save(unit, file));
+};
+
+
+/**
+ * Save a code unit.
+ *   @top: The code unit.
+ *   @file: The output file.
+ */
+def[export] e:str[void](pt:st:pl3:unit unit, st:io:file file) pl3:unit_save = {
+};

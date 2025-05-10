@@ -655,7 +655,7 @@ def e:str[pt:st:pl3:decl](pt:st:ctx ctx) ctx_decl = {
 			e:fmt("%C: Expected ',' or ';'.", lex:loc(ctx->lex));
 	}
 
-	return pl3:decl_new(mut, attr, type, meta, bind);
+	return pl3:decl_new(mut ? pl3:decl:mut : 0, attr, type, meta, bind);
 };
 
 /**
@@ -1372,7 +1372,7 @@ def e:str[pt:st:pl3:tydecl](pt:st:ctx ctx) ctx_tydecl = {
 
 		e:get(lex:tok_req(ctx->lex, ';', ";"));
 
-		decl = pl3:tydecl_alias(str:fmt("ty:%s", id), attr, pl3:alias_new(type), meta);
+		decl = pl3:tydecl_alias(str:fmt("ty:%s", id), 0, attr, pl3:alias_new(type), meta);
 	}
 	else if(e:get(lex:tok_try(ctx->lex, '{')) != null) {
 		if(pre == tok_en) {
@@ -1409,7 +1409,7 @@ def e:str[pt:st:pl3:tydecl](pt:st:ctx ctx) ctx_tydecl = {
 
 			e:get(lex:tok_req(ctx->lex, ';', ";"));
 
-			decl = pl3:tydecl_enum(str:fmt("en:%s", id), attr, pl3:enum_new(val), meta);
+			decl = pl3:tydecl_enum(str:fmt("en:%s", id), 0, attr, pl3:enum_new(val), meta);
 		}
 		else {
 			var pt:st:pl3:memb memb = null;
@@ -1425,9 +1425,9 @@ def e:str[pt:st:pl3:tydecl](pt:st:ctx ctx) ctx_tydecl = {
 			e:get(lex:tok_req(ctx->lex, ';', ";"));
 
 			if(pre == tok_st)
-				decl = pl3:tydecl_struct(str:dup(id), attr, pl3:agg_new(str:fmt("st:%s", id), memb), meta);
+				decl = pl3:tydecl_struct(str:dup(id), 0, attr, pl3:agg_new(str:fmt("st:%s", id), memb), meta);
 			else if(pre == tok_un)
-				decl = pl3:tydecl_union(str:dup(id), attr, pl3:agg_new(str:fmt("un:%s", id), memb), meta);
+				decl = pl3:tydecl_union(str:dup(id), 0, attr, pl3:agg_new(str:fmt("un:%s", id), memb), meta);
 			else
 				e:fmt("%C: Invalid aggregate declaration.", pl3:meta_call(&meta));
 		}
@@ -1949,86 +1949,3 @@ def[export] void() go = {
 	//io:file_open("testfile", io:WRITE);
 };
 var[export] bool DEBUG = false;
-
-
-
-tydef st:list {
-	cpt:char path;
-	pt:st:list next;
-};
-
-def void(pt:st:list list) list_clear = {
-	var pt:st:list tmp;
-
-	while(list != null) {
-		list = (tmp = list)->next;
-		mem:free(tmp);
-	}
-};
-
-def[export] void(pt:pt:char args) run = {
-	var pt:st:pl3:top top;
-	var pt:st:list iter, list = null;
-	var pt:pt:st:list ilist = &list;
-
-	var u32 i;
-	var cpt:char out = null;
-	var i64 mark;
-	var u32 rd, chk, gen;
-
-	for(i = 1; args[i] != null; i++) {
-		if(str:equal(args[i], "-o")) {
-			i++;
-			if(args[i] == null)
-				fatal("Unexpected end of arguments.");
-
-			out = args[i];
-		}
-		else {
-			*ilist = mem:make(st:list{ args[i], null });
-			ilist = &(*ilist)->next;
-		}
-	}
-
-	if(out == null)
-		fatal("Require output file '-o'.");
-
-	top = pl3:top_new();
-	onerr pl3:top_delete(top);
-
-	{
-		mark = tm:usec();
-
-		for(iter = list; iter != null; iter = iter->next) {
-			e:req(pl3:parse(iter->path, pl3:top_unit(top)));
-		}
-
-		rd = u32{tm:usec() - mark};
-		//print("parse %ums\n", rd / 1000);
-	}
-
-	{
-		mark = tm:usec();
-
-		e:req(pl3:check_brief(top));
-
-		chk = u32{tm:usec() - mark};
-		//print("check %ums\n", chk / 1000);
-	}
-
-	{
-		mark = tm:usec();
-
-		e:req(pl3:llvm(top, out));
-
-		gen = u32{tm:usec() - mark};
-		//print("gen   %ums\n", gen / 1000);
-	}
-	
-	pl3:top_delete(top);
-	list_clear(list);
-
-	//print("tot   %ums\n", (rd + chk + gen) / 1000);
-
-	mem:assert();
-};

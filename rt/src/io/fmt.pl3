@@ -59,10 +59,8 @@ def[export] void(cpt:char fmt, ...) eprint = {
 var bool fatal_term = false;
 // TODO all of the below
 def[export] void(cpt:char fmt, ...) fatal = {
-	if(fatal_term) {
-		*pt:u32{1} = 1;
-		os:exit(1);
-	}
+	if(fatal_term)
+		os:exit(2);
 
 	fatal_term = true;
 
@@ -75,8 +73,6 @@ def[export] void(cpt:char fmt, ...) fatal = {
 	bi:btrace(&trace, 16 * sizeof(pt:void));
 	//bi:btrace_dump(&trace, 6 * sizeof(pt:void));
 
-		*pt:u32{1} = 1;
-	os:exit(1);
 	var u32 i;
 	var pt:char str;
 
@@ -85,15 +81,12 @@ def[export] void(cpt:char fmt, ...) fatal = {
 			break;
 
 		str = e:req(dwarf:getfunc("./pl3", trace[i]));
-		if(str != null) {
+		if(str != null)
 			print("  0x%p \"%s\"\n", trace[i], str);
-			mem:free(str);
-		}
 		else
 			print("  0x%p\n", trace[i]);
 	}
 
-	*pt:u32{1} = 1;
 	os:exit(1);
 };
 

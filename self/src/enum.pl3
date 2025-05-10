@@ -44,6 +44,42 @@ def[export] pt:st:pl3:enval(pt:st:pl3:enum enum, cpt:char id) pl3:enum_find = {
 
 
 /**
+ * Read an enumerator from a file.
+ *   @rd: The reader.
+ *   &returns: The enumerator.
+ */
+def[export] e:str[pt:st:pl3:enum](pt:st:pl3:rd rd) pl3:enum_read = {
+	var pt:st:pl3:enval val = null;
+	var pt:pt:st:pl3:enval ival = &val;
+
+	onerr pl3:enval_clear(val);
+
+	while(e:get(io:rd_u8(rd->file)) > 0) {
+		*ival = e:get(pl3:enval_read(rd));
+		ival = &(*ival)->next;
+	}
+
+	return pl3:enum_new(val);
+};
+
+/**
+ * Write an enumerator to a file.
+ *   @enum: The enumerator.
+ *   @wr: The writer.
+ */
+def[export] e:str[void](pt:st:pl3:enum enum, pt:st:pl3:wr wr) pl3:enum_write = {
+	var pt:st:pl3:enval val;
+
+	for(val = enum->val; val != null; val = val->next) {
+		e:get(io:wr_u8(wr->file, 1));
+		e:get(pl3:enval_write(val, wr));
+	}
+
+	e:get(io:wr_u8(wr->file, 0));
+};
+
+
+/**
  * Enumerated value structure.
  *   @id: The identifier.
  *   @expr: The expression, if given.
@@ -87,6 +123,46 @@ def[export] void(pt:st:pl3:enval val) pl3:enval_clear = {
 		val = (tmp = val)->next;
 		pl3:enval_delete(tmp);
 	}
+};
+
+
+/**
+ * Write an enumerated value to a file.
+ *   @val: The enumerated value.
+ *   @wr: The writer.
+ */
+def[export] e:str[void](pt:st:pl3:enval val, pt:st:pl3:wr wr) pl3:enval_write = {
+	io:wr_str32(wr->file, val->id);
+
+	io:wr_u8(wr->file, 0);
+	/* FIXME this
+	if(val->expr != null) {
+		io:wr_u8(wr->file, 1);
+		fatal("FIXME stub enval_write\n");
+	}
+	else
+		io:wr_u8(wr->file, 0);
+	*/
+};
+
+/**
+ * Read a enumerated value from a file.
+ *   @rd: The reader.
+ *   &returns: The enumerated value.
+ */
+def[export] e:str[pt:st:pl3:enval](pt:st:pl3:rd rd) pl3:enval_read = {
+	var pt:char id;
+	var pt:st:pl3:expr expr;
+
+	id = e:get(io:rd_str32(rd->file));
+	onerr mem:free(id);
+
+	if(e:get(io:rd_u8(rd->file)) > 0)
+		fatal("FIXME stub enval_read\n");
+	else
+		expr = null;
+
+	return pl3:enval_new(id, expr);
 };
 
 

@@ -64,3 +64,22 @@ def[export] i32(cpt:void ptr, u32 sz, u8 val) mem:find_u8 = {
 
 	return -1;
 };
+
+
+/**
+ * Determine if two memory buffers are equal. This is not constant time.
+ *   @lhs: The left-hand buffer.
+ *   @rhs: The right-hand right.
+ *   @sz: The buffer sizes.
+ *   &returns: True if equal.
+ */
+def[export] bool(cpt:void lhs, cpt:void rhs, u32 sz) mem:equal = {
+	var u32 i;
+
+	for(i = 0; i < sz; i++) {
+		if(cpt:u8{lhs}[i] != cpt:u8{rhs}[i])
+			return false;
+	}
+
+	return true;
+};

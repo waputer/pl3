@@ -360,6 +360,7 @@ def[export] e:str[pt:char](cpt:char path, pt:void addr) dwarf:getfunc = {
 
 			info->tag = tag;
 			mem:erase(info->func);
+			info->func = null;
 			break;
 
 		case dwarf:attr:low_pc:
