@@ -758,7 +758,7 @@ def[export] void(cpt:char fmt, ...) print = {
 	var ty:args args = args:init();
 
 	//e:ign(io1:fmtv(io:stdout, fmt, &args)); FIXME
-	io1:fmtv(io:stdout, fmt, &args);
+	io:fmtv(1/*FIXME const*/, fmt, &args);
 };
 
 
@@ -772,10 +772,20 @@ def[export] void(cpt:char fmt, ...) fatal = {
 	fatal_term = true;
 
 	//e:ign(io1:fmtv(io:stderr, fmt, &args)); FIXME
-	io1:fmtv(io:stderr, fmt, &args);
-	io1:wr_ch(io:stderr, '\n');
+	io:fmtv(2/*FIXME const*/, fmt, &args);
+	io:wr_ch(2/*FIXME const*/, '\n');
 	os:abort();
 };
+
+def[export] void(cpt:char str) fatalstr = {
+	if(fatal_term)
+		os:abort();
+
+	io:write(2/*FIXME const*/, str, str:len(str));
+	io:wr_ch(2/*FIXME const*/, '\n');
+	os:abort();
+};
+
 
 /**
  * Function to be executable for unreachable code.

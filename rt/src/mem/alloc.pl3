@@ -205,7 +205,7 @@ tydef st:sm_bin {
 
 /**
  * Small memory structure.
- *   @sz, next; The memory size and next memory offset.
+ *   @sz, next: The memory size and next memory offset.
  *   @pad: The padding.
  */
 tydef st:sm_mem {

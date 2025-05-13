@@ -4,6 +4,8 @@
 tydef en:env { func, block, sw, loop };
 tydef un:env { pt:st:map map; pt:st:pl3:sw sw; };
 tydef st:env {
+	u32 ptr; /// Pointer size.
+
 	en:env tag;  /// Type tag
 	un:env data; /// Data union
 
@@ -79,13 +81,14 @@ tydef st:type {
 /**
  * Typecheck starting from a top-level.
  *   @top: The top-level.
+ *   @ptr: The pointer size in bytes.
  */
-def[export] e:str[void](pt:st:pl3:top top) pl3:check2 = {
+def[export] e:str[void](pt:st:pl3:top top, u32 ptr) pl3:check2 = {
 	var st:env exp;
 	var pt:st:pl3:unit unit;
 	var pt:st:pl3:stmt stmt;
 
-	exp = env_top();
+	exp = env_top(ptr);
 	onerr env_done(exp);
 
 	for(unit = top->unit; unit != null; unit = unit->next) {
@@ -253,29 +256,23 @@ def e:str[void](pt:st:env env, pt:st:pl3:expr expr, pt:st:pl3:sig sig) chk_expr 
 		break;
 
 	case ev:pl3:expr:ident: {
+		var pt:st:sym sym;
 		var pt:st:pl3:ident ident = expr->data.ident;
 
-		if(str:equal(ident->str, "bi:syscall")) {
-			fatal("FIXME syscall");
-		}
-		else {
-			var pt:st:sym sym;
+		sym = get_sym(env, ident->str);
+		if(sym == null)
+			e:fmt("%C: Unknown identifier '%s'.", pl3:meta_call(&expr->meta), ident->str);
 
-			sym = get_sym(env, ident->str);
-			if(sym == null)
-				e:fmt("%C: Unknown identifier '%s'.", pl3:meta_call(&expr->meta), ident->str);
+		switch(sym->tag) {
+		case ev:sym:param:
+			pl3:ident_param(ident, sym->data.param);
+			pl3:type_replace(&expr->type, pl3:type_copy(sym->data.param->type));
+			break;
 
-			switch(sym->tag) {
-			case ev:sym:param:
-				pl3:ident_param(ident, sym->data.param);
-				pl3:type_replace(&expr->type, pl3:type_copy(sym->data.param->type));
-				break;
-
-			case ev:sym:ref:
-				pl3:ident_link(ident, sym->data.ref.decl, sym->data.ref.bind);
-				pl3:type_replace(&expr->type, pl3:type_copy(sym->data.ref.decl->type));
-				break;
-			}
+		case ev:sym:ref:
+			pl3:ident_link(ident, sym->data.ref.decl, sym->data.ref.bind);
+			pl3:type_replace(&expr->type, pl3:type_copy(sym->data.ref.decl->type));
+			break;
 		}
 	} break;
 
@@ -500,6 +497,29 @@ def e:str[void](pt:st:env env, pt:st:pl3:expr expr, pt:st:pl3:sig sig) chk_expr 
 			e:fmt("%C: Not enough arguments.", pl3:meta_call(&expr->meta));
 	} break;
 
+	case ev:pl3:expr:builtin: {
+		var st:pl3:type type;
+		var pt:st:pl3:arg arg;
+		var pt:st:pl3:builtin builtin = expr->data.builtin;
+
+		if(str:equal(builtin->id, "bi:syscall")) {
+			for(arg = builtin->arg; arg != null; arg = arg->next) {
+				e:get(chk_expr(env, arg->expr, sig));
+
+				if(pl3:type_is_unk(arg->expr->type))
+					e:get(chk_fill(arg->expr, pl3:type_i32));
+	
+				type = pl3:type_base(arg->expr->type);
+				if((type.tag != ev:pl3:type:ptr) && (type.tag != ev:pl3:type:i32) && (type.tag != ev:pl3:type:u32) && (type.tag != ev:pl3:type:i64) && (type.tag != ev:pl3:type:u64))
+					e:fmt("%C: Invalid syscall parameter.", pl3:meta_call(&arg->expr->meta));
+			}
+
+			pl3:type_replace(&expr->type, pl3:type_ptr(pl3:ptr_new(pl3:type_void, true)));
+		}
+		else
+			fatal("FIXME unsupported builtin");
+	} break;
+
 	case ev:pl3:expr:elem: {
 		var en:pl3:tydecl tag;
 		var st:pl3:type type;
@@ -525,7 +545,9 @@ def e:str[void](pt:st:env env, pt:st:pl3:expr expr, pt:st:pl3:sig sig) chk_expr 
 			field = pl3:agg_find(agg, elem->id, &type, &elem->idx);
 			if(field == null)
 				e:fmt("%C: Cannot find field '%s' in type '%C'.", pl3:meta_call(&elem->expr->meta), elem->id, pl3:type_call(&type));
+
 			
+			elem->off = pl3:agg_off(agg, elem->idx, env->ptr);
 			pl3:type_replace(&expr->type, pl3:type_copy(type));
 			e:get(chk_type(env, expr->type, &expr->meta));
 		}
@@ -582,7 +604,7 @@ def e:str[void](pt:st:env env, pt:st:pl3:expr expr, pt:st:pl3:sig sig) chk_expr 
 	} break;
 
 	case ev:pl3:expr:ewarn: {
-		fatal("stub");
+		fatal("stub ewarn");
 	} break;
 
 	case ev:pl3:expr:ereq: {
@@ -672,7 +694,7 @@ def e:str[void](pt:st:env env, pt:st:pl3:expr expr, pt:st:pl3:sig sig) chk_expr 
 		if(pl3:agg_find(agg, offset->id, null, &idx) == null)
 			e:fmt("%C: Type '%C' does not have memeber '%s'.", pl3:meta_call(&expr->meta), pl3:type_call(&offset->type), offset->id);
 
-		offset->val = i32{pl3:agg_off(agg, idx, &pl3:arch_x64)};
+		offset->val = i32{pl3:agg_off(agg, idx, env->ptr)};
 	} break;
 
 	case ev:pl3:expr:parent: {
@@ -698,7 +720,7 @@ def e:str[void](pt:st:env env, pt:st:pl3:expr expr, pt:st:pl3:sig sig) chk_expr 
 		if(!chk_same(ptr->type, type))
 			e:fmt("%C: Type mismatch between '%C' and '%C'.", pl3:meta_call(&parent->expr->meta), pl3:type_call(&type), pl3:type_call(&ptr->type));
 
-		parent->off = i32{pl3:agg_off(agg, idx, &pl3:arch_x64)};
+		parent->off = i32{pl3:agg_off(agg, idx, env->ptr)};
 		pl3:type_replace(&expr->type, pl3:type_ptr(pl3:ptr_new(pl3:type_copy(parent->type), ptr->mut)));
 	} break;
 
@@ -1535,10 +1557,11 @@ def bool(st:pl3:type lhs, st:pl3:type rhs) chk_cmp = {
 
 /**
  * Create the top level environment.
+ *   @ptr: The pointer size.
  *   &returns: The environment.
  */
-def st:env() env_top = {
-	return st:env{ ev:env:block, { .map = map_new(false, null) }, null };
+def st:env(u32 ptr) env_top = {
+	return st:env{ ptr, ev:env:block, { .map = map_new(false, null) }, null };
 };
 
 /**
@@ -1547,7 +1570,7 @@ def st:env() env_top = {
  *   &returns: The nested environment.
  */
 def st:env(pt:st:env env) env_func = {
-	return st:env{ ev:env:func, { .map = map_new(false, null) }, env };
+	return st:env{ env->ptr, ev:env:func, { .map = map_new(false, null) }, env };
 };
 
 /**
@@ -1556,7 +1579,7 @@ def st:env(pt:st:env env) env_func = {
  *   &returns: The nested environment.
  */
 def st:env(pt:st:env env) env_block  = {
-	return st:env{ ev:env:block, { .map = map_new(false, null) }, env };
+	return st:env{ env->ptr, ev:env:block, { .map = map_new(false, null) }, env };
 };
 
 /**
@@ -1565,7 +1588,7 @@ def st:env(pt:st:env env) env_block  = {
  *   &returns: The nested environment.
  */
 def st:env(pt:st:env env, pt:st:pl3:sw sw) env_sw = {
-	return st:env{ ev:env:sw, { .sw = sw }, env };
+	return st:env{ env->ptr, ev:env:sw, { .sw = sw }, env };
 };
 
 /**
@@ -1574,7 +1597,7 @@ def st:env(pt:st:env env, pt:st:pl3:sw sw) env_sw = {
  *   &returns: The nested environment.
  */
 def st:env(pt:st:env env) env_loop = {
-	return st:env{ ev:env:loop, {}, env };
+	return st:env{ env->ptr, ev:env:loop, {}, env };
 };
 
 /**
@@ -1743,13 +1766,22 @@ def e:str[void](pt:st:env env, pt:st:pl3:decl decl, pt:st:pl3:bind bind) add_ref
  */
 def e:str[void](pt:st:env env, pt:st:pl3:tydecl decl) add_type = {
 	var pt:st:type type;
+	var pt:st:avl:node node;
 	var pt:st:map map = get_map(env);
 
-	if(avl:root_get(&map->type, decl->id) != null)
-		e:fmt("%C: Duplicate type declaration '%s'.", pl3:meta_call(&decl->meta), decl->id);
 
-	type = mem:make(st:type{ decl, avl:node(decl->id) });
-	avl:root_add(&map->type, &type->node);
+	node = avl:root_get(&map->type, decl->id);
+	if(node != null) {
+		var pt:st:type type = getparent(node, st:type, node);
+
+		if(((type->decl->flags & pl3:decl:exp) != 0) && ((decl->flags & pl3:decl:exp) == 0))
+			type->decl = decl;
+		else
+			e:fmt("%C: Duplicate type declaration '%s'.", pl3:meta_call(&decl->meta), decl->id);
+	} else {
+		type = mem:make(st:type{ decl, avl:node(decl->id) });
+		avl:root_add(&map->type, &type->node);
+	}
 };
 
 

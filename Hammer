@@ -93,7 +93,6 @@ lib2_src = lib2/src/bind.pl3
            lib2/src/io.pl3
            lib2/src/list.pl3
            lib2/src/lit.pl3
-           lib2/src/llvm.pl3
            lib2/src/meta.pl3
            lib2/src/parse.pl3
            lib2/src/sig.pl3
@@ -103,59 +102,100 @@ lib2_src = lib2/src/bind.pl3
  
 bin_src = bin/src/run.pl3;
 
+bin2_src = bin2/src/run.pl3
+           bin2/src/gen.pl3;
+
 doc = $com_doc $os_doc;
 
 root = ${?root};
-pl3  = $root/pl3-1.0.0-dev4;
-ver  = 1.0.0-dev5;
+pl3  = $root/pl3-1.0.0-dev5;
+ver  = 1.0.0-dev6;
 bin  = pl3-$ver;
 
 ## compiler build
 
-lib.o lib.pl3mod : $lib2_src $root/rtchk.common.pl3mod {
-	$pl3 $lib2_src -o lib.ll -i $root/rtchk.common.pl3mod -e lib.pl3mod;
-	llc -O0 lib.ll -o lib.o -filetype=obj -relocation-model=pic;
+lib.o lib.pl3mod : $lib_src $root/rt.common.pl3mod {
+	$pl3 $lib_src -o lib.ll -i $root/rt.common.pl3mod -e lib.pl3mod;
+	llc -O1 lib.ll -o lib.o -filetype=obj -relocation-model=pic;
 }
 
-bin.o : $bin_src $root/rtchk.common.pl3mod lib.pl3mod {
-	$pl3 $bin_src -o bin.ll -i $root/rtchk.common.pl3mod -i lib.pl3mod;
-	llc -O0 bin.ll -o bin.o -filetype=obj -relocation-model=pic;
+bin.o : $bin_src $root/rt.common.pl3mod lib.pl3mod {
+	$pl3 $bin_src -o bin.ll -i $root/rt.common.pl3mod -i lib.pl3mod;
+	llc -O1 bin.ll -o bin.o -filetype=obj -relocation-model=pic;
 }
 
-$bin : bin.o lib.o $root/rtchk.common.o $root/rtchk.posix.o $root/start.c $root/rt/posix/src/start.c {
+$bin : bin.o lib.o $root/rt.common.o $root/rt.posix.o $root/start.c $root/rt/posix/src/start.c {
 	gcc $^ -lm -o $@ -pthread -lm;
 }
 
+
+bin2.o : pl3chk $bin2_src lib2.o {
+	./pl3chk $bin2_src -o bin2.ll -i ../rt/rt.elf.pl3mod -i lib2.pl3mod -i ../miir/lib/miir.pl3mod;
+	llc -O1 bin2.ll -o bin2.o -filetype=obj -relocation-model=pic;
+}
+
+lib2.o : $lib2_src ../rt/rt.elf.pl3mod {
+	./pl3chk $lib2_src -o lib2.ll -i ../rt/rt.elf.pl3mod -e lib2.pl3mod;
+	llc -O1 lib2.ll -o lib2.o -filetype=obj -relocation-model=pic;
+}
+
+pl3c : bin2.o lib2.o ../rt/rt.elf.o ../miir/lib/miir.o ../rt/ext.c {
+	gcc $^ -lm -o $@ -pthread -lm;
+}
+
+
+bin3.o : pl3c $bin2_src lib3.o {
+	./pl3c -t elf $bin2_src -o bin3.o -i ../rt/rt.elf.pl3mod -i lib3.pl3mod -i ../miir/lib/miir.pl3mod;
+}
+
+lib3.o : pl3c $lib2_src ../rt/rt.elf.pl3mod {
+	./pl3c -t elf $lib2_src -o lib3.o -i ../rt/rt.elf.pl3mod -e lib3.pl3mod;
+}
+
+pl3c2 : bin3.o lib3.o ../rt/rt.elf.o ../miir/lib/miir.o ../rt/ext.c {
+	gcc $^ -lm -o $@ -pthread -lm;
+}
+
+
+#bin3.o : pl3c $bin2_src rt.plmod lib2.pl3mod {
+#	./pl3c $bin2_src -o bin3.o -i ../rt/rt.elf.pl3mod -i lib2.pl3mod -i ../miir/lib/miir.pl3mod;
+#	#llc -O1 bin3.ll -o bin3.o -filetype=obj -relocation-model=pic;
+#}
+#pl3c2 : bin3.o lib2.o ../rt/rt.elf.o start.c rt/posix/src/start.c ../miir/lib/miir.o {
+#	gcc $^ -lm -o $@ -pthread -lm;
+#}
+
+
 rt.common.o rt.common.pl3mod : $com_src $bin {
 	./$bin $com_src -o rt.common.ll -e rt.common.pl3mod;
-	llc -O0 rt.common.ll -o rt.common.o -filetype=obj -relocation-model=pic;
+	llc -O1 rt.common.ll -o rt.common.o -filetype=obj -relocation-model=pic;
 }
 
 rt.posix.o rt.posix.pl3mod : $posix_src rt.common.pl3mod $bin {
 	./$bin $posix_src -o rt.posix.ll -i rt.common.pl3mod -e rt.posix.pl3mod;
-	llc -O0 rt.posix.ll -o rt.posix.o -filetype=obj -relocation-model=pic;
+	llc -O1 rt.posix.ll -o rt.posix.o -filetype=obj -relocation-model=pic;
 }
 
 ## check build
 
 rtchk.common.o rtchk.common.pl3mod : $com_src $bin {
 	./$bin $com_src -o rtchk.common.ll -e rtchk.common.pl3mod;
-	llc -O0 rtchk.common.ll -o rtchk.common.o -filetype=obj -relocation-model=pic;
+	llc -O1 rtchk.common.ll -o rtchk.common.o -filetype=obj -relocation-model=pic;
 }
 
 rtchk.posix.o rtchk.posix.pl3mod : $posix_src rtchk.common.pl3mod $bin {
 	./$bin $posix_src -o rtchk.posix.ll -i rtchk.common.pl3mod -e rtchk.posix.pl3mod;
-	llc -O0 rtchk.posix.ll -o rtchk.posix.o -filetype=obj -relocation-model=pic;
+	llc -O1 rtchk.posix.ll -o rtchk.posix.o -filetype=obj -relocation-model=pic;
 }
 
 libchk.o libchk.pl3mod : $lib_src rtchk.common.pl3mod rtchk.posix.pl3mod $bin {
 	./$bin $lib_src -o lib.ll -i rtchk.common.pl3mod -i rtchk.posix.pl3mod -e libchk.pl3mod;
-	llc -O0 lib.ll -o libchk.o -filetype=obj -relocation-model=pic;
+	llc -O1 lib.ll -o libchk.o -filetype=obj -relocation-model=pic;
 }
 
 binchk.o : $bin_src rtchk.common.pl3mod rtchk.posix.pl3mod libchk.pl3mod $bin {
 	./$bin $bin_src -o binchk.ll -i rtchk.common.pl3mod -i rtchk.posix.pl3mod -i libchk.pl3mod;
-	llc -O0 binchk.ll -o binchk.o -filetype=obj -relocation-model=pic;
+	llc -O1 binchk.ll -o binchk.o -filetype=obj -relocation-model=pic;
 }
 
 pl3chk : binchk.o libchk.o rtchk.common.o rtchk.posix.o start.c rt/posix/src/start.c {
@@ -166,43 +206,56 @@ pl3chk : binchk.o libchk.o rtchk.common.o rtchk.posix.o start.c rt/posix/src/sta
 
 rtrechk.common.o rtrechk.common.pl3mod : $com_src pl3chk {
 	./pl3chk $com_src -o rtrechk.common.ll -e rtrechk.common.pl3mod;
-	llc -O0 rtrechk.common.ll -o rtrechk.common.o -filetype=obj -relocation-model=pic;
+	llc -O1 rtrechk.common.ll -o rtrechk.common.o -filetype=obj -relocation-model=pic;
 }
 
 rtrechk.posix.o rtrechk.posix.pl3mod : $posix_src rtrechk.common.pl3mod pl3chk {
 	./pl3chk $posix_src -o rtrechk.posix.ll -i rtrechk.common.pl3mod -e rtrechk.posix.pl3mod;
-	llc -O0 rtrechk.posix.ll -o rtrechk.posix.o -filetype=obj -relocation-model=pic;
+	llc -O1 rtrechk.posix.ll -o rtrechk.posix.o -filetype=obj -relocation-model=pic;
 }
 
 librechk.o librechk.pl3mod : $lib_src rtrechk.common.pl3mod rtrechk.posix.pl3mod pl3chk {
 	./pl3chk $lib_src -o lib.ll -i rtrechk.common.pl3mod -i rtrechk.posix.pl3mod -e librechk.pl3mod;
-	llc -O0 lib.ll -o librechk.o -filetype=obj -relocation-model=pic;
+	llc -O1 lib.ll -o librechk.o -filetype=obj -relocation-model=pic;
 }
 
 binrechk.o : $bin_src rtrechk.common.pl3mod rtrechk.posix.pl3mod librechk.pl3mod pl3chk {
 	./pl3chk $bin_src -o binrechk.ll -i rtrechk.common.pl3mod -i rtrechk.posix.pl3mod -i librechk.pl3mod;
-	llc -O0 binrechk.ll -o binrechk.o -filetype=obj -relocation-model=pic;
+	llc -O1 binrechk.ll -o binrechk.o -filetype=obj -relocation-model=pic;
 }
 
 pl3rechk : binrechk.o librechk.o rtrechk.common.o rtrechk.posix.o start.c rt/posix/src/start.c {
 	gcc $^ -lm -o $@ -lpthread;
 }
 
-.all : $bin rt.common.o rt.posix.o;
+.all : ${bin} rt.common.o rt.posix.o;
 
 .check : pl3rechk;
 
 .run : pl3rechk {
+	#./pl3c $lib_src -o pl3d -i ../rt/rt.elf.pl3mod;
+
+	#./unit.bin;
 	#./pl3chk uhg.pl3 -o uhg.ll;
-	#llc -O0 uhg.ll -o uhg.o -filetype=obj -relocation-model=pic;
+	#llc -O1 uhg.ll -o uhg.o -filetype=obj -relocation-model=pic;
 	#gcc rt/posix/src/start.c start.c uhg.o rtchk.common.o rtchk.posix.o -lm -lpthread -o uhg;
 	#./uhg;
 	#$pl3 foo.pl3 -o foo.ll -i lib.pl3mod -i rt.pl3mod;
-	#llc -O0 foo.ll -o foo.o -filetype=obj -relocation-model=pic;
+	#llc -O1 foo.ll -o foo.o -filetype=obj -relocation-model=pic;
 	#gcc rt/posix/src/start.c start.c foo.o rt.o lib.o -lm -lpthread -o foo;
 	#./foo;
-	#llc -O0 uhg.ll -o uhg.o -filetype=obj -relocation-model=pic;
+	#llc -O1 uhg.ll -o uhg.o -filetype=obj -relocation-model=pic;
 }
+
+#.unit : unit.bin {
+#	./unit.bin;
+#}
+#
+#unit.bin : unit/main.c unit/func.pl3 pl3chk rtchk.common.pl3mod rtchk.posix.pl3mod libchk.pl3mod {
+#	./pl3chk unit/func.pl3 -o unit.ll -i rtchk.common.pl3mod -i rtchk.posix.pl3mod -i libchk.pl3mod;
+#	llc -O1 unit.ll -o unit.o -filetype=obj -relocation-model=pic;
+#	gcc unit/main.c unit.o -O2 -o $@;
+#}
 
 # distribute
 
@@ -221,7 +274,7 @@ pl3-${ver}-src.tar.xz : Hammer hammer.sh start.c rt/posix/src/start.c $rt_src $c
 .doc : doc.json;
 
 doc.json : $doc {
-	js ../doc/test.js $doc > $@;
+	node ../doc/test.js $doc > $@;
 }
 
 # clean
@@ -229,3 +282,4 @@ doc.json : $doc {
 .clean : {
 	rm -rf $*;
 }
+

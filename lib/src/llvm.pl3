@@ -46,8 +46,6 @@ tydef st:defer {
 };
 
 
-def[export] st:pl3:arch pl3:arch_x64 = { 8 };
-
 /**
  * Generate LLVM bitcode.
  *   @top: The top-level.
@@ -82,7 +80,6 @@ def[export] e:str[void](pt:st:pl3:top top, cpt:char path) pl3:llvm = {
 	e:get(io1:fmt(ctx.ext, "\tret i64 %%8\n"));
 	e:get(io1:fmt(ctx.ext, "}\n"));
 
-							st:pinfo{ &ctx };
 	for(unit = top->unit; unit != null; unit = unit->next) {
 		for(stmt = unit->stmt; stmt != null; stmt = stmt->next) {
 			if(stmt->tag == ev:pl3:stmt:decl) {
@@ -169,7 +166,6 @@ def[export] e:str[void](pt:st:pl3:top top, cpt:char path) pl3:llvm = {
  *   @file THe output file.
  */
 def void(pt:st:ctx ctx, st:io file) ctx_init = {
-	var st:ref foo;
 	ctx->defer = null;
 	ctx->file = file;
 	ctx->ext_buf = null;
@@ -336,7 +332,7 @@ def e:str[void](pt:st:ctx ctx, pt:st:pl3:decl decl) ctx_top = {
 					ref_external(ctx, bind);
 
 				if((decl->flags & pl3:decl:exp) != 0)
-					e:get(io1:fmt(ctx->file, "%C = global %C %C, !dbg %C\n", ref_bind(ctx, bind), call_type(&decl->type), calc, dbg_bind(ctx, bind, decl)));
+					e:get(io1:fmt(ctx->file, "%C = dso_local global %C %C, !dbg %C\n", ref_bind(ctx, bind), call_type(&decl->type), calc, dbg_bind(ctx, bind, decl)));
 				else
 					e:get(io1:fmt(ctx->file, "%C = internal global %C %C, !dbg %C\n", ref_bind(ctx, bind), call_type(&decl->type), calc, dbg_bind(ctx, bind, decl)));
 
@@ -913,7 +909,7 @@ def e:str[st:io1:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_ex
 			else if(pl3:type_is_fp(expr->type))
 				fatal("FIXME stub float");
 			else if(pl3:type_is_ptr(expr->type))
-				e:get(io1:fmt(ctx->code, "\t%C = getelementptr i8, i8* %C, i32 %d", out, in, i32{inc ? 1 : -1} * i32{pl3:type_size(expr->type.data.ptr->type, &pl3:arch_x64)}));
+				e:get(io1:fmt(ctx->code, "\t%C = getelementptr i8, i8* %C, i32 %d", out, in, i32{inc ? 1 : -1} * i32{pl3:type_size(expr->type.data.ptr->type, 8)}));
 			else
 				e:fmt("%C: Invalid increment/decrement.", pl3:meta_call(&expr->meta));
 
@@ -1005,7 +1001,7 @@ def e:str[st:io1:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_ex
 					rhs = tmp;
 				}
 
-				sz = pl3:type_is_void(sub) ? 1 : pl3:type_size(sub, &pl3:arch_x64);
+				sz = pl3:type_is_void(sub) ? 1 : pl3:type_size(sub, 8);
 				off = gen_tmp(ctx);
 				e:get(io1:fmt(ctx->code, "\t%C = mul %C %C, %u\n", off, call_type(&op2->rhs->type), rhs, sz));
 				e:get(io1:fmt(ctx->code, "\t%C = getelementptr i8, i8* %C, %C %C\n", ret, lhs, call_type(&op2->rhs->type), off));
@@ -1037,14 +1033,14 @@ def e:str[st:io1:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_ex
 				}
 
 				if((op2->tag == ev:pl3:op2:shleq) || (op2->tag == ev:pl3:op2:shreq)) {
-					if(pl3:type_size(op2->lhs->type, &pl3:arch_x64) < pl3:type_size(op2->rhs->type, &pl3:arch_x64)) {
+					if(pl3:type_size(op2->lhs->type, 8) < pl3:type_size(op2->rhs->type, 8)) {
 						var st:io1:call tmp;
 
 						tmp = gen_tmp(ctx);
 						e:get(io1:fmt(ctx->code, "\t%C = trunc %C %C to %C\n", tmp, call_type(&op2->rhs->type), rhs, call_type(&op2->lhs->type)));
 						rhs = tmp;
 					}
-					else if(pl3:type_size(op2->lhs->type, &pl3:arch_x64) > pl3:type_size(op2->rhs->type, &pl3:arch_x64)) {
+					else if(pl3:type_size(op2->lhs->type, 8) > pl3:type_size(op2->rhs->type, 8)) {
 						var st:io1:call tmp;
 
 						tmp = gen_tmp(ctx);
@@ -1081,7 +1077,7 @@ def e:str[st:io1:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_ex
 				}
 
 				off = gen_tmp(ctx);
-				sz = pl3:type_is_void(sub) ? 1 : pl3:type_size(sub, &pl3:arch_x64);
+				sz = pl3:type_is_void(sub) ? 1 : pl3:type_size(sub, 8);
 				e:get(io1:fmt(ctx->code, "\t%C = mul %C %C, %u\n", off, call_type(&op2->rhs->type), rhs, sz));
 				e:get(io1:fmt(ctx->code, "\t%C = getelementptr i8, i8* %C, %C %C\n", res, lhs, call_type(&op2->rhs->type), off));
 			}
@@ -1131,14 +1127,14 @@ def e:str[st:io1:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_ex
 				}
 
 				if((op2->tag == ev:pl3:op2:shl) || (op2->tag == ev:pl3:op2:shr)) {
-					if(pl3:type_size(op2->lhs->type, &pl3:arch_x64) < pl3:type_size(op2->rhs->type, &pl3:arch_x64)) {
+					if(pl3:type_size(op2->lhs->type, 8) < pl3:type_size(op2->rhs->type, 8)) {
 						var st:io1:call tmp;
 
 						tmp = gen_tmp(ctx);
 						e:get(io1:fmt(ctx->code, "\t%C = trunc %C %C to %C\n", tmp, call_type(&op2->rhs->type), rhs, call_type(&op2->lhs->type)));
 						rhs = tmp;
 					}
-					else if(pl3:type_size(op2->lhs->type, &pl3:arch_x64) > pl3:type_size(op2->rhs->type, &pl3:arch_x64)) {
+					else if(pl3:type_size(op2->lhs->type, 8) > pl3:type_size(op2->rhs->type, 8)) {
 						var st:io1:call tmp;
 
 						tmp = gen_tmp(ctx);
@@ -1317,7 +1313,7 @@ def e:str[st:io1:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_ex
 			val = e:get(ctx_expr(ctx, env, src));
 
 			if(pl3:type_is_int(src->type) && pl3:type_is_int(comp->type)) {
-				if(pl3:type_size(src->type, &pl3:arch_x64) > pl3:type_size(comp->type, &pl3:arch_x64)) {
+				if(pl3:type_size(src->type, 8) > pl3:type_size(comp->type, 8)) {
 					var st:io1:call ret;
 
 					ret = gen_tmp(ctx);
@@ -1325,7 +1321,7 @@ def e:str[st:io1:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_ex
 
 					return ret;
 				}
-				else if(pl3:type_size(src->type, &pl3:arch_x64) < pl3:type_size(comp->type, &pl3:arch_x64)) {
+				else if(pl3:type_size(src->type, 8) < pl3:type_size(comp->type, 8)) {
 					var st:io1:call ret;
 
 					ret = gen_tmp(ctx);
@@ -1383,9 +1379,9 @@ def e:str[st:io1:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_ex
 				var cpt:char name;
 				var st:io1:call ret, src_type, dst_type;
 
-				if(pl3:type_size(src->type, &pl3:arch_x64) > pl3:type_size(comp->type, &pl3:arch_x64))
+				if(pl3:type_size(src->type, 8) > pl3:type_size(comp->type, 8))
 					name = "fptrunc";
-				else if(pl3:type_size(src->type, &pl3:arch_x64) < pl3:type_size(comp->type, &pl3:arch_x64))
+				else if(pl3:type_size(src->type, 8) < pl3:type_size(comp->type, 8))
 					name = "fpext";
 				else
 					return val;
@@ -1541,7 +1537,7 @@ def e:str[st:io1:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_ex
 			}
 			else if(tag == ev:pl3:tydecl:union) {
 				var st:io1:call tmp, cast;
-				var u32 sz = 8 * pl3:type_size(type, &pl3:arch_x64);
+				var u32 sz = 8 * pl3:type_size(type, 8);
 
 				tmp = gen_tmp(ctx);
 				cast = gen_tmp(ctx);
@@ -1752,7 +1748,7 @@ def e:str[st:io1:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_ex
 		ret = gen_tmp(ctx);
 		type = call_type(&expr->type);
 		//TODO: check out of range size
-		e:get(io1:fmt(ctx->code, "\t%C = bitcast %C %d to %C\n", ret, type, pl3:type_size(size->type, &pl3:arch_x64), type));
+		e:get(io1:fmt(ctx->code, "\t%C = bitcast %C %d to %C\n", ret, type, pl3:type_size(size->type, 8), type));
 
 		return ret;
 	} break;
@@ -1833,7 +1829,7 @@ def e:str[st:io1:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_ex
 		ret = gen_tmp(ctx);
 
 		//if(pl3:type_get_agg(get->type, null) != null) {
-			var u32 sz = 8 * pl3:type_size(get->type, &pl3:arch_x64);
+			var u32 sz = 8 * pl3:type_size(get->type, 8);
 			var st:io1:call tmp, val, ptr, type;
 
 			tmp = gen_tmp(ctx);
@@ -2016,7 +2012,7 @@ def e:str[st:io1:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:expr expr) ctx_le
 		if(tag == ev:pl3:tydecl:struct)
 			e:get(io1:fmt(ctx->code, "\t%C = getelementptr %C, %C* %C, i32 0, i32 %u\n", ret, call_type(&type), call_type(&type), base, elem->idx));
 		else if(tag == ev:pl3:tydecl:union)
-			e:get(io1:fmt(ctx->code, "\t%C = bitcast i%u* %C to %C*\n", ret, 8 * pl3:type_size(type, &pl3:arch_x64), base, call_type(&expr->type)));
+			e:get(io1:fmt(ctx->code, "\t%C = bitcast i%u* %C to %C*\n", ret, 8 * pl3:type_size(type, 8), base, call_type(&expr->type)));
 		else
 			e:fmt("Internal error. Invalid element access.");
 
@@ -2100,7 +2096,7 @@ def e:str[st:io1:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:agg agg, pt:st:pl
 def e:str[st:io1:call](pt:st:ctx ctx, pt:st:env env, pt:st:pl3:agg agg, pt:st:pl3:list list) emit_union = {
 	var pt:st:pl3:init init;
 	var st:io1:call val, tmp, cast, ret;
-	var u32 sz = 8 * pl3:agg_max(agg, &pl3:arch_x64);
+	var u32 sz = 8 * pl3:agg_max(agg, 8);
 
 	if(list->init == null)
 		return io:call_str("undef");
@@ -2582,7 +2578,7 @@ def st:io1:call(cpt:st:pl3:type type) call_type = {
 			} break;
 
 			case ev:pl3:tydecl:union:
-				e:get(io1:fmt(file, "i%u", 8 * pl3:type_size(*type, &pl3:arch_x64)));
+				e:get(io1:fmt(file, "i%u", 8 * pl3:type_size(*type, 8)));
 				break;
 			}
 
@@ -3176,8 +3172,6 @@ def st:io1:call(pt:st:ctx ctx, cpt:st:pl3:bind bind) ref_bind = {
 };
 
 
-tydef st:foo { };
-def void(st:foo foo) foo = { };
 def e:str[void](st:io file, cpt:st:pl3:bind bind) ext_proc = {
 	e:get(io1:fmt(file, "@\"%s\"", bind->id));
 };

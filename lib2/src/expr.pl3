@@ -5,8 +5,8 @@
  *   @type: The type information.
  *   @meta: The metadata information.
  */
-tydef[export] en:pl3:expr { lit, ident, enum, op1, op2, index, comp, call, elem, func, tern, enref, size, offset, parent, "arrlen", "getref", vinit, vget, eget, eign, ewarn, ereq };
-tydef[export] un:pl3:expr { pt:char id; pt:st:pl3:lit lit; pt:st:pl3:ident ident; pt:st:pl3:op1 op1; pt:st:pl3:op2 op2; pt:st:pl3:index index; pt:st:pl3:comp comp; pt:st:pl3:call call; pt:st:pl3:elem elem; pt:st:pl3:func func; pt:st:pl3:tern tern; pt:st:pl3:enref enref; pt:st:pl3:expr expr; pt:st:pl3:size size; pt:st:pl3:offset offset; pt:st:pl3:parent parent; pt:st:pl3:arrlen len; pt:st:pl3:vget vget; };
+tydef[export] en:pl3:expr { lit, ident, enum, op1, op2, index, comp, call, builtin, elem, func, tern, enref, size, offset, parent, "arrlen", "getref", vinit, vget, eget, eign, ewarn, ereq };
+tydef[export] un:pl3:expr { pt:char id; pt:st:pl3:lit lit; pt:st:pl3:ident ident; pt:st:pl3:op1 op1; pt:st:pl3:op2 op2; pt:st:pl3:index index; pt:st:pl3:comp comp; pt:st:pl3:call call; pt:st:pl3:builtin builtin; pt:st:pl3:elem elem; pt:st:pl3:func func; pt:st:pl3:tern tern; pt:st:pl3:enref enref; pt:st:pl3:expr expr; pt:st:pl3:size size; pt:st:pl3:offset offset; pt:st:pl3:parent parent; pt:st:pl3:arrlen len; pt:st:pl3:vget vget; };
 tydef[export] st:pl3:expr {
 	en:pl3:expr tag;
 	un:pl3:expr data;
@@ -40,6 +40,7 @@ def[export] void(pt:st:pl3:expr expr) pl3:expr_delete = {
 	case ev:pl3:expr:index: pl3:index_delete(expr->data.index); break;
 	case ev:pl3:expr:comp: pl3:comp_delete(expr->data.comp); break;
 	case ev:pl3:expr:call: pl3:call_delete(expr->data.call); break;
+	case ev:pl3:expr:builtin: pl3:builtin_delete(expr->data.builtin); break;
 	case ev:pl3:expr:elem: pl3:elem_delete(expr->data.elem); break;
 	case ev:pl3:expr:func: pl3:func_delete(expr->data.func); break;
 	case ev:pl3:expr:tern: pl3:tern_delete(expr->data.tern); break;
@@ -150,6 +151,17 @@ def[export] pt:st:pl3:expr(pt:st:pl3:comp comp, st:pl3:meta meta) pl3:expr_comp 
  */
 def[export] pt:st:pl3:expr(pt:st:pl3:call call, st:pl3:meta meta) pl3:expr_call = {
 	return pl3:expr_new(ev:pl3:expr:call, un:pl3:expr{ .call = call }, meta);
+};
+
+/**
+ * Create a builtin expression.
+ *   @name: Consumed. The name.
+ *   @builtin: Consumed. The builtin operation.
+ *   @meta: Consumed. The metadata.
+ *   &returns: The expression.
+ */
+def[export] pt:st:pl3:expr(pt:st:pl3:builtin builtin, st:pl3:meta meta) pl3:expr_builtin = {
+	return pl3:expr_new(ev:pl3:expr:builtin, un:pl3:expr{ .builtin = builtin }, meta);
 };
 
 /**
@@ -318,12 +330,13 @@ def[export] e:str[pt:st:pl3:expr](pt:st:pl3:rd rd) pl3:expr_read = {
 	switch(tag) {
 	case ev:pl3:expr:lit: data.lit = e:get(pl3:lit_read(rd)); break;
 	case ev:pl3:expr:op1: data.op1 = e:get(pl3:op1_read(rd)); break;
+	case ev:pl3:expr:op2: data.op2 = e:get(pl3:op2_read(rd)); break;
 
 	case ev:pl3:expr:comp:
 		break;
 
 	default:
-		fatal("FIXME stub");
+		fatal("FIXME stub expr_read");
 	}
 
 	type = e:get(pl3:type_read(rd));
@@ -332,7 +345,7 @@ def[export] e:str[pt:st:pl3:expr](pt:st:pl3:rd rd) pl3:expr_read = {
 	meta = e:get(pl3:meta_read(rd));
 	onerr pl3:meta_delete(meta);
 
-	if(tag == ev:pl3:expr:comp || tag == ev:pl3:expr:op2) {
+	if(tag == ev:pl3:expr:comp) {
 	 //FIXME
 		pl3:type_delete(type);
 		return null;
@@ -352,8 +365,9 @@ def[export] e:str[void](pt:st:pl3:expr expr, pt:st:pl3:wr wr) pl3:expr_write = {
 	switch(expr->tag) {
 	case ev:pl3:expr:lit: e:get(pl3:lit_write(expr->data.lit, wr)); break;
 	case ev:pl3:expr:op1: e:get(pl3:op1_write(expr->data.op1, wr)); break;
+	case ev:pl3:expr:op2: e:get(pl3:op2_write(expr->data.op2, wr)); break;
 	case ev:pl3:expr:comp:
-	case ev:pl3:expr:op2: //FIXME
+	 //FIXME
 		break;
 
 	default:
@@ -608,6 +622,33 @@ def[export] pt:st:pl3:op2(pt:st:pl3:expr lhs, pt:st:pl3:expr rhs) pl3:op2_div = 
  */
 def[export] pt:st:pl3:op2(pt:st:pl3:expr lhs, pt:st:pl3:expr rhs) pl3:op2_rem = {
 	return pl3:op2_new(ev:pl3:op2:rem, lhs, rhs);
+};
+
+/**
+ * Read a binary operation.
+ *   @rd: The reader.
+ *   &returns: The binary operation.
+ */
+def[export] e:str[pt:st:pl3:op2](pt:st:pl3:rd rd) pl3:op2_read = {
+	var en:pl3:op2 tag;
+	var pt:st:pl3:expr lhs, rhs;
+
+	tag = en:pl3:op2{e:get(io:rd_u8(rd->file))};
+	lhs = e:get(pl3:expr_read(rd));
+	rhs = e:get(pl3:expr_read(rd));
+
+	return pl3:op2_new(tag, lhs, rhs);
+};
+
+/**
+ * Write a binary operation.
+ *   @op2: The binary operation.
+ *   @wr: The writer.
+ */
+def[export] e:str[void](pt:st:pl3:op2 op2, pt:st:pl3:wr wr) pl3:op2_write = {
+	e:get(io:wr_u8(wr->file, u8{ op2->tag }));
+	e:get(pl3:expr_write(op2->lhs, wr));
+	e:get(pl3:expr_write(op2->rhs, wr));
 };
 
 
@@ -900,7 +941,7 @@ def[export] void(pt:st:pl3:func func) pl3:func_delete = {
  * Call structure.
  *   @deref: The derefence flag.
  *   @func: The function.
- *   @arg: The argument.
+ *   @arg: The argument list.
  */
 tydef[export] st:pl3:call {
 	bool deref;
@@ -942,6 +983,35 @@ def[export] u32(pt:st:pl3:call call) pl3:call_cnt = {
 		n++;
 	
 	return n;
+};
+
+
+/**
+ * Builtin structure.
+ */
+tydef[export] st:pl3:builtin {
+	pt:char id;        /// The identifier.
+	pt:st:pl3:arg arg; /// The argument list
+};
+
+/**
+ * Create a new builtin.
+ *   @id: Consumed. The identifier.
+ *   @arg: Consumed. The argument list.
+ *   &returns: The builtin.
+ */
+def[export] pt:st:pl3:builtin(pt:char id, pt:st:pl3:arg arg) pl3:builtin_new = {
+	return mem:make(st:pl3:builtin{ id, arg });
+};
+
+/**
+ * Delete a builtin.
+ *   @builtin: The builtin.
+ */
+def[export] void(pt:st:pl3:builtin builtin) pl3:builtin_delete = {
+	pl3:arg_clear(builtin->arg);
+	mem:free(builtin->id);
+	mem:free(builtin);
 };
 
 

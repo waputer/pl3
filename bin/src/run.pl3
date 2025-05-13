@@ -82,7 +82,7 @@ def[export] void(pt:pt:char args) run = {
 		mark = tm:usec();
 
 		//e:req(pl3:check_brief(top));
-		e:req(pl3:check2(top));
+		e:req(pl3:check2(top, 8));
 
 		chk = u32{tm:usec() - mark};
 		//print("check %ums\n", chk / 1000);

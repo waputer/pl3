@@ -6,10 +6,11 @@
  *   @ext: External.
  *   @ign: Ignore (redefined).
  */
-def[export] u32 pl3:decl:mut = 0x01,
-                pl3:decl:pub = 0x02,
-                pl3:decl:exp = 0x04,
-                pl3:decl:ext = 0x08;
+def[export] u32 pl3:decl:mut  = 0x01,
+                pl3:decl:pub  = 0x02,
+                pl3:decl:exp  = 0x04,
+                pl3:decl:ext  = 0x08,
+                pl3:decl:weak = 0x10;
 
 /**
  * Declaration structure.
@@ -46,6 +47,9 @@ def[export] pt:st:pl3:decl(u32 flags, pt:st:pl3:attr attr, st:pl3:type type, st:
 
 	if(pl3:attr_contains(attr, "extern"))
 		flags |= pl3:decl:ext;
+
+	if(pl3:attr_contains(attr, "weak"))
+		flags |= pl3:decl:weak;
 
 	return mem:make(st:pl3:decl{ flags, attr, type, meta, bind });
 };

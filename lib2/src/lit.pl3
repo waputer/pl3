@@ -62,6 +62,15 @@ def[export] pt:st:pl3:lit(bool boolv) pl3:lit_bool = {
 };
 
 /**
+ * Create a signed 8-bit literal
+ *   @u8v: The value.
+ *   &returns: The literal.
+ */
+def[export] pt:st:pl3:lit(i8 i8v) pl3:lit_i8 = {
+	return pl3:lit_new(ev:pl3:lit:i8v, un:pl3:lit{ .i8v = i8v });
+};
+
+/**
  * Create an unsigned 8-bit literal
  *   @u8v: The value.
  *   &returns: The literal.
@@ -71,12 +80,66 @@ def[export] pt:st:pl3:lit(u8 u8v) pl3:lit_u8 = {
 };
 
 /**
+ * Create a signed 16-bit literal
+ *   @u16v: The value.
+ *   &returns: The literal.
+ */
+def[export] pt:st:pl3:lit(i16 i16v) pl3:lit_i16 = {
+	return pl3:lit_new(ev:pl3:lit:i16v, un:pl3:lit{ .i16v = i16v });
+};
+
+/**
+ * Create an unsigned 16-bit literal
+ *   @u16v: The value.
+ *   &returns: The literal.
+ */
+def[export] pt:st:pl3:lit(u16 u16v) pl3:lit_u16 = {
+	return pl3:lit_new(ev:pl3:lit:u16v, un:pl3:lit{ .u16v = u16v });
+};
+
+/**
  * Create a signed 32-bit literal
  *   @i32v: The value.
  *   &returns: The literal.
  */
 def[export] pt:st:pl3:lit(i32 i32v) pl3:lit_i32 = {
 	return pl3:lit_new(ev:pl3:lit:i32v, un:pl3:lit{ .i32v = i32v });
+};
+
+/**
+ * Create an unsigned 32-bit literal
+ *   @u32v: The value.
+ *   &returns: The literal.
+ */
+def[export] pt:st:pl3:lit(u32 u32v) pl3:lit_u32 = {
+	return pl3:lit_new(ev:pl3:lit:u32v, un:pl3:lit{ .u32v = u32v });
+};
+
+/**
+ * Create a signed 64-bit literal
+ *   @i64v: The value.
+ *   &returns: The literal.
+ */
+def[export] pt:st:pl3:lit(i64 i64v) pl3:lit_i64 = {
+	return pl3:lit_new(ev:pl3:lit:i64v, un:pl3:lit{ .i64v = i64v });
+};
+
+/**
+ * Create an unsigned 64-bit literal
+ *   @u64v: The value.
+ *   &returns: The literal.
+ */
+def[export] pt:st:pl3:lit(u64 u64v) pl3:lit_u64 = {
+	return pl3:lit_new(ev:pl3:lit:u64v, un:pl3:lit{ .u64v = u64v });
+};
+
+/**
+ * Create an 32-bit float.
+ *   @val: The value.
+ *   &returns: The literal.
+ */
+def[export] pt:st:pl3:lit(fp32 val) pl3:lit_fp32 = {
+	return pl3:lit_new(ev:pl3:lit:fp32, un:pl3:lit{ .fp32v = val });
 };
 
 /**
@@ -294,7 +357,7 @@ def[export] bool(pt:st:pl3:lit lit, st:pl3:type type) pl3:lit_fill = {
 		case ev:pl3:type:i32: pl3:lit_put_i32(lit, i32{lit->data.flt}); break;
 		case ev:pl3:type:u64: pl3:lit_put_u64(lit, u64{lit->data.flt}); break;
 		case ev:pl3:type:i64: pl3:lit_put_i64(lit, i64{lit->data.flt}); break;
-		case ev:pl3:type:fp32: pl3:lit_put_fp32(lit, cast_fp64tofp32(lit->data.flt)); break;
+		case ev:pl3:type:fp32: pl3:lit_put_fp32(lit, fp32{lit->data.flt}); break;
 		case ev:pl3:type:fp64: pl3:lit_put_fp64(lit, lit->data.flt); break;
 
 		case ev:pl3:type:name:

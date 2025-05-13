@@ -280,6 +280,19 @@ def[export] e:str[fp64](st:io io) io1:rd_fp64 = {
  *   @io: The I/O.
  *   &returns: The allocated string.
  */
+def[export] e:str[pt:char](i32 desc) io:rd_str32 = {
+	var u32 len;
+	var pt:char str;
+
+	len = e:get(io:rd_u32(desc));
+	str = mem:alloc(len + 1);
+	onerr mem:free(str);
+
+	e:get(io:rd_buf(desc, str, len));
+	str[len] = '\0';
+
+	return str;
+};
 def[export] e:str[pt:char](st:io io) io1:rd_str32 = {
 	var u32 len;
 	var pt:char str;

@@ -294,3 +294,25 @@ def[export] void(pt:st:lex:parse parse, i32 id) lex:rule_slashstar = {
 
 	lex:rule_add(parse, &func, pt:void{id});
 };
+
+/**
+ * Add a rule to parse single line comments starting with a hash.
+ *   @parse: The parser.
+ *   @id: The token ID.
+ */
+def[export] void(pt:st:lex:parse parse, i32 id) lex:rule_hash = {
+	def e:str[pt:st:lex:token](pt:st:lex:parse parse, pt:void arg) func = {
+		var u32 i;
+
+		if(lex:ch_get(parse, 0) != '#')
+			return null;
+
+		i = 2;
+		while((lex:ch_get(parse, i) != '\n') && (lex:ch_get(parse, i) >= 0))
+			i++;
+
+		return e:get(lex:tok_new(parse, i32{arg}, i, null, 0));
+	};
+
+	lex:rule_add(parse, &func, pt:void{id});
+};

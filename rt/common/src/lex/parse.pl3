@@ -428,22 +428,3 @@ def[export] e:str[pt:st:lex:token](pt:st:lex:parse parse, i32 id, cpt:char req) 
 def[export] e:str[pt:st:lex:token](pt:st:lex:parse parse) lex:tok_peek = {
 	return lex:tok_get(parse, 0);
 };
-
-
-tydef[export] st:mem:set {
-	pt:pt:void arr;
-	u32 cnt;
-};
-
-def[export] pt:st:mem:set() mem:set_new = {
-	return mem:make(st:mem:set{ mem:alloc(0), 0 });
-};
-
-def[export] void(pt:st:mem:set set) mem:set_delete = {
-	var u32 i;
-	
-	for(i = 0; i < set->cnt; i++)
-		mem:free(set->arr[i]);
-
-	mem:free(set);
-};

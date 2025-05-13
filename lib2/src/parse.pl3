@@ -271,7 +271,7 @@ def ar[]:st:bin binlist = {
 	{ '/', ev:pl3:op2:div, false },
 	{ '%', ev:pl3:op2:rem, true  },
 	// end-of-list
-	{ -1/*TODO, en:pl3:expr{0}, true*/}
+	{ -1, ev:pl3:op2:rem, true }
 };
 
 
@@ -306,7 +306,7 @@ def[export] e:str[void](cpt:char path, pt:st:pl3:unit unit) pl3:parse = {
 	pl3:str_delete(ctx.path);
 };
 
-def[export] e:str[void](st:io file, cpt:char path, pt:st:pl3:unit unit) pl3:parse_file = {
+def[export] e:str[void](i32 file, cpt:char path, pt:st:pl3:unit unit) pl3:parse_file = {
 	var st:ctx ctx;
 
 	ctx.lex = e:get(lex:new(file, path, 256, true));
@@ -1065,8 +1065,6 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_post = {
 };
 
 
-def[extern,export] fp64(cpt:char str) str_get_fp64; //FIXME
-
 /**
  * Parse a terminal expression.
  *   @ctx: The context.
@@ -1092,10 +1090,14 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_term = {
 		return expr;
 	}
 	else if((tok = e:get(lex:tok_try(ctx->lex, tok_num))) != null) {
-		if(str:chr(tok->str, '.') != null)
-			return pl3:expr_lit(pl3:lit_flt(str_get_fp64(tok->str)), meta);
-		else
+		if(str:chr(tok->str, '.') != null) {
+			if(tok->str[str:len(tok->str) - 1] == 'f')
+				return pl3:expr_lit(pl3:lit_fp32(e:get(str:get_fp32(tok->str))), meta);
+			else
+				return pl3:expr_lit(pl3:lit_flt(e:get(str:get_fp64(tok->str))), meta);
+		} else {
 			return pl3:expr_lit(pl3:lit_int(e:get(m:int_parse(tok->str, 0))), meta);
+		}
 	}
 	else if((tok = e:get(lex:tok_try(ctx->lex, tok_quote1))) != null) {
 		if(tok->sz != 1)
@@ -1109,8 +1111,12 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_term = {
 		return pl3:expr_lit(pl3:lit_bool(true), meta);
 	else if(e:get(lex:tok_try(ctx->lex, tok_false)) != null)
 		return pl3:expr_lit(pl3:lit_bool(false), meta);
-	else if((tok = e:get(lex:tok_try(ctx->lex, tok_id))) != null)
-		return pl3:expr_ident(pl3:ident_new(str:dup(tok->str)), meta);
+	else if((tok = e:get(lex:tok_try(ctx->lex, tok_id))) != null) {
+		if(str:prefix(tok->str, "bi:syscal")) // FIXME all builtins
+			return pl3:expr_builtin(e:get(ctx_builtin(ctx, tok)), meta);
+		else
+			return pl3:expr_ident(pl3:ident_new(str:dup(tok->str)), meta);
+	}
 	else if((tok = e:get(lex:tok_try(ctx->lex, tok_null))) != null)
 		return pl3:expr_lit(pl3:lit_null(), meta);
 	else if((tok = e:get(lex:tok_try(ctx->lex, tok_ev))) != null) {
@@ -1358,6 +1364,39 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_term = {
 		e:fmt("%C: Expected expression.", lex:loc(ctx->lex));
 
 	return null;
+};
+
+/**
+ * Parse a builtin.
+ *   @ctx: The context.
+ *   @tok: The token.
+ */
+def e:str[pt:st:pl3:builtin](pt:st:ctx ctx, cpt:st:lex:token tok) ctx_builtin = {
+	var pt:char id;
+	var pt:st:pl3:arg arg = null;
+	var pt:pt:st:pl3:arg iter = &arg;
+
+	onerr pl3:arg_clear(arg);
+
+	id = str:dup(tok->str);
+	onerr mem:free(id);
+
+	if(e:get(lex:tok_try(ctx->lex, '(')) == null)
+		e:fmt("%C: Expected '(' what.", lex:loc(ctx->lex));
+
+	if(e:get(lex:tok_try(ctx->lex, ')')) == null) {
+		for() {
+			*iter = pl3:arg_new(e:get(ctx_assign(ctx)));
+			iter = &(*iter)->next;
+
+			if(e:get(lex:tok_try(ctx->lex, ')')) != null)
+				break;
+			else if(e:get(lex:tok_try(ctx->lex, ',')) == null)
+				e:fmt("%C: Expected ',' or ')'.", lex:loc(ctx->lex));
+		}
+	}
+
+	return pl3:builtin_new(id, arg);
 };
 
 /**
@@ -1980,81 +2019,3 @@ def e:str[pt:st:lex:token](pt:st:lex:parse parse, pt:void arg) rule_prefix = {
 
 	return null;
 };
-
-
-def e:str[void]() build = {
-	var pt:st:pl3:top top;
-
-	top = pl3:top_new();
-	onerr pl3:top_delete(top);
-
-	//e:get(pl3:parse("test.el", pl3:top_unit(top)));
-	//e:get(pl3:parse("bar.el", pl3:top_unit(top)));
-	e:get(pl3:parse("foo.el", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/avl/avl.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/avl/test.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/io/accum.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/io/file.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/io/fmt.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/io/view.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/lex/ch.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/lex/parse.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/lex/rules.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/math/int.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/math/lim.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/mem/alloc.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/mem/buf.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/mem/std.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/os/linux/io.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/os/linux/linux.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/str/buf.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/str/fmt.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/str/std.pl3", pl3:top_unit(top)));
-
-	e:get(pl3:parse("../self/src/meta.el", pl3:top_unit(top)));
-
-	e:get(pl3:parse("../self/src/enum.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/expr.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/list.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/stmt.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/top.el", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/type.pl3", pl3:top_unit(top)));
-
-	e:get(pl3:parse("../self/src/check.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/elf.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/dwarf.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/llvm.pl3", pl3:top_unit(top)));
-
-	e:get(pl3:parse("../self/src/parse.pl3", pl3:top_unit(top)));
-
-	/*
-	 * self/src/parse.pl3
-	 */
-
-	//e:get(pl3:parse("baz.pl3", pl3:top_unit(top)));
-	//e:get(pl3:check_brief(top));
-	e:get(pl3:check2(top));
-	e:get(pl3:llvm(top, "foo.ll"));
-
-	pl3:top_delete(top);
-};
-
-def[export] void() go = {
-	var pt:char err;
-
-	m:int:test();
-	mem:assert();
-
-	err = build().err;
-	if(err != null) {
-		print("%s\n", err);
-		mem:free(err);
-		mem:assert();
-		os:exit(1);
-	}
-
-	mem:assert();
- 	//os_write(1, "test\n", 5);
-	//io:file_open("testfile", io:WRITE);
-};
-var[export] bool DEBUG = false;

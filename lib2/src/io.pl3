@@ -3,7 +3,7 @@
  *   @file: The file.
  */
 tydef[export] st:pl3:wr {
-	st:io file;
+	i32 file;
 };
 
 /**
@@ -11,7 +11,7 @@ tydef[export] st:pl3:wr {
  *   @file: The file.
  */
 tydef[export] st:pl3:rd {
-	st:io file;
+	i32 file;
 };
 
 

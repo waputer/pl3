@@ -110,7 +110,7 @@ def[export] i32(i32 desc, i32 wid, char pad) io:align = {
 					e:get(io:write(align->desc, align->tmp, align->idx));
 
 				for(i = 0; i < abs - align->idx; i++)
-					e:get(io:wr_ch(align->desc, ' '));
+					e:get(io:wr_ch(align->desc, align->pad));
 
 				if(align->wid > 0)
 					e:get(io:write(align->desc, align->tmp, align->idx));

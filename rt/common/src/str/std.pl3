@@ -145,6 +145,7 @@ def[export] pt:char(cpt:char str, u32 max) str:ndup = {
 	return ret;
 };
 
+
 /**
  * Set a string.
  *   @dst: The destination string. Will be freed if non-null.

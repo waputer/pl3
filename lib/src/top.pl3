@@ -64,6 +64,40 @@ def[export] e:str[void](pt:st:pl3:top top, st:io file) pl3:top_save = {
 		e:get(pl3:unit_save(unit, file));
 };
 
+/**
+ * Load AST data from the top-level.
+ *   @top: The top-level.
+ *   @path: The file path.
+ */
+def[export] e:str[void](pt:st:pl3:top top, cpt:char path) pl3:top_load = {
+	var ar[16]:u8 magic;
+	var st:pl3:rd rd;
+
+	rd.file = e:get(io1:open(path, io:mode:read));
+	onerr io1:close(rd.file);
+
+	e:get(io1:read(rd.file, &magic, sizeof(magic)));
+
+	if(!mem:equal(&magic, &pl3:magic, 16))
+		e:fmt("%s: not a valid pl3 file.", path);
+
+	while(e:get(io1:rd_u8(rd.file)) != 0) {
+		var pt:st:pl3:unit unit;
+		var pt:st:pl3:stmt stmt;
+		var pt:pt:st:pl3:stmt istmt;
+
+		unit = pl3:top_unit(top);
+		istmt = &unit->stmt;
+
+		while((stmt = e:get(pl3:stmt_read(&rd))) != null) {
+			*istmt = stmt;
+			istmt = &(*istmt)->next;
+		}
+	}
+
+	io1:close(rd.file);
+};
+
 
 /**
  * Save a code unit.
@@ -72,3 +106,4 @@ def[export] e:str[void](pt:st:pl3:top top, st:io file) pl3:top_save = {
  */
 def[export] e:str[void](pt:st:pl3:unit unit, st:io file) pl3:unit_save = {
 };
+
