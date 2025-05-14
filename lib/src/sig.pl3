@@ -70,9 +70,9 @@ def[export] e:str[pt:st:pl3:sig](pt:st:pl3:rd rd) pl3:sig_read = {
 	type = e:get(pl3:type_read(rd));
 	onerr pl3:type_delete(type);
 
-	vlist = bool{e:get(io1:rd_u8(rd->file))};
+	vlist = bool{e:get(io:rd_u8(rd->file))};
 
-	while(bool{e:get(io1:rd_u8(rd->file))}) {
+	while(bool{e:get(io:rd_u8(rd->file))}) {
 		*iparam = e:get(pl3:param_read(rd));
 		iparam = &(*iparam)->next;
 	}
@@ -157,8 +157,8 @@ def[export] e:str[pt:st:pl3:param](pt:st:pl3:rd rd) pl3:param_read = {
 	type = e:get(pl3:type_read(rd));
 	onerr pl3:type_delete(type);
 
-	if(e:get(io1:rd_u8(rd->file)) > 0)
-		id = e:get(io1:rd_str32(rd->file));
+	if(e:get(io:rd_u8(rd->file)) > 0)
+		id = e:get(io:rd_str32(rd->file));
 	else
 		id = null;
 

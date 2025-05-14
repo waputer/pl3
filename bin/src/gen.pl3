@@ -1,0 +1,3090 @@
+/**
+ * Context structure.
+ */
+tydef st:ctx {
+	pt:st:miir:mod mod;     /// Module
+	st:miir:type ptr, args; /// Pointer and arguments types
+
+	pt:st:miir:ext fatal, free; /// Common externs
+
+	st:avl:root sym; /// Top level symbols tree
+
+	st:avl:root defer; /// Deferred objects
+
+	st:avl:root map; /// General map
+};
+
+/**
+ * Symbol structure.
+ */
+tydef st:sym {
+	pt:st:miir:decl decl; /// Declaration
+
+	st:avl:node node; /// Tree node
+};
+
+/**
+ * Deferred resolved objects.
+ */
+tydef st:defer {
+	pt:void src;       /// Source value
+	pt:pt:pt:void dst; /// Destination
+	u32 cnt;
+	
+	st:avl:node node; /// Tree node
+};
+
+/**
+ * Scope structure.
+ */
+tydef st:scope {
+	pt:st:ref ref;         /// Reference list
+	pt:st:handler handler; /// List of handlers
+};
+
+/**
+ * Reference structure.
+ */
+tydef st:ref {
+	pt:void ptr;        /// Pointer
+	pt:st:miir:reg reg; /// Reigster
+
+	pt:st:ref next; /// Next reference
+};
+
+/**
+ * Environment structure.
+ */
+tydef en:env { top, frame, scope, flow, sw };
+tydef un:env { pt:st:frame frame; pt:st:scope scope; pt:st:flow flow; };
+tydef st:env {
+	en:env tag;    /// Tag
+	un:env data;   /// Data
+	pt:st:ctx ctx; /// Context
+	pt:st:env up;  /// Parent environment
+};
+
+/**
+ * Function frame.
+ */
+tydef st:frame {
+	pt:st:pl3:sig sig;       /// Signature
+	pt:pt:st:miir:reg reg;   /// Tail local register
+	pt:pt:st:miir:blk blk;   /// Tail block
+	pt:pt:st:miir:inst inst; /// Tail instruction
+	pt:st:miir:term term;    /// Terminal
+	st:avl:root map;         /// Label/case to block mapping
+};
+
+/**
+ * Mapping structure.
+ */
+tydef st:map {
+	pt:st:miir:blk blk; /// Target block
+	st:avl:node node;   /// Tree node
+};
+
+/**
+ * Handler structure.
+ */
+tydef st:handler {
+	bool suc, err;       /// Success and error flags
+	pt:st:pl3:stmt stmt; /// Statement
+	pt:st:handler next;  /// Next handler
+};
+
+/**
+ * Control flow structure.
+ */
+tydef st:flow {
+	pt:st:miir:blk brk, cont; /// Break and continue blocks
+	pt:st:flow up;            /// Parent flow
+};
+
+
+/**
+ * Fold from the top.
+ *   @top: The top.
+ */
+def[export] void(pt:st:pl3:top top) pl3:fold_top = {
+	var pt:st:pl3:unit unit;
+
+	var pt:st:pl3:stmt stmt;
+	for(unit = top->unit; unit != null; unit = unit->next) {
+		for(stmt = unit->stmt; stmt != null; stmt = stmt->next) {
+			switch(stmt->tag) {
+			case ev:pl3:stmt:decl: pl3:fold_decl(stmt->data.decl); break;
+			}
+		}
+	}
+};
+
+/**
+ * Fold a declaration.
+ *   @decl: The declaration.
+ */
+def[export] void(pt:st:pl3:decl decl) pl3:fold_decl = {
+	var pt:st:pl3:bind bind;
+
+	for(bind = decl->bind; bind != null; bind = bind->next) {
+		if(bind->expr != null)
+			pl3:fold_expr(&bind->expr);
+	}
+};
+
+/**
+ * Fold an expression.
+ *   @expr: The expression.
+ */
+def[export] void(pt:pt:st:pl3:expr expr) pl3:fold_expr = {
+	switch((*expr)->tag) {
+	case ev:pl3:expr:op1: pl3:fold_op1(expr, (*expr)->data.op1); break;
+	}
+};
+
+/**
+ * Fold a unary operation.
+ *   @root: The root expression.
+ *   @op1: The unary operation.
+ */
+def[export] void(pt:pt:st:pl3:expr root, pt:st:pl3:op1 op1) pl3:fold_op1 = {
+	pl3:fold_expr(&op1->in);
+
+	switch(op1->tag) {
+	case ev:pl3:op1:neg: pl3:fold_neg(root, op1->in); break;
+	}
+};
+
+/**
+ * Fold a negation.
+ *   @root: The root expression.
+ *   @expr: The input expression.
+ */
+def[export] void(pt:pt:st:pl3:expr root, pt:st:pl3:expr expr) pl3:fold_neg = {
+	var st:pl3:meta meta;
+	var pt:st:pl3:lit put, get;
+
+	if(expr->tag != ev:pl3:expr:lit)
+		return;
+
+	get = expr->data.lit;
+	switch(get->tag) {
+	case ev:pl3:lit:none: break;
+	case ev:pl3:lit:bool: put = pl3:lit_bool(!get->data.boolv); break;
+	case ev:pl3:lit:i8v: put = pl3:lit_i8(-get->data.i8v); break;
+	case ev:pl3:lit:u8v: put = pl3:lit_u8(-get->data.u8v); break;
+	case ev:pl3:lit:i16v: put = pl3:lit_i16(-get->data.i16v); break;
+	case ev:pl3:lit:u16v: put = pl3:lit_u16(-get->data.u16v); break;
+	case ev:pl3:lit:i32v: put = pl3:lit_i32(-get->data.i32v); break;
+	case ev:pl3:lit:u32v: put = pl3:lit_u32(-get->data.u32v); break;
+	case ev:pl3:lit:i64v: put = pl3:lit_i64(-get->data.i64v); break;
+	case ev:pl3:lit:u64v: put = pl3:lit_u64(-get->data.u64v); break;
+	}
+
+	meta = pl3:meta_copy(expr->meta);
+	pl3:expr_delete(*root);
+	*root = pl3:expr_lit(put, meta);
+};
+
+
+/**
+ * Generate a module from a path.
+ *   @path: The path.
+ *   @ptr: The pointer type.
+ *   @args: The argument type.
+ *   &returns: The module.
+ */
+def[export] e:str[pt:st:miir:mod](pt:st:pl3:top top, st:miir:type ptr, st:miir:type args) miir:gen = {
+	pl3:fold_top(top);
+
+	var pt:st:pl3:unit unit;
+	var pt:st:pl3:stmt stmt;
+
+	var st:ctx ctx;
+	var st:env env;
+
+	ctx.mod = miir:mod_new();
+	ctx.ptr = ptr;
+	ctx.args = args;
+	ctx.sym = avl:root_new(&avl:cmp_ptr);
+	ctx.defer = avl:root_new(&avl:cmp_ptr);
+	ctx.map = avl:root_new(&avl:cmp_ptr);
+	onerr miir:mod_delete(ctx.mod);
+	onerr avl:root_delete(&ctx.sym, offsetof(st:sym, node), &mem:free);
+	onerr avl:root_delete(&ctx.defer, offsetof(st:defer, node), &defer_delete);
+	onerr avl:root_delete(&ctx.map, offsetof(st:avl:ptr, node), &mem:free);
+
+	env = env_top(&ctx);
+	onerr env_done(&env);
+
+	for(unit = top->unit; unit != null; unit = unit->next) {
+		for(stmt = unit->stmt; stmt != null; stmt = stmt->next) {
+			if(stmt->tag == ev:pl3:stmt:decl)
+				e:get(gen_decl(&env, stmt->data.decl));
+		}
+	}
+
+	for(unit = top->unit; unit != null; unit = unit->next) {
+		for(stmt = unit->stmt; stmt != null; stmt = stmt->next) {
+			if(stmt->tag == ev:pl3:stmt:decl)
+				e:get(gen_top(&env, stmt->data.decl));
+		}
+	}
+
+	if(ctx.fatal == null)
+		e:fmt("Missing 'fatalstr' definition.");
+	else if(ctx.free == null)
+		e:fmt("Missing 'mem:free' definition.");
+
+	defer_resolve(&ctx);
+
+	env_done(&env);
+	avl:root_delete(&ctx.sym, offsetof(st:sym, node), &mem:free);
+	avl:root_delete(&ctx.defer, offsetof(st:defer, node), &defer_delete);
+	avl:root_delete(&ctx.map, offsetof(st:avl:ptr, node), &mem:free);
+
+	return ctx.mod;
+};
+
+
+/**
+ * Create a top-level environment.
+ *   @ctx: The context.
+ *   &returns; The environment.
+ */
+def st:env(pt:st:ctx ctx) env_top = {
+	return st:env{ ev:env:top, {}, ctx, null };
+};
+
+/**
+ * Create a frame environment.
+ *   @env: The environment.
+ *   @sig: The signature.
+ *   @reg: The register.
+ *   &returns: The environment.
+ */
+def st:env(pt:st:env env, pt:st:pl3:sig sig, pt:pt:st:miir:reg reg) env_frame = {
+	return st:env{ ev:env:frame, { .frame = frame_new(sig, reg) }, env->ctx, env };
+};
+
+/**
+ * Create a function environment.
+ *   @env: The environment.
+ *   @scope: The scope.
+ *   &returns: The environment.
+ */
+def st:env(pt:st:env env, pt:st:scope scope) env_scope = {
+	return st:env{ ev:env:scope, { .scope = scope }, env->ctx, env };
+};
+
+/**
+ * Create a flow environment.
+ *   @env: The environment.
+ *   @flow: The flow.
+ *   &returns: The environment.
+ */
+def st:env(pt:st:env env, pt:st:flow flow) env_flow = {
+	return st:env{ ev:env:flow, { .flow = flow }, env->ctx, env };
+};
+
+/**
+ * Cleanup an environment.
+ *   @env: The environment.
+ */
+def void(pt:st:env env) env_done = {
+	switch(env->tag) {
+	case ev:env:top: break;
+	case ev:env:frame: frame_delete(env->data.frame); break;
+	case ev:env:scope: scope_delete(env->data.scope); break;
+	case ev:env:flow: flow_clear(env->data.flow); break;
+	}
+};
+
+/**
+ * Emit error handlers.
+ *   @env: The environemnt.
+ */
+def e:str[void](pt:st:env env) env_err = {
+	var pt:st:miir:reg reg;
+	var pt:st:handler handler;
+
+	while(env != null) {
+		if(env->tag == ev:env:frame)
+			break;
+
+		if(env->tag == ev:env:scope) {
+			for(handler = env->data.scope->handler; handler != null; handler = handler->next)
+				e:get(gen_stmt(env, handler->stmt));
+		}
+
+		env = env->up;
+	}
+};
+
+def void(pt:st:flow flow) flow_clear = {
+};
+
+
+/**
+ * Get a register based off a pointer.
+ *   @env: The environment.
+ *   @ptr: The pointer.
+ *   &returns: The register or null if not found.
+ */
+def pt:st:miir:reg(pt:st:env env, pt:void ptr) find_reg = {
+	var pt:st:miir:reg reg;
+
+	while(env != null) {
+		if(env->tag == ev:env:frame)
+			break;
+
+		if(env->tag == ev:env:scope) {
+			reg = scope_get(env->data.scope, ptr);
+			if(reg != null)
+				return reg;
+		}
+
+		env = env->up;
+	}
+
+	return null;
+};
+
+/**
+ * Get a register based off a pointer.
+ *   @env: The environment.
+ *   @ptr: The pointer.
+ *   &returns: The register or null if not found.
+ */
+def e:str[pt:st:miir:reg](pt:st:env env, pt:void ptr) get_reg = {
+	var pt:st:miir:reg reg;
+
+	reg = find_reg(env, ptr);
+	if(reg == null)
+		e:fmt("Cannot find resolved reference.");
+	
+	return reg;
+};
+
+/**
+ * Get the next frame from an environment.
+ *   @env: The environment.
+ *   &returns: The frame or null.
+ */
+def pt:st:frame(pt:st:env env) get_frame = {
+	while(env != null) {
+		if(env->tag == ev:env:frame)
+			return env->data.frame;
+
+		env = env->up;
+	}
+
+	return null;
+};
+
+/**
+ * Get the next scope from an environment.
+ *   @env: The environment.
+ *   &returns: The scope or null.
+ */
+def pt:st:scope(pt:st:env env) get_scope = {
+	while(env != null) {
+		if(env->tag == ev:env:scope)
+			return env->data.scope;
+
+		env = env->up;
+	}
+
+	return null;
+};
+
+/**
+ * Get the next flow from an environment.
+ *   @env: The environment.
+ *   &returns: The flow or null.
+ */
+def pt:st:flow(pt:st:env env) get_flow = {
+	while(env != null) {
+		if(env->tag == ev:env:flow)
+			return env->data.flow;
+
+		env = env->up;
+	}
+
+	return null;
+};
+
+
+/**
+ * Allocate a register from the environment.
+ *   @env: The environment.
+ *   @type: The type.
+ *   @name: Optional. Consumed. The name.
+ *   &returns: The register.
+ */
+def pt:st:miir:reg(pt:st:env env, st:miir:type type, pt:char name) env_alloc = {
+	var pt:st:miir:reg reg;
+	var pt:st:frame frame;
+
+	reg = miir:reg_new(type, name);
+	frame = get_frame(env);
+	*frame->reg = reg;
+	frame->reg = &reg->next;
+
+	return reg;
+};
+
+
+/**
+ * Generate a top-level symbol.
+ *   @env: The environment.
+ *   @decl: The declaration.
+ */
+def e:str[void](pt:st:env env, pt:st:pl3:decl decl) gen_decl = {
+	var st:miir:type type;
+	var pt:st:pl3:bind bind;
+	var pt:st:miir:mod mod = env->ctx->mod;
+
+	if(decl->type.tag == ev:pl3:type:sig) {
+		for(bind = decl->bind; bind != null; bind = bind->next) {
+			var pt:st:miir:ext ext;
+			var st:miir:type ret;
+			var pt:st:pl3:sig sig;
+
+			if(bind->expr != null) 
+				continue;
+			else if((decl->flags & pl3:decl:ext) == 0)
+				e:fmt("%C: Function declaration must be defined or external.", pl3:meta_call(&bind->expr->meta));
+
+			sig = pl3:type_get_sig(decl->type);
+			ext = miir:ext_func(str:dup(bind->id), e:get(gen_sig(sig, env)));
+			*env->ctx->mod->iext = ext;
+			env->ctx->mod->iext = &ext->next;
+			avl:root_add(&env->ctx->map, avl:ptr_new(bind, ext));
+
+			if(str:equal(bind->id, "fatalstr"))
+				env->ctx->fatal = ext;
+			else if(str:equal(bind->id, "mem:free"))
+				env->ctx->free = ext;
+		}
+	} else {
+		type = e:get(gen_type(decl->type, env));
+
+		for(bind = decl->bind; bind != null; bind = bind->next) {
+			var pt:st:miir:decl gen;
+			var pt:st:miir:val val;
+
+			if(bind->expr != null)
+				val = e:get(val_expr(env, bind->expr));
+			else
+				val = null;
+
+			var u32 flags = 0;
+
+			if((decl->flags & pl3:decl:pub) != 0)
+				flags |= miir:flag:pub;
+
+			if((decl->flags & pl3:decl:exp) != 0)
+				flags |= miir:flag:exp;
+
+			if((decl->flags & pl3:decl:weak) != 0)
+				flags |= miir:flag:weak;
+
+			gen = miir:decl_new(str:dup(bind->id), type, flags, val, miir:type_size(type));
+			*mod->idecl = gen;
+			mod->idecl = &gen->next;
+
+			var pt:st:sym sym = mem:make(st:sym{ gen, avl:node(bind) }); /// FIXME one statement
+			avl:root_add(&env->ctx->sym, &sym->node);
+		}
+	}
+};
+
+/**
+ * Generate a top-level declaration.
+ *   @env: The environment.
+ *   @decl: The declaration.
+ */
+def e:str[void](pt:st:env env, pt:st:pl3:decl decl) gen_top = {
+	var bool exp, weak;
+	var pt:st:pl3:bind bind;
+	var pt:st:pl3:expr expr;
+
+	exp = ((decl->flags & pl3:decl:exp) != 0);
+	weak = ((decl->flags & pl3:decl:weak) != 0);
+
+	if(decl->type.tag == ev:pl3:type:sig) {
+		for(bind = decl->bind; bind != null; bind = bind->next) {
+			var pt:st:pl3:sig sig;
+			var pt:st:miir:func func;
+
+			expr = bind->expr;
+			if(expr == null) {
+				continue;
+			} else if(expr->tag != ev:pl3:expr:func) {
+				e:fmt("%C: Invalid function binding.", pl3:meta_call(&bind->expr->meta));
+			} else if((sig = pl3:type_get_sig(expr->type)) == null) {
+				e:fmt("%C: Invalid function type.", pl3:meta_call(&bind->expr->meta));
+			} else {
+				func = e:get(gen_func(env, bind->id, expr->data.func->sig, expr->data.func, true, exp, weak));
+				defer_src(env->ctx, bind, func);
+			}
+		}
+	}
+};
+
+/**
+ * Generate a function.
+ *   @env: The environment.
+ *   @id: The identifier.
+ *   @sig: The signature.
+ *   @func: The function.
+ *   @top: Top-level flag.
+ *   @exp: Exported.
+ *   @weak: Weak symbol.
+ *   &returns: The generated function.
+ */
+def e:str[pt:st:miir:func](pt:st:env env, cpt:char id, pt:st:pl3:sig sig, pt:st:pl3:func func, bool top, bool exp, bool weak) gen_func = {
+	var st:env outer, inner;
+	var pt:st:frame frame;
+	var pt:st:scope scope;
+	var pt:st:miir:func ret;
+	var pt:st:pl3:param param;
+	var pt:pt:st:miir:reg arg;
+	var pt:st:miir:reg reg = null;
+	var pt:st:miir:blk blk = null;
+	var pt:pt:st:miir:blk iblk = &blk;
+
+	onerr miir:reg_clear(reg);
+
+	outer = env_frame(env, sig, &reg);
+	frame = outer.data.frame; //FIXME
+	onerr env_done(&outer);
+
+	scope = scope_new();
+	inner = env_scope(&outer, scope);
+	onerr env_done(&inner);
+
+	*iblk = miir:blk_new(); //FIXME onerr?
+	frame->inst = &(*iblk)->inst;
+	frame->term = &(*iblk)->term;
+	frame->blk = &(*iblk)->next;
+
+	arg = &(*iblk)->arg;
+	for(param = sig->param; param != null; param = param->next) {
+		//FIXME i think this is correct... //*arg = env_alloc(&outer,
+		//e:get(gen_type(param->type, env)), null);
+		*arg = miir:reg_new(e:get(gen_type(param->type, env)), (param->id != null) ? str:dup(param->id) : null);
+		scope_add(scope, param, *arg);
+		arg = &(*arg)->next;
+	}
+
+	e:get(gen_blk(&inner, &func->block));
+
+	if(frame->term->tag == ev:miir:term:inv) {
+		var pt:st:pl3:err err;
+
+		err = pl3:type_get_err(sig->ret);
+
+		if(pl3:type_is_void(sig->ret)) {
+			*frame->term = miir:term_ret(miir:ret_new(null, false));
+		} else if((err != null) && pl3:type_is_void(err->suc)) {
+			var st:miir:type type;
+			var pt:st:miir:reg zero;
+
+			type = e:get(gen_type(err->fail, &inner));
+
+			zero = env_alloc(&inner, type, null);
+
+			add_inst(&inner, miir:inst_imm(miir:imm_zero(zero, zero->type.wid / 8)));
+			*frame->term = miir:term_ret(miir:ret_new(zero, false));
+		}
+	}
+
+	ret = miir:func_new(str:dup(id), top, exp, sig->vlist, e:get(gen_type(sig->ret, env)), blk);
+	if(weak)
+		ret->weak = true;
+	ret->reg = reg; //FIXME doesn't look right
+	*env->ctx->mod->ifunc = ret;
+	env->ctx->mod->ifunc = &(*env->ctx->mod->ifunc)->next;
+
+	env_done(&inner);
+	env_done(&outer);
+
+	return ret;
+};
+
+/**
+ * Generate a block.
+ *   @env: The environment.
+ *   @sig: The signature.
+ *   @block: The function.
+ */
+def e:str[void](pt:st:env env, pt:st:pl3:block block) gen_blk = {
+	var pt:st:pl3:stmt stmt;
+
+	for(stmt = block->stmt; stmt != null; stmt = stmt->next)
+		e:get(gen_stmt(env, stmt));
+};
+
+/**
+ * Generate a statment.
+ *   @env: The environment.
+ *   @stmt: The statement.
+ */
+def e:str[void](pt:st:env env, pt:st:pl3:stmt stmt) gen_stmt = {
+	switch(stmt->tag) {
+	case ev:pl3:stmt:expr:
+		e:get(gen_expr(env, stmt->data.expr));
+		break;
+
+	case ev:pl3:stmt:decl: {
+		var bool exp;
+		var pt:st:pl3:bind bind;
+		var pt:st:pl3:decl decl = stmt->data.decl;
+
+		if(pl3:type_is_sig(decl->type)) {
+			var pt:st:miir:func func;
+			var pt:st:miir:reg dst;
+
+			for(bind = decl->bind; bind != null; bind = bind->next) {
+				func = e:get(gen_func(env, bind->id, bind->expr->data.func->sig, bind->expr->data.func, false, false, false));
+				defer_src(env->ctx, bind, func);
+
+				dst = env_alloc(env, env->ctx->ptr, null);
+				add_inst(env, miir:inst_func(env->ctx->ptr, dst, func));
+
+				scope_add(get_scope(env), bind, dst);
+			}
+		} else if((decl->flags & pl3:decl:mut) == 0) {
+			var st:miir:type type;
+			var pt:st:miir:decl gen;
+			var pt:st:miir:val val;
+			var pt:st:miir:mod mod = env->ctx->mod;
+
+			type = e:get(gen_type(decl->type, env));
+			for(bind = decl->bind; bind != null; bind = bind->next) {
+				if(bind->expr != null)
+					val = e:get(val_expr(env, bind->expr));
+				else
+					val = null;
+
+				gen = miir:decl_new(str:dup(bind->id), type, 0, val, miir:type_size(type));
+				*mod->idecl = gen;
+				mod->idecl = &gen->next;
+
+				var pt:st:sym sym = mem:make(st:sym{ gen, avl:node(bind) }); /// FIXME one statement
+				avl:root_add(&env->ctx->sym, &sym->node);
+			}
+		} else {
+			var st:miir:type type;
+			var pt:st:miir:reg reg;
+			var pt:st:frame frame = get_frame(env);
+
+			type = e:get(gen_type(decl->type, env));
+
+			for(bind = decl->bind; bind != null; bind = bind->next) {
+				reg = miir:reg_new(type, str:dup(bind->id));
+				scope_add(get_scope(env), bind, reg);
+
+				*frame->reg = reg;
+				frame->reg = &reg->next;
+
+				if(bind->expr != null) {
+					var pt:st:miir:reg dst, src, val;
+
+					val = e:get(gen_expr(env, bind->expr));
+					dst = env_alloc(env, env->ctx->ptr, null);
+					src = find_reg(env, bind);
+					if(src == null) {
+						fatal("EXTERN");
+					} else {
+						add_inst(env, miir:inst_addr(type, dst, reg));
+						add_inst(env, miir:inst_st(type, dst, val));
+					}
+				}
+			}
+		}
+	} break;
+
+	case ev:pl3:stmt:ret: {
+		var pt:st:miir:reg src;
+		var pt:st:frame frame;
+		var pt:st:miir:blk blk;
+		var pt:st:pl3:err err;
+
+		frame = get_frame(env);
+
+		if(stmt->data.expr != null)
+			src = e:get(gen_expr(env, stmt->data.expr));
+		else
+			src = null;
+
+		err = pl3:type_get_err(frame->sig->ret);
+		if(err == null) {
+			*frame->term = miir:term_ret(miir:ret_new(src, pl3:type_is_signed(frame->sig->ret)));
+		} else {
+			var pt:st:miir:reg val, addr, zero;
+
+			zero = env_alloc(env, e:get(gen_type(frame->sig->ret, env)), null); // TODO only zero the correct part
+			val = env_alloc(env, e:get(gen_type(frame->sig->ret, env)), null);
+			addr = env_alloc(env, env->ctx->ptr, null);
+
+			add_inst(env, miir:inst_imm(miir:imm_zero(zero, miir:type_size(zero->type))));
+			add_inst(env, miir:inst_addr(env->ctx->ptr, addr, val));
+			add_inst(env, miir:inst_st(zero->type, addr, zero));
+
+			if(src != null)
+				add_inst(env, miir:inst_st(src->type, addr, src));
+
+			*frame->term = miir:term_ret(miir:ret_new(val, false));
+		}
+
+		set_frame(frame, miir:blk_new());
+	} break;
+
+	case ev:pl3:stmt:block: e:get(gen_block(env, stmt->data.block)); break;
+	case ev:pl3:stmt:cond: e:get(gen_cond(env, stmt->data.cond)); break;
+	case ev:pl3:stmt:loop: e:get(gen_loop(env, stmt->data.loop)); break;
+
+	case ev:pl3:stmt:brk:
+	case ev:pl3:stmt:cont: {
+		var pt:st:frame frame;
+		var pt:st:flow flow = get_flow(env);
+
+		if(flow == null)
+			e:fmt("Internal error. Invalid break/continue.");
+
+		frame = get_frame(env);
+		*frame->term = miir:term_br((stmt->tag == ev:pl3:stmt:brk) ? flow->brk : flow->cont);
+		set_frame(frame, miir:blk_new());
+	} break;
+
+	case ev:pl3:stmt:sw: e:get(gen_switch(env, stmt->data.sw)); break;
+	case ev:pl3:stmt:cas: e:get(gen_case(env, stmt->data.cas)); break;
+	case ev:pl3:stmt:dflt: e:get(gen_default(env, stmt)); break;
+
+	case ev:pl3:stmt:eret: {
+		var st:pl3:type type;
+		var pt:st:pl3:err err;
+		var pt:st:miir:reg src;
+		var pt:st:frame frame;
+		var pt:st:miir:blk blk;
+
+		type = get_frame(env)->sig->ret;
+		err = pl3:type_get_err(type);
+		if(err == null)
+			e:fmt("Internal error. Invalid return type.");
+
+		frame = get_frame(env);
+
+		if(pl3:type_is_void(err->suc)) {
+			var pt:st:miir:reg val;
+
+			val = e:get(gen_expr(env, stmt->data.expr));
+			e:get(env_err(env));
+			*frame->term = miir:term_ret(miir:ret_new(val, pl3:type_is_signed(err->fail)));
+		} else {
+			var pt:st:miir:reg val, reg, addr, off, dst;
+			var u32 width = pl3:type_size(type, env->ctx->ptr.wid / 8);
+
+			reg = env_alloc(env, e:get(gen_type(type, env)), null);
+			addr = env_alloc(env, env->ctx->ptr, null);
+			off = env_alloc(env, env->ctx->ptr, null);
+			dst = env_alloc(env, env->ctx->ptr, null);
+
+			val = e:get(gen_expr(env, stmt->data.expr));
+
+			add_inst(env, miir:inst_addr(env->ctx->ptr, addr, reg));
+			e:get(gen_off(env, off, m:align_u32(pl3:type_size(err->suc, env->ctx->ptr.wid / 8), pl3:type_align(type, env->ctx->ptr.wid / 8))));
+			add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:add, env->ctx->ptr, dst, addr, off)));
+			add_inst(env, miir:inst_st(e:get(gen_type(err->fail, env)), dst, val));
+
+			e:get(env_err(env));
+
+			*frame->term = miir:term_ret(miir:ret_new(reg, pl3:type_is_signed(err->fail)));
+		}
+
+		set_frame(frame, miir:blk_new());
+	} break;
+	
+	case ev:pl3:stmt:onerr: e:get(gen_handler(env, stmt->data.stmt)); break;
+
+	default:
+		fatal("STUB gen_stmt");
+	}
+};
+
+/**
+ * Generate a block.
+ *   @env: The environment.
+ *   @block: The block.
+ */
+def e:str[void](pt:st:env env, st:pl3:block block) gen_block = {
+	var st:env nest;
+	var pt:st:scope scope;
+	var pt:st:pl3:stmt stmt;
+
+	scope = scope_new();
+	nest = env_scope(env, scope);
+	onerr env_done(&nest);
+
+	for(stmt = block.stmt; stmt != null; stmt = stmt->next)
+		e:get(gen_stmt(&nest, stmt));
+
+	env_done(&nest);
+};
+
+/**
+ * Generate a conditional.
+ *   @env: The environment.
+ *   @cond: The conditional.
+ */
+def e:str[void](pt:st:env env, pt:st:pl3:cond cond) gen_cond = {
+	var pt:st:frame frame;
+	var pt:st:miir:reg eval, val;
+	var pt:st:miir:blk ontrue, onfalse, after;
+
+	frame = get_frame(env);
+
+	after = miir:blk_new();
+	ontrue = (cond->ontrue != null) ? miir:blk_new() : after;
+	onfalse = (cond->onfalse != null) ? miir:blk_new() : after;
+
+	eval = e:get(gen_expr(env, cond->eval));
+	*frame->term = miir:term_cond(eval, ontrue, onfalse);
+
+	if(cond->ontrue != null) {
+		set_frame(frame, ontrue);
+		e:get(gen_stmt(env, cond->ontrue));
+		*frame->term = miir:term_br(after);
+	}
+
+	if(cond->onfalse != null) {
+		set_frame(frame, onfalse);
+		e:get(gen_stmt(env, cond->onfalse));
+		*frame->term = miir:term_br(after);
+	}
+
+	set_frame(frame, after);
+};
+
+/**
+ * Generate a handler.
+ *   @env: The environment.
+ *   @stmt: The statement.
+ */
+def e:str[void](pt:st:env env, pt:st:pl3:stmt stmt) gen_handler = {
+	var pt:st:scope scope;
+
+	scope = get_scope(env);
+	scope->handler = mem:make(st:handler{ false, true, stmt, scope->handler });
+};
+
+//FIXME docs and naming
+def void(pt:st:frame frame, pt:st:miir:blk blk) set_frame = {
+	*frame->blk = blk;
+	frame->blk = &blk->next;
+	frame->inst = &blk->inst;
+	frame->term = &blk->term;
+};
+
+/**
+ * Generate a loop.
+ *   @env: The environment.
+ *   @cond: The loop.
+ */
+def e:str[void](pt:st:env env, pt:st:pl3:loop loop) gen_loop = {
+	var st:flow flow;
+	var st:env nest;
+	var pt:st:frame frame;
+	var pt:st:miir:reg eval;
+	var pt:st:miir:blk cond, begin, inc, end;
+
+	begin = miir:blk_new();
+	end = miir:blk_new();
+
+	frame = get_frame(env);
+	flow = st:flow{ end, begin, get_flow(env) };
+	nest = env_flow(env, &flow);
+
+	if(loop->inc != null)
+		flow.cont = inc = miir:blk_new();
+
+	if(loop->init != null)
+		e:get(gen_expr(&nest, loop->init));
+
+	if(loop->eval != null) {
+		cond = miir:blk_new();
+
+		*frame->term = miir:term_br(loop->post ? begin : cond);
+		set_frame(frame, cond);
+		eval = e:get(gen_expr(&nest, loop->eval));
+		*frame->term = miir:term_cond(eval, begin, end);
+	}
+	else {
+		cond = begin;
+		*frame->term = miir:term_br(begin);
+	}
+
+	set_frame(frame, begin);
+	e:get(gen_stmt(&nest, loop->body));
+
+	if(loop->inc != null) {
+		*frame->term = miir:term_br(inc);
+		set_frame(frame, inc);
+
+		e:get(gen_expr(&nest, loop->inc));
+	}
+
+	*frame->term = miir:term_br(cond);
+
+	set_frame(frame, end);
+};
+
+/**
+ * Generate a switch.
+ *   @env: The environment.
+ *   @sw: The switch.
+ */
+def e:str[void](pt:st:env env, pt:st:pl3:sw sw) gen_switch = {
+	var pt:st:pl3:cas cas;
+	var pt:st:miir:reg reg;
+	var pt:st:frame frame;
+	var pt:st:miir:blk after, dflt;
+	var pt:st:miir:cas head = null;
+	var pt:pt:st:miir:cas iter = &head;
+
+	frame = get_frame(env);
+
+	for(cas = sw->cas; cas != null; cas = cas->next) {
+		*iter = miir:cas_new(e:get(val_expr(env, cas->expr)), frame_map(frame, cas));
+		iter = &(*iter)->next;
+	}
+
+	reg = e:get(gen_expr(env, sw->eval));
+
+	after = miir:blk_new();
+
+	if(sw->dflt != null)
+		dflt = frame_map(frame, sw->dflt);
+	else
+		dflt = after;
+
+	*frame->term = miir:term_sw(miir:sw_new(reg, head, dflt));
+
+	var st:flow flow;
+	var st:env nest;
+
+	flow = st:flow{ after, after, get_flow(env) };
+	nest = env_flow(env, &flow);
+	onerr env_done(&nest);
+
+	set_frame(frame, miir:blk_new());
+	e:get(gen_stmt(&nest, sw->stmt));
+	*get_frame(&nest)->term = miir:term_br(after);
+
+	set_frame(frame, after);
+
+	env_done(&nest);
+};
+
+/**
+ * Generate a case.
+ *   @env: The environment.
+ *   @cas: The case.
+ */
+def e:str[void](pt:st:env env, pt:st:pl3:cas cas) gen_case = {
+	var pt:st:frame frame;
+	var pt:st:miir:blk blk;
+
+	frame = get_frame(env);
+	blk = frame_map(frame, cas);
+	*frame->term = miir:term_br(blk);
+	set_frame(frame, blk);
+};
+
+/**
+ * Generate a default.
+ *   @env: The environment.
+ *   @stmt: The statement.
+ */
+def e:str[void](pt:st:env env, pt:st:pl3:stmt stmt) gen_default = {
+	var pt:st:frame frame;
+	var pt:st:miir:blk blk;
+
+	frame = get_frame(env);
+	blk = frame_map(frame, stmt);
+	*frame->term = miir:term_br(blk);
+	set_frame(frame, blk);
+};
+
+
+/**
+ * Generate an expression.
+ *   @env: The environment.
+ *   @expr: The expression.
+ *   &returns: The register with the value.
+ */
+def e:str[pt:st:miir:reg](pt:st:env env, pt:st:pl3:expr expr) gen_expr = {
+	switch(expr->tag) {
+	case ev:pl3:expr:lit: {
+		// TODO handling of string looks weird since it's so different
+		var pt:st:miir:reg dst;
+		var pt:void buf;
+		var u32 sz;
+		var pt:st:pl3:lit lit = expr->data.lit;
+
+		switch(lit->tag) {
+		case ev:pl3:lit:none: buf = mem:alloc(sz = 0); break;
+		case ev:pl3:lit:bool: buf = mem:dup(&lit->data.boolv, sz = sizeof(bool)); break;
+		case ev:pl3:lit:u8v: buf = mem:dup(&lit->data.u8v, sz = sizeof(u8)); break;
+		case ev:pl3:lit:i8v: buf = mem:dup(&lit->data.i8v, sz = sizeof(i8)); break;
+		case ev:pl3:lit:u16v: buf = mem:dup(&lit->data.u16v, sz = sizeof(u16)); break;
+		case ev:pl3:lit:i16v: buf = mem:dup(&lit->data.i16v, sz = sizeof(i16)); break;
+		case ev:pl3:lit:u32v: buf = mem:dup(&lit->data.u32v, sz = sizeof(u32)); break;
+		case ev:pl3:lit:i32v: buf = mem:dup(&lit->data.i32v, sz = sizeof(i32)); break;
+		case ev:pl3:lit:u64v: buf = mem:dup(&lit->data.u64v, sz = sizeof(u64)); break;
+		case ev:pl3:lit:i64v: buf = mem:dup(&lit->data.i64v, sz = sizeof(i64)); break;
+		case ev:pl3:lit:fp32: buf = mem:dup(&lit->data.fp32v, sz = sizeof(fp32)); break;
+		case ev:pl3:lit:fp64: buf = mem:dup(&lit->data.fp64v, sz = sizeof(fp64)); break;
+
+		case ev:pl3:lit:null:
+			sz = miir:type_size(env->ctx->ptr);
+			buf = mem:alloc(sz);
+			mem:zero(buf, sz);
+			break;
+
+		case ev:pl3:lit:str: {
+			var u32 len;
+			var pt:st:pl3:buf buf;
+			var pt:st:miir:decl decl;
+			var pt:st:miir:val val;
+			var pt:st:miir:mod mod = env->ctx->mod;
+
+			buf = lit->data.buf;
+			val = miir:val_new(mem:dup(buf->arr, buf->sz), buf->sz, null);
+			decl = miir:decl_new(null, miir:type_void(), 0, val, buf->sz);
+			*mod->idecl = decl;
+			mod->idecl = &decl->next;
+
+			dst = env_alloc(env, e:get(gen_type(expr->type, env)), null);
+			add_inst(env, miir:inst_glob(dst, decl));
+
+			return dst;
+		} break;
+
+		case ev:pl3:lit:ptr: {
+			sz = miir:type_size(env->ctx->ptr);
+			if(sz == 4)
+				buf = mem:dup(getref(m:int_get_u32(lit->data.int)), sz);
+			else if(sz == 8)
+				buf = mem:dup(getref(m:int_get_u64(lit->data.int)), sz);
+			else
+				e:fmt("Unsupported pointer size.");
+		} break;
+
+		default: fatal("STUB gen_expr lit");
+		}
+
+		dst = env_alloc(env, e:get(gen_type(expr->type, env)), null);
+		add_inst(env, miir:inst_imm(miir:imm_new(dst, buf, sz)));
+
+		return dst;
+	} break;
+
+	case ev:pl3:expr:ident: {
+		var pt:st:pl3:ident ident = expr->data.ident;
+
+		switch(ident->tag) {
+		case ev:pl3:ident:unk:
+			e:fmt("Cannot emit unresolved identifier.");
+
+		case ev:pl3:ident:param:
+			return e:get(get_reg(env, ident->data.param));
+
+		case ev:pl3:ident:link: {
+			var pt:st:avl:node node;
+			var pt:st:pl3:bind bind = ident->data.link.bind;
+
+			node = avl:root_get(&env->ctx->sym, bind);
+			if(node != null) {
+				var st:miir:type type;
+				var pt:st:miir:reg reg, mem;
+				var pt:st:sym sym = getparent(node, st:sym, node);
+
+				type = e:get(gen_type(expr->type, env));
+
+				mem = env_alloc(env, env->ctx->ptr, null);
+				reg = env_alloc(env, type, null);
+
+				add_inst(env, miir:inst_glob(mem, sym->decl));
+				add_inst(env, miir:inst_ld(type, reg, mem));
+
+				return reg;
+			}
+			else
+				return e:get(get_reg(env, ident->data.link.bind));
+		} break;
+
+		case ev:pl3:ident:builtin:
+			fatal("FIXME stub gen.pl3:gen_expr");
+		}
+	} break;
+
+	case ev:pl3:expr:enum: {
+		fatal("STUB gen_expr enum");
+	} break;
+
+	case ev:pl3:expr:op1: {
+		var st:miir:type type;
+		var pt:st:pl3:op1 op1 = expr->data.op1;
+
+		type = e:get(gen_type(expr->type, env));
+
+		switch(op1->tag) {
+		case ev:pl3:op1:pos:
+			return e:get(gen_expr(env, op1->in));
+			
+		case ev:pl3:op1:neg: {
+			var pt:st:miir:reg dst, src, zero;
+
+			zero = env_alloc(env, type, null);
+			dst = env_alloc(env, type, null);
+
+			src = e:get(gen_expr(env, op1->in));
+			add_inst(env, miir:inst_imm(miir:imm_zero(zero, miir:type_size(type))));
+			add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:sub, type, dst, zero, src)));
+
+			return dst;
+		} break;
+			
+		case ev:pl3:op1:not: {
+			var pt:st:miir:reg dst, src;
+
+			dst = env_alloc(env, type, null);
+
+			src = e:get(gen_expr(env, op1->in));
+			add_inst(env, miir:inst_op1(miir:op1_new(ev:miir:op1:not, type, dst, src)));
+
+			return dst;
+		} break;
+			
+		case ev:pl3:op1:lnot: {
+			var pt:st:miir:reg dst, src;
+
+			dst = env_alloc(env, type, null);
+
+			src = e:get(gen_expr(env, op1->in));
+			add_inst(env, miir:inst_op1(miir:op1_new(ev:miir:op1:lnot, type, dst, src)));
+
+			return dst;
+		} break;
+
+		case ev:pl3:op1:deref: {
+			if(pl3:type_is_ptr(op1->in->type)) {
+				var pt:st:miir:reg dst, src;
+
+				src = e:get(gen_expr(env, op1->in));
+				dst = env_alloc(env, type, null);
+				add_inst(env, miir:inst_ld(type, dst, src));
+
+				return dst;
+			} else if(pl3:type_is_arr(op1->in->type)) {
+				return e:get(gen_left(env, op1->in));
+			} else {
+				e:fmt("Internal error. Invalid dereference.");
+			}
+		} break;
+
+		case ev:pl3:op1:addr: {
+			return e:get(gen_left(env, op1->in));
+		} break;
+
+		case ev:pl3:op1:preinc:
+		case ev:pl3:op1:predec:
+		case ev:pl3:op1:postinc:
+		case ev:pl3:op1:postdec: {
+			var u32 sz, step;
+			var pt:void buf;
+			var pt:st:pl3:ptr ptr;
+			var bool inc, pre;
+			var pt:st:miir:reg mem, dst, src, one;
+
+			inc = ((op1->tag == ev:pl3:op1:preinc) || (op1->tag == ev:pl3:op1:postinc));
+			pre = ((op1->tag == ev:pl3:op1:preinc) || (op1->tag == ev:pl3:op1:predec));
+
+			step = 1;
+			ptr = pl3:type_get_ptr(op1->in->type);
+			if((ptr != null) && !pl3:type_is_void(ptr->type))
+				step = miir:type_size(e:get(gen_type(ptr->type, env)));
+
+			sz = miir:type_size(type);
+			buf = mem:alloc(sz);
+			mem:zero(buf, sz);
+			*pt:u8{buf} = u8{step}; // TODO big endian
+
+			src = env_alloc(env, type, null);
+			one = env_alloc(env, type, null);
+			dst = env_alloc(env, type, null);
+			
+			mem = e:get(gen_left(env, op1->in));
+			add_inst(env, miir:inst_ld(type, src, mem));
+			add_inst(env, miir:inst_imm(miir:imm_new(one, buf, sz)));
+			add_inst(env, miir:inst_op2(miir:op2_new(inc ? ev:miir:op2:add : ev:miir:op2:sub, type, dst, src, one)));
+			add_inst(env, miir:inst_st(type, mem, dst));
+
+			return pre ? dst : src;
+		} break;
+
+		default:
+			fatal("STUB gen_expr op1");
+		}
+	} break;
+
+	case ev:pl3:expr:op2: {
+		var pt:st:pl3:op2 op2 = expr->data.op2;
+		var bool sign = pl3:type_is_signed(op2->lhs->type) && !pl3:type_is_fp(op2->lhs->type);
+
+		def e:str[pt:st:miir:reg](pt:st:env env, pt:st:pl3:expr expr, pt:st:pl3:op2 op2, en:miir:op2 tag) arith = {
+			var st:miir:type type;
+			var pt:st:pl3:ptr ptr;
+			var pt:st:miir:reg lhs, rhs, dst;
+
+			type = e:get(gen_type(expr->type, env));
+			lhs = e:get(gen_expr(env, op2->lhs));
+			rhs = e:get(gen_expr(env, op2->rhs));
+
+			if(rhs->type.wid != lhs->type.wid) {
+				var pt:st:miir:reg tmp;
+
+				tmp = env_alloc(env, lhs->type, null);
+				add_inst(env, miir:inst_op1(miir:op1_new(ev:miir:op1:sext, lhs->type, tmp, rhs)));
+				rhs = tmp;
+			}
+
+			if(((ptr = pl3:type_get_ptr(op2->lhs->type)) != null) && pl3:type_is_int(op2->rhs->type) && ((tag == ev:miir:op2:add) || (tag == ev:miir:op2:sub))) {
+				var u32 sz;
+				var pt:st:miir:reg imm, tmp;
+
+				sz = miir:type_size(e:get(gen_type(ptr->type, env)));
+				if(sz == 0)
+					sz = 1;
+
+				imm = env_alloc(env, type, null);
+				if(miir:type_size(type) == 8)
+					add_inst(env, miir:inst_imm(miir:imm_u64(imm, u64{sz})));
+				else if(miir:type_size(type) == 4)
+					add_inst(env, miir:inst_imm(miir:imm_u32(imm, u32{sz})));
+				else
+					e:fmt("Unsupported pointer size.");
+
+				tmp = env_alloc(env, type, null);
+				add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:mul, type, tmp, rhs, imm)));
+				rhs = tmp;
+			}
+
+			dst = env_alloc(env, type, null);
+			add_inst(env, miir:inst_op2(miir:op2_new(tag, type, dst, lhs, rhs)));
+
+			return dst;
+		};
+
+		def e:str[pt:st:miir:reg](pt:st:env env, pt:st:pl3:expr expr, pt:st:pl3:op2 op2, en:miir:op2 tag) aritheq = {
+			var st:miir:type type;
+			var pt:st:pl3:ptr ptr;
+			var pt:st:miir:reg mem, lhs, rhs, dst;
+
+			type = e:get(gen_type(expr->type, env));
+			lhs = env_alloc(env, type, null);
+			dst = env_alloc(env, type, null);
+
+			mem = e:get(gen_left(env, op2->lhs));
+			rhs = e:get(gen_expr(env, op2->rhs));
+
+			if(rhs->type.wid != type.wid) {
+				var pt:st:miir:reg tmp;
+
+				tmp = env_alloc(env, type, null);
+				add_inst(env, miir:inst_op1(miir:op1_new(ev:miir:op1:sext, type, tmp, rhs)));
+				rhs = tmp;
+			}
+
+			if(((ptr = pl3:type_get_ptr(op2->lhs->type)) != null) && pl3:type_is_int(op2->rhs->type) && ((tag == ev:miir:op2:add) || (tag == ev:miir:op2:sub))) {
+				var u32 sz;
+				var pt:st:miir:reg imm, tmp;
+
+				sz = miir:type_size(e:get(gen_type(ptr->type, env)));
+				if(sz == 0)
+					sz = 1;
+
+				imm = env_alloc(env, type, null);
+				if(miir:type_size(type) == 8)
+					add_inst(env, miir:inst_imm(miir:imm_u64(imm, u64{sz})));
+				else if(miir:type_size(type) == 4)
+					add_inst(env, miir:inst_imm(miir:imm_u32(imm, u32{sz})));
+				else
+					e:fmt("Unsupported pointer size.");
+
+				tmp = env_alloc(env, type, null);
+				add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:mul, type, tmp, rhs, imm)));
+				rhs = tmp;
+			}
+
+			add_inst(env, miir:inst_ld(type, lhs, mem));
+			add_inst(env, miir:inst_op2(miir:op2_new(tag, type, dst, lhs, rhs)));
+			add_inst(env, miir:inst_st(type, mem, dst));
+
+			return dst;
+		};
+
+		switch(op2->tag) {
+		case ev:pl3:op2:assign: {
+			var st:miir:type type;
+			var pt:st:miir:reg dst, src;
+
+			type = e:get(gen_type(expr->type, env));
+			src = e:get(gen_expr(env, op2->rhs));
+			dst = e:get(gen_left(env, op2->lhs));
+			add_inst(env, miir:inst_st(type, dst, src));
+
+			return src;
+		} break;
+
+		case ev:pl3:op2:add: return arith(env, expr, op2, ev:miir:op2:add);
+		case ev:pl3:op2:sub: return arith(env, expr, op2, ev:miir:op2:sub);
+		case ev:pl3:op2:mul: return arith(env, expr, op2, ev:miir:op2:mul);
+		case ev:pl3:op2:div: return arith(env, expr, op2, pl3:type_is_signed(expr->type) ? ev:miir:op2:idiv : ev:miir:op2:udiv);
+		case ev:pl3:op2:rem: return arith(env, expr, op2, pl3:type_is_signed(expr->type) ? ev:miir:op2:irem : ev:miir:op2:urem);
+		case ev:pl3:op2:eq: return arith(env, expr, op2, ev:miir:op2:eq);
+		case ev:pl3:op2:ne: return arith(env, expr, op2, ev:miir:op2:ne);
+		case ev:pl3:op2:gt: return arith(env, expr, op2, sign ? ev:miir:op2:igt : ev:miir:op2:ugt);
+		case ev:pl3:op2:gte: return arith(env, expr, op2, sign ? ev:miir:op2:igte : ev:miir:op2:ugte);
+		case ev:pl3:op2:lt: return arith(env, expr, op2, sign ? ev:miir:op2:ilt : ev:miir:op2:ult);
+		case ev:pl3:op2:lte: return arith(env, expr, op2, sign ? ev:miir:op2:ilte : ev:miir:op2:ulte);
+
+		case ev:pl3:op2:land: {
+			var pt:st:frame frame;
+			var pt:st:miir:reg lhs, rhs, val;
+			var pt:st:miir:blk mid, after;
+
+			frame = get_frame(env);
+			mid = miir:blk_new();
+			after = miir:blk_new();
+
+			lhs = e:get(gen_expr(env, op2->lhs));
+			val = env_alloc(env, lhs->type, null);
+			add_inst(env, miir:inst_op1(miir:op1_new(ev:miir:op1:mov, lhs->type, val, lhs)));
+			*frame->term = miir:term_cond(lhs, mid, after);
+
+			set_frame(frame, mid);
+			rhs = e:get(gen_expr(env, op2->rhs));
+			add_inst(env, miir:inst_op1(miir:op1_new(ev:miir:op1:mov, lhs->type, val, rhs)));
+			*frame->term = miir:term_br(after);
+
+			set_frame(frame, after);
+
+			return val;
+		} break;
+
+		case ev:pl3:op2:lor: {
+			var pt:st:frame frame;
+			var pt:st:miir:reg lhs, rhs, val;
+			var pt:st:miir:blk mid, after;
+
+			frame = get_frame(env);
+			mid = miir:blk_new();
+			after = miir:blk_new();
+
+			lhs = e:get(gen_expr(env, op2->lhs));
+			val = env_alloc(env, lhs->type, null);
+			add_inst(env, miir:inst_op1(miir:op1_new(ev:miir:op1:mov, lhs->type, val, lhs)));
+			*frame->term = miir:term_cond(lhs, after, mid);
+
+			set_frame(frame, mid);
+			rhs = e:get(gen_expr(env, op2->rhs));
+			add_inst(env, miir:inst_op1(miir:op1_new(ev:miir:op1:mov, lhs->type, val, rhs)));
+			*frame->term = miir:term_br(after);
+
+			set_frame(frame, after);
+
+			return val;
+		} break;
+
+		case ev:pl3:op2:and: return arith(env, expr, op2, ev:miir:op2:and);
+		case ev:pl3:op2:or: return arith(env, expr, op2, ev:miir:op2:or);
+		case ev:pl3:op2:xor: return arith(env, expr, op2, ev:miir:op2:xor);
+		case ev:pl3:op2:shl: return arith(env, expr, op2, ev:miir:op2:shl);
+		case ev:pl3:op2:shr: return arith(env, expr, op2, pl3:type_is_signed(expr->type) ? ev:miir:op2:sar : ev:miir:op2:shr);
+
+		case ev:pl3:op2:addeq: return aritheq(env, expr, op2, ev:miir:op2:add);
+		case ev:pl3:op2:subeq: return aritheq(env, expr, op2, ev:miir:op2:sub);
+		case ev:pl3:op2:muleq: return aritheq(env, expr, op2, ev:miir:op2:mul);
+		case ev:pl3:op2:diveq: return aritheq(env, expr, op2, pl3:type_is_signed(expr->type) ? ev:miir:op2:idiv : ev:miir:op2:udiv);
+		case ev:pl3:op2:remeq: return aritheq(env, expr, op2, pl3:type_is_signed(expr->type) ? ev:miir:op2:irem : ev:miir:op2:urem);
+		case ev:pl3:op2:andeq: return aritheq(env, expr, op2, ev:miir:op2:and);
+		case ev:pl3:op2:oreq: return aritheq(env, expr, op2, ev:miir:op2:or);
+		case ev:pl3:op2:xoreq: return aritheq(env, expr, op2, ev:miir:op2:xor);
+		case ev:pl3:op2:shleq: return aritheq(env, expr, op2, ev:miir:op2:shl);
+		case ev:pl3:op2:shreq: return arith(env, expr, op2, pl3:type_is_signed(expr->type) ? ev:miir:op2:sar : ev:miir:op2:shr);
+
+		case ev:pl3:op2:comma:
+			e:get(gen_expr(env, op2->lhs));
+			return e:get(gen_expr(env, op2->rhs));
+
+		default:
+			fatal("STUB gen_expr op2");
+		}
+	} break;
+
+	case ev:pl3:expr:comp: {
+		var en:pl3:tydecl tag;
+		var pt:st:pl3:agg agg;
+		var pt:st:pl3:arr arr;
+		var pt:st:pl3:comp comp = expr->data.comp;
+
+		if((agg = pl3:type_get_agg(comp->type, &tag)) != null)
+			return e:get(gen_agg(env, comp, agg, tag));
+		else if((arr = pl3:type_get_arr(comp->type)) != null)
+			return e:get(gen_arr(env, comp, arr, tag));
+		else
+			return e:get(gen_cast(env, comp));
+	} break;
+
+	case ev:pl3:expr:index: {
+		var pt:st:pl3:arr arr;
+		var pt:st:pl3:ptr ptr;
+		var pt:st:pl3:index index = expr->data.index;
+
+		if(index->deref) {
+			fatal("STUB gen_expr index deref");
+		}
+
+		if((ptr = pl3:type_get_ptr(index->base->type)) != null) {
+			var u32 inc;
+			var st:miir:type type, ptype;
+			var pt:st:miir:reg reg, off, add, mul, step, src, dst;
+
+			type = e:get(gen_type(expr->type, env));
+			ptype = e:get(gen_type(index->base->type, env));
+
+			reg = e:get(gen_expr(env, index->base));
+			off = e:get(gen_expr(env, index->off));
+
+			add = env_alloc(env, ptype, null);
+			add_inst(env, miir:inst_op1(miir:op1_new(ev:miir:op1:sext, ptype, add, off))); // TODO maybe use a cast function
+
+			inc = miir:type_size(e:get(gen_type(ptr->type, env)));
+			if(inc == 0)
+				inc = 1;
+
+			step = env_alloc(env, ptype, null);
+			if(miir:type_size(env->ctx->ptr) == 8)
+				add_inst(env, miir:inst_imm(miir:imm_u64(step, u64{inc})));
+			else if(miir:type_size(env->ctx->ptr) == 4)
+				add_inst(env, miir:inst_imm(miir:imm_u32(step, u32{inc})));
+			else
+				e:fmt("Unsupported pointer size.");
+
+			mul = env_alloc(env, ptype, null);
+			add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:mul, ptype, mul, add, step)));
+
+			src = env_alloc(env, ptype, null);
+			add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:add, ptype, src, reg, mul)));
+
+			dst = env_alloc(env, type, null);
+			add_inst(env, miir:inst_ld(type, dst, src));
+
+			return dst;
+		} else if((arr = pl3:type_get_arr(index->base->type)) != null) {
+			var st:miir:type ptr, type;
+			var pt:st:miir:reg reg, off, step, idx, add, src, dst;
+
+			ptr = env->ctx->ptr;
+			type = e:get(gen_type(arr->type, env));
+
+			reg = e:get(gen_left(env, index->base));
+			off = e:get(gen_expr(env, index->off));
+			idx = env_alloc(env, ptr, null);
+			add_inst(env, miir:inst_op1(miir:op1_new(ev:miir:op1:sext, ptr, idx, off))); // TODO maybe use a cast function
+
+			step = env_alloc(env, ptr, null);
+			e:get(gen_off(env, step, pl3:type_size(arr->type, env->ctx->ptr.wid / 8)));
+
+			add = env_alloc(env, ptr, null);
+			add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:mul, ptr, add, idx, step)));
+
+			src = env_alloc(env, ptr, null);
+			dst = env_alloc(env, type, null);
+			add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:add, ptr, src, reg, add)));
+			add_inst(env, miir:inst_ld(type, dst, src));
+
+			return dst;
+		}
+		else
+			e:fmt("%C: Internal error. Invalid index operation.", pl3:meta_call(&expr->meta));
+	} break;
+
+	case ev:pl3:expr:call: {
+		var pt:st:pl3:arg iter;
+		var pt:st:pl3:call call = expr->data.call;
+
+		if(call->deref) { // TODO: these branches can be consolidated a bit
+			var pt:st:pl3:sig sig;
+			var pt:st:pl3:ptr ptr;
+			var st:miir:type type;
+			var pt:st:miir:reg func, tmp, ret;
+			var pt:st:miir:arg arg = null;
+			var pt:pt:st:miir:arg iarg = &arg;
+
+			func = e:get(gen_left(env, call->func));
+			type = e:get(gen_type(expr->type, env));
+			ret = env_alloc(env, type, null);
+
+			*iarg = miir:arg_new(type, ret);
+			iarg = &(*iarg)->next;
+
+			for(iter = call->arg; iter != null; iter = iter->next) {
+				*iarg = miir:arg_new(e:get(gen_type(iter->expr->type, env)), e:get(gen_expr(env, iter->expr)));
+				iarg = &(*iarg)->next;
+			}
+
+			ptr = pl3:type_get_ptr(call->func->type);
+			if(ptr == null)
+				e:fmt("%C: Internal error. Cannot dereference non-pointer type.", pl3:meta_call(&expr->meta));
+
+			sig = pl3:type_get_sig(ptr->type);
+			if(sig == null)
+				e:fmt("%C: Internal error. Cannot call non-signature type.", pl3:meta_call(&expr->meta));
+
+			tmp = env_alloc(env, env->ctx->ptr, null);
+			add_inst(env, miir:inst_ld(env->ctx->ptr, tmp, func));
+			add_inst(env, miir:inst_call(miir:call_new(e:get(gen_sig(sig, env)), tmp, arg)));
+
+			return ret;
+		} else {
+			var pt:st:pl3:sig sig;
+			var st:miir:type type;
+			var pt:st:miir:reg func, ret;
+			var pt:st:miir:arg arg = null;
+			var pt:pt:st:miir:arg iarg = &arg;
+
+			func = e:get(gen_left(env, call->func));
+			type = e:get(gen_type(expr->type, env));
+			ret = env_alloc(env, type, null);
+
+			*iarg = miir:arg_new(type, ret);
+			iarg = &(*iarg)->next;
+
+			for(iter = call->arg; iter != null; iter = iter->next) {
+				*iarg = miir:arg_new(e:get(gen_type(iter->expr->type, env)), e:get(gen_expr(env, iter->expr)));
+				iarg = &(*iarg)->next;
+			}
+
+			sig = pl3:type_get_sig(call->func->type);
+			if(sig == null)
+				e:fmt("%C: Internal error. Cannot call non-signature type.", pl3:meta_call(&expr->meta));
+
+			add_inst(env, miir:inst_call(miir:call_new(e:get(gen_sig(sig, env)), func, arg)));
+
+			return ret;
+		}
+	} break;
+
+	case ev:pl3:expr:builtin: {
+		var en:miir:builtin tag;
+		var pt:st:pl3:arg iter;
+		var pt:st:miir:reg ret;
+		var pt:st:miir:arg arg = null;
+		var pt:pt:st:miir:arg iarg = &arg;
+		var pt:st:pl3:builtin builtin = expr->data.builtin;
+
+		for(iter = builtin->arg; iter != null; iter = iter->next) {
+			*iarg = miir:arg_new(e:get(gen_type(iter->expr->type, env)), e:get(gen_expr(env, iter->expr)));
+			iarg = &(*iarg)->next;
+		}
+
+		if(str:equal(builtin->id, "bi:syscall"))
+			tag = ev:miir:builtin:syscall;
+		else
+			fatal("Internal error. Unknown builtin '%s'.", builtin->id);
+
+		ret = env_alloc(env, env->ctx->ptr, null);
+		add_inst(env, miir:inst_builtin(miir:builtin_new(tag, ret, arg)));
+
+		return ret;
+	} break;
+
+	case ev:pl3:expr:elem: {
+		var en:pl3:tydecl tag;
+		var st:pl3:type from;
+		var pt:st:miir:reg src;
+		var pt:st:pl3:err err;
+		var pt:st:pl3:elem elem = expr->data.elem;
+
+		src = e:get(gen_expr(env, elem->expr));
+		from = elem->expr->type;
+
+		if(elem->deref) {
+			var pt:st:pl3:ptr ptr = pl3:type_get_ptr(from);
+
+			if(ptr == null)
+				fatal("Internal error. Attempted to dereference non-pointer type.");
+
+			from = ptr->type;
+		}
+
+		if((err = pl3:type_get_err(from)) != null) {
+			var u32 val;
+			var st:miir:type type;
+			var pt:st:miir:reg base, imm, off, ptr, dst;
+
+			if(str:equal(elem->id, "val"))
+				val = 0;
+			else if(str:equal(elem->id, "err"))
+				val = m:align_u32(pl3:type_size(err->suc, env->ctx->ptr.wid / 8), pl3:type_align(expr->type, env->ctx->ptr.wid / 8));
+			else
+				e:fmt("Internal error. Invalid member access on error type.");
+
+			type = e:get(gen_type(expr->type, env));
+
+			if(!elem->deref) {
+				base = env_alloc(env, env->ctx->ptr, null);
+				add_inst(env, miir:inst_addr(e:get(gen_type(from, env)), base, src));
+			} else {
+				base = src;
+			}
+
+			imm = env_alloc(env, miir:type_i32(), null);
+			off = env_alloc(env, env->ctx->ptr, null);
+			ptr = env_alloc(env, env->ctx->ptr, null);
+			dst = env_alloc(env, type, null);
+			add_inst(env, miir:inst_imm(miir:imm_u32(imm, val)));
+			add_inst(env, miir:inst_op1(miir:op1_new(ev:miir:op1:sext, env->ctx->ptr, off, imm)));
+			add_inst(env, miir:inst_op2(miir:op2_add(env->ctx->ptr, ptr, base, off)));
+			add_inst(env, miir:inst_ld(type, dst, ptr));
+
+			return dst;
+		} else if(pl3:type_get_agg(from, &tag) != null) {
+			switch(tag) {
+			case ev:pl3:tydecl:struct: {
+				var st:miir:type type;
+				var pt:st:miir:reg base, imm, off, ptr, dst;
+
+				type = e:get(gen_type(expr->type, env));
+
+				if(!elem->deref) {
+					base = env_alloc(env, env->ctx->ptr, null);
+					add_inst(env, miir:inst_addr(e:get(gen_type(from, env)), base, src));
+				} else {
+					base = src;
+				}
+
+				imm = env_alloc(env, miir:type_i32(), null);
+				off = env_alloc(env, env->ctx->ptr, null);
+				ptr = env_alloc(env, env->ctx->ptr, null);
+				dst = env_alloc(env, type, null);
+				add_inst(env, miir:inst_imm(miir:imm_u32(imm, elem->off)));
+				add_inst(env, miir:inst_op1(miir:op1_new(ev:miir:op1:sext, env->ctx->ptr, off, imm)));
+				add_inst(env, miir:inst_op2(miir:op2_add(env->ctx->ptr, ptr, base, off)));
+				add_inst(env, miir:inst_ld(type, dst, ptr));
+
+				return dst;
+			} break;
+
+			case ev:pl3:tydecl:union: {
+				var st:miir:type type;
+				var pt:st:miir:reg dst, ptr;
+
+				type = e:get(gen_type(expr->type, env));
+
+				ptr = env_alloc(env, env->ctx->ptr, null);
+				add_inst(env, miir:inst_addr(env->ctx->ptr, ptr, src));
+
+				dst = env_alloc(env, type, null);
+				add_inst(env, miir:inst_ld(type, dst, ptr));
+
+				return dst;
+			} break;
+			}
+		} else {
+			e:fmt("Internal error. Invalid element access. tag = %u", pl3:type_root(from).tag);
+		}
+	} break;
+
+	case ev:pl3:expr:tern: return gen_tern(env, expr->data.tern);
+	case ev:pl3:expr:size: return gen_size(env, e:get(gen_type(expr->type, env)), expr->data.size);
+	case ev:pl3:expr:offset: return gen_offset(env, e:get(gen_type(expr->type, env)), expr->data.offset);
+	case ev:pl3:expr:parent: return gen_parent(env, e:get(gen_type(expr->type, env)), expr->data.parent);
+	case ev:pl3:expr:arrlen: return gen_len(env, e:get(gen_type(expr->type, env)), expr->data.len);
+
+	case ev:pl3:expr:eget: {
+		var pt:st:frame frame;
+		var pt:st:pl3:err err;
+		var pt:st:miir:blk onfail, onsuc;
+		var pt:st:miir:reg eval, val, addr, off, dst, chk, zero, cond;
+		var st:miir:type ftype, stype;
+
+		err = pl3:type_get_err(expr->data.expr->type);
+		if(err == null)
+			e:fmt("Call to `e:get` requires error value.");
+
+		onfail = miir:blk_new();
+		onsuc = miir:blk_new();
+
+		ftype = e:get(gen_type(err->fail, env));
+		stype = e:get(gen_type(err->suc, env));
+
+		eval = e:get(gen_expr(env, expr->data.expr));
+		addr = env_alloc(env, env->ctx->ptr, null);
+		off = env_alloc(env, env->ctx->ptr, null);
+		dst = env_alloc(env, env->ctx->ptr, null);
+		val = env_alloc(env, stype, null);
+		chk = env_alloc(env, ftype, null);
+		zero = env_alloc(env, ftype, null);
+		cond = env_alloc(env, miir:type_i8(), null);
+
+		add_inst(env, miir:inst_addr(env->ctx->ptr, addr, eval));
+		e:get(gen_off(env, off, m:align_u32(pl3:type_size(err->suc, env->ctx->ptr.wid / 8), pl3:type_align(expr->data.expr->type, env->ctx->ptr.wid / 8))));
+		add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:add, env->ctx->ptr, dst, addr, off)));
+		add_inst(env, miir:inst_ld(ftype, chk, dst));
+
+		add_inst(env, miir:inst_imm(miir:imm_zero(zero, zero->type.wid / 8)));
+
+		frame = get_frame(env);
+
+		add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:ne, ftype, cond, chk, zero)));
+		*frame->term = miir:term_cond(cond, onfail, onsuc);
+
+		set_frame(frame, onfail);
+
+		{
+			var st:pl3:type type;
+			var pt:st:pl3:err err;
+			var pt:st:miir:reg src;
+			var pt:st:frame frame;
+			var pt:st:miir:blk blk;
+
+			type = get_frame(env)->sig->ret;
+			err = pl3:type_get_err(get_frame(env)->sig->ret);
+			if(err == null)
+				e:fmt("Internal error. Invalid return type.");
+
+			frame = get_frame(env);
+
+			if(pl3:type_is_void(err->suc)) {
+				*frame->term = miir:term_ret(miir:ret_new(chk, pl3:type_is_signed(err->fail)));
+			} else {
+				var pt:st:miir:reg reg, addr, off, dst;
+				var u32 width = pl3:type_size(type, env->ctx->ptr.wid / 8);
+
+				reg = env_alloc(env, e:get(gen_type(type, env)), null);
+				addr = env_alloc(env, env->ctx->ptr, null);
+				off = env_alloc(env, env->ctx->ptr, null);
+				dst = env_alloc(env, env->ctx->ptr, null);
+
+				add_inst(env, miir:inst_addr(env->ctx->ptr, addr, reg));
+				e:get(gen_off(env, off, m:align_u32(pl3:type_size(err->suc, env->ctx->ptr.wid / 8), pl3:type_align(get_frame(env)->sig->ret, env->ctx->ptr.wid / 8))));
+				add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:add, env->ctx->ptr, dst, addr, off)));
+				add_inst(env, miir:inst_st(ftype, dst, chk));
+
+				e:get(env_err(env));
+				*frame->term = miir:term_ret(miir:ret_new(reg, pl3:type_is_signed(err->fail)));
+			}
+		}
+
+		set_frame(frame, onsuc);
+
+		if(miir:type_size(stype) > 0)
+			add_inst(env, miir:inst_ld(stype, val, addr));
+
+		return val;
+	} break;
+
+	case ev:pl3:expr:ereq: return e:get(gen_ereq(env, expr->data.expr)); break;
+	case ev:pl3:expr:eign: return e:get(gen_eign(env, expr->data.expr)); break;
+	case ev:pl3:expr:vinit: return e:get(gen_vinit(env));
+	case ev:pl3:expr:vget: return e:get(gen_vget(env, expr->data.vget));
+	case ev:pl3:expr:getref: return e:get(gen_getref(env, expr->data.expr));
+	case ev:pl3:expr:enref: return gen_expr(env, expr->data.enref->val->expr);
+
+	default:
+		fatal("STUB gen_expr %u", expr->tag);
+	}
+};
+
+/**
+ * Generate ternary operator.
+ *   @env: The environment.
+ *   @tern: The ternary operator.
+ */
+def e:str[pt:st:miir:reg](pt:st:env env, pt:st:pl3:tern tern) gen_tern = {
+	var pt:st:frame frame;
+	var st:miir:type type;
+	var pt:st:miir:reg cond, tmp, val;
+	var pt:st:miir:blk ontrue, onfalse, after;
+
+	frame = get_frame(env);
+
+	type = e:get(gen_type(tern->ontrue->type, env));
+
+	after = miir:blk_new();
+	ontrue = miir:blk_new();
+	onfalse = miir:blk_new();
+	val = env_alloc(env, type, null);
+
+	cond = e:get(gen_expr(env, tern->cond));
+	*frame->term = miir:term_cond(cond, ontrue, onfalse);
+
+	set_frame(frame, ontrue);
+	tmp = e:get(gen_expr(env, tern->ontrue));
+	add_inst(env, miir:inst_op1(miir:op1_new(ev:miir:op1:mov, type, val, tmp)));
+	*frame->term = miir:term_br(after);
+
+	set_frame(frame, onfalse);
+	tmp = e:get(gen_expr(env, tern->onfalse));
+	add_inst(env, miir:inst_op1(miir:op1_new(ev:miir:op1:mov, type, val, tmp)));
+	*frame->term = miir:term_br(after);
+
+	set_frame(frame, after);
+
+	return val;
+};
+
+/**
+ * Generate sizeof operator.
+ *   @env: The environment.
+ *   @type: The type.
+ *   @size: The sizeof operator.
+ */
+def e:str[pt:st:miir:reg](pt:st:env env, st:miir:type type, pt:st:pl3:size size) gen_size = {
+	var pt:st:miir:reg reg;
+
+	reg = env_alloc(env, type, null);
+	add_inst(env, miir:inst_imm(miir:imm_zext(reg, miir:type_size(type), i32{miir:type_size(e:get(gen_type(size->type, env)))})));
+
+	return reg;
+};
+
+/**
+ * Generate offsetof operator.
+ *   @env: The environment.
+ *   @type: The type.
+ *   @offset: The offsetof operator.
+ */
+def e:str[pt:st:miir:reg](pt:st:env env, st:miir:type type, pt:st:pl3:offset offset) gen_offset = {
+	var pt:st:miir:reg reg;
+
+	reg = env_alloc(env, type, null);
+	add_inst(env, miir:inst_imm(miir:imm_zext(reg, miir:type_size(type), i32{offset->val})));
+
+	return reg;
+};
+
+/**
+ * Generate parentof operator.
+ *   @env: The environment.
+ *   @parent: The parentof operator.
+ */
+def e:str[pt:st:miir:reg](pt:st:env env, st:miir:type type, pt:st:pl3:parent parent) gen_parent = {
+	var pt:st:miir:reg dst, src, off;
+
+	off = env_alloc(env, type, null);
+	dst = env_alloc(env, type, null);
+
+	src = e:get(gen_expr(env, parent->expr));
+	add_inst(env, miir:inst_imm(miir:imm_zext(off, miir:type_size(type), i32{parent->off})));
+	add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:sub, type, dst, src, off)));
+
+	return dst;
+};
+
+/**
+ * Generate array length operator.
+ *   @env: The environment.
+ *   @len: The array length operator.
+ */
+def e:str[pt:st:miir:reg](pt:st:env env, st:miir:type type, pt:st:pl3:arrlen len) gen_len = {
+	var pt:st:miir:reg reg;
+
+	reg = env_alloc(env, type, null);
+	add_inst(env, miir:inst_imm(miir:imm_zext(reg, miir:type_size(type), i32{len->val})));
+
+	return reg;
+};
+
+/**
+ * Generate an error require statement.
+ *   @env: The environment.
+ *   @expr: The expression.
+ */
+def e:str[pt:st:miir:reg](pt:st:env env, pt:st:pl3:expr expr) gen_ereq = {
+	var pt:st:frame frame;
+	var pt:st:pl3:err err;
+	var pt:st:miir:blk onfail, onsuc;
+	var pt:st:miir:reg eval, val, addr, off, dst, chk, zero, cond;
+	var st:miir:type ftype, stype;
+
+	err = pl3:type_get_err(expr->type);
+	if(err == null)
+		e:fmt("Call to `e:req` requires error value.");
+
+	onfail = miir:blk_new();
+	onsuc = miir:blk_new();
+
+	ftype = e:get(gen_type(err->fail, env));
+	stype = e:get(gen_type(err->suc, env));
+
+	eval = e:get(gen_expr(env, expr));
+	addr = env_alloc(env, env->ctx->ptr, null);
+	off = env_alloc(env, env->ctx->ptr, null);
+	dst = env_alloc(env, env->ctx->ptr, null);
+	val = env_alloc(env, stype, null);
+	chk = env_alloc(env, ftype, null);
+	zero = env_alloc(env, ftype, null);
+	cond = env_alloc(env, miir:type_i8(), null);
+
+	var u32 t = m:align_u32(pl3:type_size(err->suc, env->ctx->ptr.wid / 8), pl3:type_align(expr->type, env->ctx->ptr.wid / 8));
+	add_inst(env, miir:inst_addr(env->ctx->ptr, addr, eval));
+	if(miir:type_size(env->ctx->ptr) == 8)
+		add_inst(env, miir:inst_imm(miir:imm_u64(off, u64{t})));
+	else if(miir:type_size(env->ctx->ptr) == 4)
+		add_inst(env, miir:inst_imm(miir:imm_u32(off, u32{t})));
+	else
+		e:fmt("Unsupported pointer size.");
+	add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:add, env->ctx->ptr, dst, addr, off)));
+	add_inst(env, miir:inst_ld(ftype, chk, dst));
+
+	add_inst(env, miir:inst_imm(miir:imm_zero(zero, zero->type.wid / 8)));
+
+	frame = get_frame(env);
+
+	add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:ne, ftype, cond, chk, zero)));
+	*frame->term = miir:term_cond(cond, onfail, onsuc);
+
+	set_frame(frame, onfail);
+
+	{
+		var pt:st:miir:reg func, ret;
+		var pt:st:miir:sig sig;
+		var pt:st:miir:arg arg;
+
+		func = env_alloc(env, env->ctx->ptr, null);
+		ret = env_alloc(env, miir:type_void(), null);
+
+		arg = miir:arg_new(miir:type_void(), ret);
+		arg->next = miir:arg_new(env->ctx->ptr, chk);
+
+		sig = miir:sig_new(false, miir:type_void(), miir:param_new(env->ctx->ptr));
+		add_inst(env, miir:inst_sym(miir:sym_new(func, env->ctx->fatal)));
+		add_inst(env, miir:inst_call(miir:call_new(sig, func, arg)));
+	}
+
+	set_frame(frame, onsuc);
+
+	if(miir:type_size(stype) > 0)
+		add_inst(env, miir:inst_ld(stype, val, addr));
+
+	return val;
+};
+
+/**
+ * Generate an error ignore.
+ *   @env: The environment.
+ *   @expr: The expression.
+ */
+def e:str[pt:st:miir:reg](pt:st:env env, pt:st:pl3:expr expr) gen_eign = {
+	var pt:st:frame frame;
+	var pt:st:pl3:err err;
+	var pt:st:miir:blk onfail, onsuc;
+	var pt:st:miir:reg eval, val, addr, off, dst, chk, zero, cond;
+	var st:miir:type ftype, stype;
+
+	err = pl3:type_get_err(expr->type);
+	if(err == null)
+		e:fmt("Call to `e:req` requires error value.");
+
+	onfail = miir:blk_new();
+	onsuc = miir:blk_new();
+
+	ftype = e:get(gen_type(err->fail, env));
+	stype = e:get(gen_type(err->suc, env));
+
+	eval = e:get(gen_expr(env, expr));
+	addr = env_alloc(env, env->ctx->ptr, null);
+	off = env_alloc(env, env->ctx->ptr, null);
+	dst = env_alloc(env, env->ctx->ptr, null);
+	val = env_alloc(env, stype, null);
+	chk = env_alloc(env, ftype, null);
+	zero = env_alloc(env, ftype, null);
+	cond = env_alloc(env, miir:type_i8(), null);
+
+	var u32 t = m:align_u32(pl3:type_size(err->suc, env->ctx->ptr.wid / 8), pl3:type_align(expr->type, env->ctx->ptr.wid / 8));
+	add_inst(env, miir:inst_addr(env->ctx->ptr, addr, eval));
+	if(miir:type_size(env->ctx->ptr) == 8)
+		add_inst(env, miir:inst_imm(miir:imm_u64(off, u64{t})));
+	else if(miir:type_size(env->ctx->ptr) == 4)
+		add_inst(env, miir:inst_imm(miir:imm_u32(off, u32{t})));
+	else
+		e:fmt("Unsupported pointer size.");
+	add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:add, env->ctx->ptr, dst, addr, off)));
+	add_inst(env, miir:inst_ld(ftype, chk, dst));
+
+	add_inst(env, miir:inst_imm(miir:imm_zero(zero, zero->type.wid / 8)));
+
+	frame = get_frame(env);
+
+	add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:ne, ftype, cond, chk, zero)));
+	*frame->term = miir:term_cond(cond, onfail, onsuc);
+
+	set_frame(frame, onfail);
+
+	{
+		var pt:st:miir:reg func, ret;
+		var pt:st:miir:sig sig;
+		var pt:st:miir:arg arg;
+
+		func = env_alloc(env, env->ctx->ptr, null);
+		ret = env_alloc(env, miir:type_void(), null);
+
+		arg = miir:arg_new(miir:type_void(), ret);
+		arg->next = miir:arg_new(env->ctx->ptr, chk);
+
+		sig = miir:sig_new(false, miir:type_void(), miir:param_new(env->ctx->ptr));
+		add_inst(env, miir:inst_sym(miir:sym_new(func, env->ctx->free)));
+		add_inst(env, miir:inst_call(miir:call_new(sig, func, arg)));
+	}
+
+	*frame->term = miir:term_br(onsuc);
+	set_frame(frame, onsuc);
+
+	return null;
+};
+
+/**
+ * Variable argument initializer.
+ *   @env: The environment.
+ */
+def e:str[pt:st:miir:reg](pt:st:env env) gen_vinit = {
+	var pt:st:miir:reg reg;
+
+	reg = env_alloc(env, env->ctx->args, null);
+	add_inst(env, miir:inst_vinit(reg));
+
+	return reg;
+};
+
+/**
+ * Variable argument get.
+ *   @env: The environment.
+ *   @get: Variable argument get.
+ */
+def e:str[pt:st:miir:reg](pt:st:env env, pt:st:pl3:vget get) gen_vget = {
+	var pt:st:miir:reg reg, args;
+
+	args = e:get(gen_expr(env, get->expr));
+
+	reg = env_alloc(env, e:get(gen_type(get->type, env)), null);
+	add_inst(env, miir:inst_vget(miir:vget_new(reg->type.kind == ev:miir:kind:flt, reg->type.wid / 8, reg, args)));
+
+	return reg;
+};
+
+/**
+ * Generate a get reference.
+ *   @env: The environment.
+ *   @expr: The expression.
+ *   &returns: The address register.
+ */
+def e:str[pt:st:miir:reg](pt:st:env env, pt:st:pl3:expr expr) gen_getref = {
+	var pt:st:miir:reg addr, val;
+
+	val = e:get(gen_expr(env, expr));
+
+	addr = env_alloc(env, env->ctx->ptr, null);
+	add_inst(env, miir:inst_addr(env->ctx->ptr, addr, val));
+
+	return addr;
+};
+
+/**
+ * Generate an aggregate.
+ *   @env: The environment.
+ *   @comp: The compound.
+ *   @agg: The aggregate type.
+ *   &returns: The register.
+ */
+def e:str[pt:st:miir:reg](pt:st:env env, pt:st:pl3:comp comp, pt:st:pl3:agg agg, en:pl3:tydecl tag) gen_agg = {
+	var pt:st:miir:reg reg, addr;
+
+	reg = env_alloc(env, e:get(gen_type(comp->type, env)), null);
+	addr = env_alloc(env, env->ctx->ptr, null);
+	add_inst(env, miir:inst_addr(env->ctx->ptr, addr, reg));
+
+	e:get(comp_agg(env, tag, comp->list, agg, addr, 0));
+
+	return reg;
+};
+
+/**
+ * Generate an array.
+ *   @env: The environment.
+ *   @comp: The compound.
+ *   @agg: The aggregate type.
+ *   &returns: The register.
+ */
+def e:str[pt:st:miir:reg](pt:st:env env, pt:st:pl3:comp comp, pt:st:pl3:arr arr, en:pl3:tydecl tag) gen_arr = {
+	var pt:st:miir:reg reg, addr;
+	var pt:st:pl3:init init;
+	var u32 width = pl3:type_size(arr->type, env->ctx->ptr.wid / 8);
+
+	reg = env_alloc(env, e:get(gen_type(comp->type, env)), null);
+	addr = env_alloc(env, env->ctx->ptr, null);
+
+	add_inst(env, miir:inst_addr(env->ctx->ptr, addr, reg));
+
+	for(init = comp->list->init; init != null; init = init->next) {
+		switch(init->tag) {
+		case ev:pl3:init:expr: {
+			var pt:st:miir:reg val, off, dst;
+
+			val = e:get(gen_expr(env, init->data.expr));
+			dst = env_alloc(env, env->ctx->ptr, null);
+			off = env_alloc(env, env->ctx->ptr, null);
+			e:get(gen_off(env, off, u32{init->idx} * width));
+			add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:add, env->ctx->ptr, dst, addr, off)));
+			add_inst(env, miir:inst_st(e:get(gen_type(init->data.expr->type, env)), dst, val));
+		} break;
+
+		case ev:pl3:init:nest:
+			fatal("STUB gen_arr nest");
+			//e:get(iter(env, init->data.list, agg, addr, off + pl3:agg_off(agg, u32{init->idx}, &arch)));
+			break;
+		}
+	}
+
+	return reg;
+};
+
+def e:str[void](pt:st:env env, pt:st:pl3:list list, st:pl3:type type, pt:st:miir:reg addr, u32 off) comp_nest = {
+	var pt:st:pl3:agg agg;
+	var pt:st:pl3:arr arr;
+	var en:pl3:tydecl tag;
+
+	if((agg = pl3:type_get_agg(type, &tag)) != null)
+		e:get(comp_agg(env, tag, list, agg, addr, off));
+	else if((arr = pl3:type_get_arr(type)) != null)
+		e:get(comp_arr(env, list, arr, addr, off));
+	else
+		fatal("Internal error. Invalid nested compound.");
+};
+
+def e:str[void](pt:st:env env, en:pl3:tydecl tag, pt:st:pl3:list list, pt:st:pl3:agg agg, pt:st:miir:reg addr, u32 off) comp_agg = {
+	var pt:st:pl3:init init;
+
+	for(init = list->init; init != null; init = init->next) {
+		var u32 into = 0;
+
+		if(tag != ev:pl3:tydecl:union)
+			into = pl3:agg_off(agg, u32{init->idx}, env->ctx->ptr.wid / 8);
+
+		switch(init->tag) {
+		case ev:pl3:init:expr: {
+			var pt:st:miir:reg val, add, dst;
+
+			val = e:get(gen_expr(env, init->data.expr));
+
+			dst = env_alloc(env, env->ctx->ptr, null);
+			add = env_alloc(env, env->ctx->ptr, null);
+			e:get(gen_off(env, add, off + into));
+			add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:add, env->ctx->ptr, dst, addr, add)));
+
+			add_inst(env, miir:inst_st(e:get(gen_type(init->data.expr->type, env)), dst, val));
+		} break;
+
+		case ev:pl3:init:nest: {
+			var st:pl3:type type;
+
+			if(pl3:agg_get(agg, u32{init->idx}, &type) == null)
+				fatal("Internal error. Cannot get aggregate member.");
+
+			e:get(comp_nest(env, init->data.list, type, addr, off + into));
+		} break;
+		}
+	}
+};
+
+def e:str[void](pt:st:env env, pt:st:pl3:list list, pt:st:pl3:arr arr, pt:st:miir:reg addr, u32 off) comp_arr = {
+	var pt:st:pl3:init init;
+	var u32 width = pl3:type_size(arr->type, env->ctx->ptr.wid / 8);
+
+	for(init = list->init; init != null; init = init->next) {
+		switch(init->tag) {
+		case ev:pl3:init:expr: {
+			var pt:st:miir:reg val, add, dst;
+
+			val = e:get(gen_expr(env, init->data.expr));
+			dst = env_alloc(env, env->ctx->ptr, null);
+			add = env_alloc(env, env->ctx->ptr, null);
+			e:get(gen_off(env, add, off + u32{init->idx} * width));
+			add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:add, env->ctx->ptr, dst, addr, add)));
+			add_inst(env, miir:inst_st(e:get(gen_type(init->data.expr->type, env)), dst, val));
+		} break;
+
+		case ev:pl3:init:nest:
+			fatal("STUB gen_arr nest");
+			//e:get(iter(env, init->data.list, agg, addr, off + pl3:agg_off(agg, u32{init->idx}, &arch)));
+			break;
+		}
+	}
+
+};
+
+/**
+ * Generate a cast.
+ *   @env: The environment.
+ *   @comp: The compound.
+ *   &returns: The register.
+ */
+def e:str[pt:st:miir:reg](pt:st:env env, pt:st:pl3:comp comp) gen_cast = {
+	var pt:st:pl3:expr src;
+	var pt:st:miir:reg val, ret;
+	var st:miir:type from, to;
+	var pt:st:pl3:list list = comp->list;
+
+	assert((list->init != null) && (list->init->next == null) && (list->init->tag == ev:pl3:init:expr));
+
+	src = list->init->data.expr;
+	val = e:get(gen_expr(env, src));
+
+	from = e:get(gen_type(src->type, env));
+	to = e:get(gen_type(comp->type, env));
+
+	if((pl3:type_is_int(src->type) || pl3:type_is_ptr(src->type)) && (pl3:type_is_int(comp->type) || pl3:type_is_ptr(comp->type))) {
+		if(from.wid == to.wid)
+			return val;
+
+		ret = env_alloc(env, to, null);
+
+		if(from.wid > to.wid)
+			add_inst(env, miir:inst_op1(miir:op1_new(ev:miir:op1:trunc, to, ret, val)));
+		else if(pl3:type_is_signed(src->type))
+			add_inst(env, miir:inst_op1(miir:op1_new(ev:miir:op1:sext, to, ret, val)));
+		else
+			add_inst(env, miir:inst_op1(miir:op1_new(ev:miir:op1:zext, to, ret, val)));
+	} else if(pl3:type_is_int(src->type) && pl3:type_is_fp(comp->type)) {
+		ret = env_alloc(env, to, null);
+		add_inst(env, miir:inst_op1(miir:op1_new(pl3:type_is_signed(src->type) ? ev:miir:op1:si2fp : ev:miir:op1:ui2fp, to, ret, val)));
+	} else if(pl3:type_is_fp(src->type) && pl3:type_is_int(comp->type)) {
+		ret = env_alloc(env, to, null);
+		add_inst(env, miir:inst_op1(miir:op1_new(pl3:type_is_signed(src->type) ? ev:miir:op1:fp2si : ev:miir:op1:fp2ui, to, ret, val)));
+	} else if(pl3:type_is_fp(src->type) && pl3:type_is_fp(comp->type)) {
+		ret = env_alloc(env, to, null);
+		add_inst(env, miir:inst_op1(miir:op1_new(ev:miir:op1:fp2fp, to, ret, val)));
+	} else {
+		e:fmt("%C: Internal error. Unsupported cast.", pl3:meta_call(&src->meta));
+	}
+	
+	return ret;
+};
+
+/**
+ * Generate an l-value expression.
+ *   @env: The environment.
+ *   @expr: The expression.
+ *   &returns: The register with the value.
+ */
+def e:str[pt:st:miir:reg](pt:st:env env, pt:st:pl3:expr expr) gen_left = {
+	switch(expr->tag) {
+	case ev:pl3:expr:ident: {
+		var pt:st:pl3:ident ident = expr->data.ident;
+
+		switch(ident->tag) {
+		case ev:pl3:ident:unk:
+			e:fmt("Cannot emit unresolved identifier.");
+
+		case ev:pl3:ident:param: {
+			var st:miir:type type;
+			var pt:st:miir:reg dst;
+
+			dst = env_alloc(env, env->ctx->ptr, null);
+			add_inst(env, miir:inst_addr(type, dst, e:get(get_reg(env, ident->data.param))));
+
+			return dst;
+		} break;
+
+		case ev:pl3:ident:link: {
+			var st:miir:type type;
+			var pt:st:miir:reg dst, src;
+			var pt:st:pl3:bind bind = ident->data.link.bind;
+
+			if(pl3:type_is_sig(expr->type)) {
+				if(bind->expr == null) {
+					var pt:st:miir:ext ext;
+
+					dst = env_alloc(env, env->ctx->ptr, null);
+					ext = avl:ptr_get(&env->ctx->map, bind);
+					if(ext == null)
+						fatal("Internal error. Cannot find external declaration");
+
+					add_inst(env, miir:inst_sym(miir:sym_new(dst, ext)));
+
+					return dst;
+				} else {
+					var pt:st:miir:inst inst;
+
+					dst = env_alloc(env, env->ctx->ptr, null);
+					add_inst(env, inst = miir:inst_func(type, dst, null));
+					defer_dst(env->ctx, bind, &inst->data.ref.data.func);
+
+					return dst;
+				}
+			}
+			else {
+				var pt:st:avl:node node;
+				var pt:st:pl3:bind bind = ident->data.link.bind;
+
+				node = avl:root_get(&env->ctx->sym, bind);
+				if(node != null) {
+					var st:miir:type type;
+					var pt:st:miir:reg mem;
+					var pt:st:sym sym = getparent(node, st:sym, node);
+
+					type = e:get(gen_type(expr->type, env));
+
+					mem = env_alloc(env, env->ctx->ptr, null);
+
+					add_inst(env, miir:inst_glob(mem, sym->decl));
+
+					return mem;
+				} else {
+					type = e:get(gen_type(expr->type, env));
+					dst = env_alloc(env, env->ctx->ptr, null);
+					src = find_reg(env, bind);
+					add_inst(env, miir:inst_addr(type, dst, src));
+
+					return dst;
+				}
+			}
+		} break;
+
+		case ev:pl3:ident:builtin:
+			fatal("FIXME stub gen.pl3:gen_expr");
+		}
+	} break;
+
+	case ev:pl3:expr:op1: {
+		var pt:st:pl3:op1 op1 = expr->data.op1;
+
+		switch(op1->tag) {
+		case ev:pl3:op1:deref:
+			return e:get(gen_expr(env, op1->in));
+
+		default:
+			fatal("STUB gen_left op1");
+		}
+	} break;
+
+	case ev:pl3:expr:elem: {
+		var en:pl3:tydecl tag;
+		var st:pl3:type from;
+		var pt:st:miir:reg src;
+		var pt:st:pl3:elem elem = expr->data.elem;
+
+		from = elem->expr->type;
+
+		if(elem->deref) {
+			var pt:st:pl3:ptr ptr = pl3:type_get_ptr(from);
+
+			if(ptr == null)
+				fatal("Internal error. Attempted to dereference non-pointer type.");
+
+			src = e:get(gen_expr(env, elem->expr));
+			from = ptr->type;
+		}
+		else
+			src = e:get(gen_left(env, elem->expr));
+
+		if(pl3:type_get_agg(from, &tag) == null)
+			e:fmt("Internal error. Invalid element access.");
+
+		switch(tag) {
+		case ev:pl3:tydecl:struct: {
+			var st:miir:type type;
+			var pt:st:miir:reg imm, off, ptr;
+
+			type = e:get(gen_type(expr->type, env));
+
+			imm = env_alloc(env, miir:type_i32(), null);
+			off = env_alloc(env, env->ctx->ptr, null);
+			ptr = env_alloc(env, env->ctx->ptr, null);
+			add_inst(env, miir:inst_imm(miir:imm_u32(imm, elem->off)));
+			add_inst(env, miir:inst_op1(miir:op1_new(ev:miir:op1:sext, env->ctx->ptr, off, imm)));
+			add_inst(env, miir:inst_op2(miir:op2_add(env->ctx->ptr, ptr, src, off)));
+
+			return ptr;
+		} break;
+
+		case ev:pl3:tydecl:union:
+			return src;
+		}
+	} break;
+
+	case ev:pl3:expr:index: {
+		var pt:st:pl3:arr arr;
+		var pt:st:pl3:ptr ptr;
+		var pt:st:pl3:index index = expr->data.index;
+
+		if(index->deref) {
+			fatal("STUB gen_expr index deref");
+		}
+
+		if((ptr = pl3:type_get_ptr(index->base->type)) != null) {
+			var u32 inc;
+			var st:miir:type type, ptype;
+			var pt:st:miir:reg reg, off, add, mul, step, src;
+
+			type = e:get(gen_type(expr->type, env));
+			ptype = e:get(gen_type(index->base->type, env));
+
+			reg = e:get(gen_expr(env, index->base));
+			off = e:get(gen_expr(env, index->off));
+
+			add = env_alloc(env, ptype, null);
+			add_inst(env, miir:inst_op1(miir:op1_new(ev:miir:op1:sext, ptype, add, off))); // TODO maybe use a cast function
+
+			inc = miir:type_size(e:get(gen_type(ptr->type, env)));
+			if(inc == 0)
+				inc = 1;
+
+			step = env_alloc(env, ptype, null);
+			if(miir:type_size(env->ctx->ptr) == 8)
+				add_inst(env, miir:inst_imm(miir:imm_u64(step, u64{inc})));
+			else if(miir:type_size(env->ctx->ptr) == 4)
+				add_inst(env, miir:inst_imm(miir:imm_u32(step, u32{inc})));
+			else
+				e:fmt("Unsupported pointer size.");
+
+			mul = env_alloc(env, ptype, null);
+			add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:mul, ptype, mul, add, step)));
+
+			src = env_alloc(env, ptype, null);
+			add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:add, ptype, src, reg, mul)));
+
+			return src;
+		} else if((arr = pl3:type_get_arr(index->base->type)) != null) {
+			var st:miir:type type;
+			var pt:st:miir:reg reg, off, mul, ext, add, src;
+
+			type = e:get(gen_type(expr->type, env));
+
+			reg = e:get(gen_left(env, index->base));
+			off = e:get(gen_expr(env, index->off));
+
+			mul = env_alloc(env, env->ctx->ptr, null);
+			add_inst(env, miir:inst_imm(miir:imm_zext(mul, miir:type_size(env->ctx->ptr), i32{miir:type_size(e:get(gen_type(arr->type, env)))})));
+
+			ext = env_alloc(env, env->ctx->ptr, null);
+			add_inst(env, miir:inst_op1(miir:op1_new(ev:miir:op1:sext, env->ctx->ptr, ext, off))); // TODO maybe use a cast function
+
+			add = env_alloc(env, env->ctx->ptr, null);
+			add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:mul, env->ctx->ptr, add, mul, ext)));
+
+			src = env_alloc(env, env->ctx->ptr, null);
+			add_inst(env, miir:inst_op2(miir:op2_new(ev:miir:op2:add, env->ctx->ptr, src, reg, add)));
+
+			return src;
+		} else {
+			e:fmt("%C: Internal error. Invalid index operation.", pl3:meta_call(&expr->meta));
+		}
+	} break;
+
+	default:
+		fatal("STUB gen_left");
+		/*
+	{
+		var st:miir:type type;
+		var pt:st:miir:reg dst, src;
+
+		type = e:get(gen_type(expr->type, env));
+
+		src = e:get(gen_expr(env, expr));
+		dst = env_alloc(env, type, null);
+		add_inst(env, miir:inst_addr(type, dst, src));
+
+		return dst;
+	} break;
+	*/
+	}
+};
+
+/**
+ * Generate a type.
+ *   @type: The PL3 type.
+ *   @env: The environment.
+ *   &returns: The MIIR type.
+ */
+def e:str[st:miir:type](st:pl3:type type, pt:st:env env) gen_type = {
+	type = pl3:type_root(type);
+
+	switch(type.tag) {
+	case ev:pl3:type:void: return miir:type_void();
+	case ev:pl3:type:bool: return miir:type_i8();
+	case ev:pl3:type:i8: return miir:type_i8();
+	case ev:pl3:type:u8: return miir:type_i8();
+	case ev:pl3:type:i16: return miir:type_i16();
+	case ev:pl3:type:u16: return miir:type_i16();
+	case ev:pl3:type:i32: return miir:type_i32();
+	case ev:pl3:type:u32: return miir:type_i32();
+	case ev:pl3:type:i64: return miir:type_i64();
+	case ev:pl3:type:u64: return miir:type_i64();
+	case ev:pl3:type:fp32: return miir:type_fp32();
+	case ev:pl3:type:fp64: return miir:type_fp64();
+	case ev:pl3:type:ptr: return env->ctx->ptr;
+	case ev:pl3:type:args: return env->ctx->args;
+	case ev:pl3:type:arr: return miir:type_blob(type.data.arr->len * miir:type_size(e:get(gen_type(type.data.arr->type, env))));
+
+	case ev:pl3:type:name: {
+		var pt:st:pl3:tydecl decl = type.data.name->decl;
+
+		switch(decl->tag) {
+		case ev:pl3:tydecl:alias: return gen_type(decl->data.alias->type, env);
+		case ev:pl3:tydecl:struct: return miir:type_blob(pl3:type_size(type, env->ctx->ptr.wid / 8));
+		case ev:pl3:tydecl:union: return miir:type_blob(pl3:type_size(type, env->ctx->ptr.wid / 8));
+		case ev:pl3:tydecl:enum: return miir:type_i32(); //FIXME explicitly typed enums
+		}
+	} break;
+
+	case ev:pl3:type:err:
+		return miir:type_blob(pl3:type_size(type, env->ctx->ptr.wid / 8));
+
+	default: fatal("FIXME gen_type %u %u", type.tag, ev:pl3:type:sig);
+	}
+};
+
+/**
+ * Generate a signature.
+ *   @sig: The PL3 signature.
+ *   @env: The environment.
+ *   &returns: The MIIR signature.
+ */
+def e:str[pt:st:miir:sig](pt:st:pl3:sig sig, pt:st:env env) gen_sig = {
+	var st:miir:type ret;
+	var pt:st:miir:param param;
+	var pt:pt:st:miir:param iparam;
+	var pt:st:pl3:param iter;
+
+	ret = e:get(gen_type(sig->ret, env));
+
+	param = null;
+	iparam = &param;
+	for(iter = sig->param; iter != null; iter = iter->next) {
+		*iparam = miir:param_new(e:get(gen_type(iter->type, env)));
+		iparam = &(*iparam)->next;
+	}
+
+	return miir:sig_new(sig->vlist, ret, param);
+};
+
+
+/**
+ * Add an instruction.
+ *   @env: The environment.
+ *   @inst: The instruction.
+ */
+def void(pt:st:env env, pt:st:miir:inst inst) add_inst = {
+	var pt:st:frame frame;
+
+	frame = get_frame(env);
+	*frame->inst = inst;
+	frame->inst = &inst->next;
+};
+
+
+/**
+ * Create a frame.
+ *   @sig: The signature.
+ *   @reg: The register.
+ *   &returns: The frame.
+ */
+def pt:st:frame(pt:st:pl3:sig sig, pt:pt:st:miir:reg reg) frame_new = {
+	return mem:make(st:frame{ sig, reg, null, null, null, avl:root_new(&avl:cmp_ptr) });
+};
+
+/**
+ * Delete a frame.
+ *   @frame: The frame.
+ */
+def void(pt:st:frame frame) frame_delete = {
+	avl:root_delete(&frame->map, offsetof(st:map, node), &mem:free);
+	mem:free(frame);
+};
+
+/**
+ * Create or get a mapped blcok for the frame.
+ *   @frame: The farme.
+ *   @ref: The reference.
+ *   &returns: The block.
+ */
+def pt:st:miir:blk(pt:st:frame frame, pt:void ref) frame_map = {
+	var pt:st:map map;
+	var pt:st:avl:node node;
+
+	node = avl:root_get(&frame->map, ref);
+	if(node == null) {
+		map = mem:make(st:map{ miir:blk_new(), avl:node(ref) });
+		avl:root_add(&frame->map, &map->node);
+	} else {
+		map = getparent(node, st:map, node);
+	}
+
+	return map->blk;
+};
+
+
+/**
+ * Create a scope.
+ *   &returns: The scope.
+ */
+def pt:st:scope() scope_new = {
+	return mem:make(st:scope{ null, null });
+};
+
+/**
+ * Delete a scope.
+ *   @scope: The scope.
+ */
+def void(pt:st:scope scope) scope_delete = {
+	var pt:st:ref ref;
+	var pt:st:handler handler;
+
+	while(scope->ref != null) {
+		scope->ref = (ref = scope->ref)->next;
+		mem:free(ref);
+	}
+
+	while(scope->handler != null) {
+		scope->handler = (handler = scope->handler)->next;
+		mem:free(handler);
+	}
+
+	mem:free(scope);
+};
+
+/**
+ * Add a reference to a scope.
+ *   @scope: The scope.
+ *   @ptr: The pointer key.
+ *   @reg: The register value.
+ */
+def void(pt:st:scope scope, pt:void ptr, pt:st:miir:reg reg) scope_add = {
+	var pt:st:ref ref;
+
+	ref = mem:make(st:ref{ ptr, reg, scope->ref });
+	scope->ref = ref;
+};
+
+/**
+ * Get a reference from a scope.
+ *   @scope: The scope.
+ *   @ptr: The pointer.
+ *   &returns: The register if found, null if not.
+ */
+def pt:st:miir:reg(pt:st:scope scope, pt:void ptr) scope_get = {
+	var pt:st:ref ref;
+
+	for(ref = scope->ref; ref != null; ref = ref->next) {
+		if(ref->ptr == ptr)
+			return ref->reg;
+	}
+
+	return null;
+};
+
+
+/**
+ * Create a deferred symbol.
+ *   @bind: The binding.
+ *   &returns: The deferred symbol.
+ */
+def pt:st:defer(pt:st:pl3:bind bind) defer_new = {
+	return mem:make(st:defer{ null, mem:alloc(0), 0, avl:node(bind) });
+};
+
+/**
+ * Delete a deferred symbol.
+ *   @defer: The deferred symbol.
+ */
+def void(pt:st:defer defer) defer_delete = {
+	mem:free(defer->dst);
+	mem:free(defer);
+};
+
+/**
+ * Get a deferred symbol.
+ *   @ctx: The context.
+ *   @bind: The binding.
+ *   &returns: The deferred symbol.
+ */
+def pt:st:defer(pt:st:ctx ctx, pt:st:pl3:bind bind) defer_get = {
+	var pt:st:defer defer;
+	var pt:st:avl:node node;
+
+	node = avl:root_get(&ctx->defer, bind);
+	if(node == null) {
+		defer = defer_new(bind);
+		avl:root_add(&ctx->defer, &defer->node);
+	}
+	else
+		defer = getparent(node, st:defer, node);
+	
+	return defer;
+};
+
+/**
+ * Create a defer source.
+ *   @ctx: The context.
+ *   @bind: The binding.
+ *   @src: The source.
+ */
+def void(pt:st:ctx ctx, pt:st:pl3:bind bind, pt:void src) defer_src = {
+	defer_get(ctx, bind)->src = src;
+};
+
+/**
+ * Create a defer destination.
+ *   @ctx: The context.
+ *   @bind: The binding.
+ *   @src: The destination pointer.
+ */
+def void(pt:st:ctx ctx, pt:st:pl3:bind bind, pt:pt:void dst) defer_dst = {
+	var pt:st:defer defer;
+
+	defer = defer_get(ctx, bind);
+	defer->dst = mem:realloc(defer->dst, (defer->cnt + 1) * sizeof(pt:pt:void));
+	defer->dst[defer->cnt++] = dst;
+};
+
+/**
+ * Resolve all deferred symbols.
+ *   @ctx: The context.
+ */
+def void(pt:st:ctx ctx) defer_resolve = {
+	var u32 i;
+	var pt:st:defer defer;
+	var pt:st:avl:node node;
+
+	for(node = avl:root_first(&ctx->defer); node != null; node = avl:node_next(node)) {
+		defer = getparent(node, st:defer, node);
+
+		for(i = 0; i < defer->cnt; i++)
+			*defer->dst[i] = defer->src;
+	}
+};
+
+
+/**
+ * Generate a value from an expression.
+ *   @env: The environment.
+ *   @expr: The expression.
+ *   &returns: The value.
+ */
+def e:str[pt:st:miir:val](pt:st:env env, pt:st:pl3:expr expr) val_expr = {
+	switch(expr->tag) {
+	case ev:pl3:expr:lit: return e:get(val_lit(env, expr->data.lit));
+
+	case ev:pl3:expr:ident: {
+		var pt:st:pl3:ident ident = expr->data.ident;
+
+		if(ident->tag == ev:pl3:ident:link) {
+			var st:pl3:link link = ident->data.link;
+
+			if((link.decl->flags & pl3:decl:mut) == 0)
+				return val_expr(env, link.bind->expr);
+		}
+	} break;
+
+	case ev:pl3:expr:op1: {
+		var pt:st:miir:val in, ret;
+		var pt:st:pl3:op1 op1 = expr->data.op1;
+
+		in = e:get(val_expr(env, op1->in));
+		// FIXME onerr
+
+		switch(op1->tag) {
+		case ev:pl3:op1:neg: ret = e:get(miir:val_neg(in)); break;
+		default: fatal("STUB val_expr op1");
+		}
+
+		miir:val_delete(in);
+		return ret;
+	} break;
+
+	case ev:pl3:expr:op2: {
+		var pt:st:miir:val lhs, rhs, ret;
+		var pt:st:pl3:op2 op2 = expr->data.op2;
+
+		lhs = e:get(val_expr(env, op2->lhs));
+		rhs = e:get(val_expr(env, op2->rhs));
+
+		switch(op2->tag) {
+		case ev:pl3:op2:shl:
+			switch(op2->lhs->type.tag) {
+			case ev:pl3:type:i8: ret = miir:val_new(mem:dup(getref(*pt:i8{lhs->buf} << *pt:i8{rhs->buf}), 1), 1, null); break;
+			case ev:pl3:type:u8: ret = miir:val_new(mem:dup(getref(*pt:u8{lhs->buf} << *pt:u8{rhs->buf}), 1), 1, null); break;
+			case ev:pl3:type:i16: ret = miir:val_new(mem:dup(getref(*pt:i16{lhs->buf} << *pt:i8{rhs->buf}), 2), 2, null); break;
+			case ev:pl3:type:u16: ret = miir:val_new(mem:dup(getref(*pt:u16{lhs->buf} << *pt:u8{rhs->buf}), 2), 2, null); break;
+			case ev:pl3:type:i32: ret = miir:val_new(mem:dup(getref(*pt:i32{lhs->buf} << *pt:i8{rhs->buf}), 4), 4, null); break;
+			case ev:pl3:type:u32: ret = miir:val_new(mem:dup(getref(*pt:u32{lhs->buf} << *pt:u8{rhs->buf}), 4), 4, null); break;
+			case ev:pl3:type:i64: ret = miir:val_new(mem:dup(getref(*pt:i64{lhs->buf} << *pt:i8{rhs->buf}), 8), 8, null); break;
+			case ev:pl3:type:u64: ret = miir:val_new(mem:dup(getref(*pt:u64{lhs->buf} << *pt:u8{rhs->buf}), 8), 8, null); break;
+			default: fatal("STUB fill_op1 shl");
+			}
+
+			break;
+
+		default: fatal("STUB val_expr op2 %u", op2->tag);
+		}
+
+		miir:val_delete(lhs);
+		miir:val_delete(rhs);
+
+		return ret;
+	} break;
+
+	case ev:pl3:expr:enref:
+		return val_expr(env, expr->data.enref->val->expr);
+
+	case ev:pl3:expr:comp: return e:get(val_comp(env, expr->data.comp));
+
+	default:
+		fatal("STUB val_expr %d", expr->tag);
+	}
+};
+
+/**
+ * Generate a value from a literal.
+ *   @env: The environment.
+ *   @lit: The literal.
+ *   &returns: The value.
+ */
+def e:str[pt:st:miir:val](pt:st:env env, pt:st:pl3:lit lit) val_lit = {
+	def pt:st:miir:val(cpt:void buf, u32 sz) make = {
+		return miir:val_new(mem:dup(buf, sz), sz, null);
+	};
+
+	switch(lit->tag) {
+	case ev:pl3:lit:none: break;
+	case ev:pl3:lit:bool: return make(&lit->data.boolv, 1);
+	case ev:pl3:lit:i8v: return make(&lit->data.i8v, 1);
+	case ev:pl3:lit:u8v: return make(&lit->data.u8v, 1);
+	case ev:pl3:lit:i16v: return make(&lit->data.i16v, 2);
+	case ev:pl3:lit:u16v: return make(&lit->data.u16v, 2);
+	case ev:pl3:lit:i32v: return make(&lit->data.i32v, 4);
+	case ev:pl3:lit:u32v: return make(&lit->data.u32v, 4);
+	case ev:pl3:lit:i64v: return make(&lit->data.i64v, 8);
+	case ev:pl3:lit:u64v: return make(&lit->data.u64v, 8);
+	default: fatal("STUB val_lit");
+	}
+};
+
+def void(pt:st:env env, pt:st:miir:val val, u32 off, st:pl3:type type, pt:st:pl3:list list) fill = {
+	var pt:st:pl3:arr arr;
+	var pt:st:pl3:agg agg;
+	var en:pl3:tydecl tag;
+	var pt:st:pl3:init init = list->init;
+
+	if((arr = pl3:type_get_arr(type)) != null) {
+		var u32 i, step;
+
+		step = pl3:type_size(arr->type, env->ctx->ptr.wid / 8);
+
+		for(i = 0; i < arr->len; i++) {
+			fill2(env, val, off + i * step, arr->type, init);
+			init = init->next;
+		}
+	} else if((agg = pl3:type_get_agg(type, &tag)) != null) {
+		switch(tag) {
+		case ev:pl3:tydecl:struct: {
+			for(init = list->init; init != null; init = init->next) {
+				pl3:agg_get(agg, u32{init->idx}, &type);
+				fill2(env, val, off + pl3:agg_off(agg, u32{init->idx}, env->ctx->ptr.wid / 8), type, init);
+			}
+		} break;
+
+		case ev:pl3:tydecl:union: {
+			for(init = list->init; init != null; init = init->next) {
+				pl3:agg_get(agg, u32{init->idx}, &type);
+				fill2(env, val, off, type, init);
+			}
+		} break;
+		}
+	}
+};
+
+def void(pt:st:env env, pt:st:miir:val val, u32 off, st:pl3:type type, pt:st:pl3:init init) fill2 = {
+	switch(init->tag) {
+	case ev:pl3:init:expr: fill_expr(env, val, off, init->data.expr); break;
+	case ev:pl3:init:nest: fill(env, val, off, type, init->data.list); break;
+	}
+};
+
+/**
+ * Fill a buffer with an expresion.
+ *   @env: The environment.
+ *   @buf: The buffer.
+ *   @expr: The expression.
+ */
+def void(pt:st:env env, pt:st:miir:val val, u32 off, pt:st:pl3:expr expr) fill_expr = {
+	switch(expr->tag) {
+	case ev:pl3:expr:lit: fill_lit(env, val, off, expr->data.lit); break;
+	case ev:pl3:expr:ident: fill_ident(env, val, off, expr->data.ident); break;
+	case ev:pl3:expr:op1: fill_op1(env, val, off, expr->data.op1, expr->meta.loc); break;
+	case ev:pl3:expr:enref: fill_expr(env, val, off, expr->data.enref->val->expr); break;
+	default: fatal("STUB fill_expr %u", expr->tag);
+	}
+};
+
+/**
+ * Fill a buffer with a literal.
+ *   @env: The environment.
+ *   @buf: The buffer.
+ *   @lit: The literal.
+ */
+def void(pt:st:env env, pt:st:miir:val val, u32 off, pt:st:pl3:lit lit) fill_lit = {
+	switch(lit->tag) {
+	case ev:pl3:lit:none: break;
+	case ev:pl3:lit:null: mem:zero(val->buf + off, miir:type_size(env->ctx->ptr)); break;
+	case ev:pl3:lit:bool: mem:copy(val->buf + off, &lit->data.boolv, 1); break;
+	case ev:pl3:lit:i8v: mem:copy(val->buf + off, &lit->data.i8v, 1); break;
+	case ev:pl3:lit:u8v: mem:copy(val->buf + off, &lit->data.u8v, 1); break;
+	case ev:pl3:lit:i16v: mem:copy(val->buf + off, &lit->data.i16v, 2); break;
+	case ev:pl3:lit:u16v: mem:copy(val->buf + off, &lit->data.u16v, 2); break;
+	case ev:pl3:lit:i32v: mem:copy(val->buf + off, &lit->data.i32v, 4); break;
+	case ev:pl3:lit:u32v: mem:copy(val->buf + off, &lit->data.u32v, 4); break;
+	case ev:pl3:lit:i64v: mem:copy(val->buf + off, &lit->data.i64v, 8); break;
+	case ev:pl3:lit:u64v: mem:copy(val->buf + off, &lit->data.u64v, 8); break;
+
+	case ev:pl3:lit:str: {
+		var u32 len;
+		var pt:st:pl3:buf buf;
+		var pt:st:miir:decl decl;
+		var pt:st:miir:val str;
+		var pt:pt:st:miir:rel rel;
+		var pt:st:miir:mod mod = env->ctx->mod;
+
+		buf = lit->data.buf;
+		str = miir:val_new(mem:dup(buf->arr, buf->sz), buf->sz, null);
+		decl = miir:decl_new(null, miir:type_void(), 0, str, buf->sz);
+		*mod->idecl = decl;
+		mod->idecl = &decl->next;
+
+		// TODO: store last relocation pointer
+		rel = &val->rel;
+		while(*rel != null)
+			rel = &(*rel)->next;
+
+		*rel = miir:rel_new(decl, ev:miir:rel:data, i32{off}, 0);
+	} break;
+
+	default: fatal("STUB fill_lit %u", lit->tag);
+	}
+};
+
+/**
+ * Fill a buffer with an identifier.
+ *   @env: The environment.
+ *   @buf: The buffer.
+ *   @ident: The idententifier.
+ */
+def void(pt:st:env env, pt:st:miir:val val, u32 off, pt:st:pl3:ident ident) fill_ident = {
+	if(ident->tag == ev:pl3:ident:link) {
+		var st:pl3:link link = ident->data.link;
+
+		if((link.decl->flags & pl3:decl:mut) == 0)
+			return fill_expr(env, val, off, link.bind->expr);
+	} else {
+		fatal("STUB fill_ident");
+	}
+};
+
+/**
+ * Fill a buffer with a unary operator.
+ *   @env: The environment.
+ *   @buf: The buffer.
+ *   @op1: The unary operator.
+ */
+def void(pt:st:env env, pt:st:miir:val val, u32 off, pt:st:pl3:op1 op1, pt:st:pl3:loc loc) fill_op1 = {
+	switch(op1->tag) {
+	case ev:pl3:op1:addr: {
+		var pt:st:pl3:expr expr;
+		var pt:st:pl3:ident ident;
+		var pt:pt:st:miir:rel rel;
+
+		if(op1->tag != ev:pl3:op1:addr)
+
+		expr = op1->in;
+		if(expr->tag != ev:pl3:expr:ident)
+			fatal("STUB fill_op1 b");
+
+		ident = expr->data.ident;
+		if(ident->tag != ev:pl3:ident:link)
+			fatal("STUB fill_op1 c");
+
+		rel = &val->rel;
+		while(*rel != null)
+			rel = &(*rel)->next;
+
+		*rel = miir:rel_new(null, ev:miir:rel:code, i32{off}, 0);
+		defer_dst(env->ctx, ident->data.link.bind, &(*rel)->ptr);
+	} break;
+
+	case ev:pl3:op1:neg: {
+		fill_expr(env, val, off, op1->in);
+
+		switch(op1->in->type.tag) {
+		case ev:pl3:type:u8: *pt:u8{val->buf + off} = -*pt:u8{val->buf + off}; break;
+		case ev:pl3:type:i8: *pt:i8{val->buf + off} = -*pt:i8{val->buf + off}; break;
+		case ev:pl3:type:u16: *pt:u16{val->buf + off} = -*pt:u16{val->buf + off}; break;
+		case ev:pl3:type:i16: *pt:i16{val->buf + off} = -*pt:i16{val->buf + off}; break;
+		case ev:pl3:type:u32: *pt:u32{val->buf + off} = -*pt:u32{val->buf + off}; break;
+		case ev:pl3:type:i32: *pt:i32{val->buf + off} = -*pt:i32{val->buf + off}; break;
+		case ev:pl3:type:u64: *pt:u64{val->buf + off} = -*pt:u64{val->buf + off}; break;
+		case ev:pl3:type:i64: *pt:i64{val->buf + off} = -*pt:i64{val->buf + off}; break;
+		default: fatal("STUB fill_op1 neg");
+		}
+	} break;
+
+	default:
+		fatal("STUB fill_op1 a %u %s:%u", op1->tag, loc->file->buf, loc->lin + 1);
+	}
+};
+
+/**
+ * Generate a value from a compound literal.
+ *   @env: The environment.
+ *   @comp: The compound literal.
+ *   &returns: The value.
+ */
+def e:str[pt:st:miir:val](pt:st:env env, pt:st:pl3:comp comp) val_comp = {
+	var u32 sz;
+	var pt:void buf;
+	var pt:st:miir:val val;
+
+	sz = pl3:type_size(comp->type, env->ctx->ptr.wid / 8);
+	val = miir:val_new(mem:create(sz), sz, null);
+
+	fill(env, val, 0, comp->type, comp->list);
+
+	return val;
+};
+
+
+def e:str[void](pt:st:env env, pt:st:miir:reg dst, u32 off) gen_off = {
+	if(miir:type_size(env->ctx->ptr) == 8)
+		add_inst(env, miir:inst_imm(miir:imm_u64(dst, u64{off})));
+	else if(miir:type_size(env->ctx->ptr) == 4)
+		add_inst(env, miir:inst_imm(miir:imm_u32(dst, off)));
+	else
+		e:fmt("Unsupported pointer size.");
+};

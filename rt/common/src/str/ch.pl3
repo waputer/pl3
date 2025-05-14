@@ -1,3 +1,0 @@
-def[export] bool(char ch) ch:is_num  = {
-	return (ch >= '0') && (ch <= '9');
-};

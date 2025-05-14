@@ -64,7 +64,6 @@ def ar[]:st:lex:map keywords = {
 	{ tok_mnew,   "mem:new"   },
 	{ tok_mmake,  "mem:make"  },
 	{ tok_onerr,  "onerr"     },
-	{ 0xfecd,  "#END"     } // FIXME
 	//{ tok_bicall, "bi:syscall" }
 };
 
@@ -306,7 +305,7 @@ def[export] e:str[void](cpt:char path, pt:st:pl3:unit unit) pl3:parse = {
 	pl3:str_delete(ctx.path);
 };
 
-def[export] e:str[void](st:io file, cpt:char path, pt:st:pl3:unit unit) pl3:parse_file = {
+def[export] e:str[void](i32 file, cpt:char path, pt:st:pl3:unit unit) pl3:parse_file = {
 	var st:ctx ctx;
 
 	ctx.lex = e:get(lex:new(file, path, 256, true));
@@ -346,8 +345,6 @@ def e:str[void](pt:st:ctx ctx, pt:st:pl3:unit unit) ctx_top = {
 		stmt = &(*stmt)->next;
 
 	while(e:get(lex:tok_try(ctx->lex, tok_eos)) == null) {
-		if(e:get(lex:tok_try(ctx->lex, 0xfecd)) != null) break; // FIXME
-
 		*stmt = e:get(ctx_stmt(ctx));
 		stmt = &(*stmt)->next;
 	}
@@ -1065,9 +1062,6 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_post = {
 };
 
 
-def[extern,export] fp32(cpt:char str) str_get_fp32; //FIXME
-def[extern,export] fp64(cpt:char str) str_get_fp64; //FIXME
-
 /**
  * Parse a terminal expression.
  *   @ctx: The context.
@@ -1095,9 +1089,9 @@ def e:str[pt:st:pl3:expr](pt:st:ctx ctx) ctx_term = {
 	else if((tok = e:get(lex:tok_try(ctx->lex, tok_num))) != null) {
 		if(str:chr(tok->str, '.') != null) {
 			if(tok->str[str:len(tok->str) - 1] == 'f')
-				return pl3:expr_lit(pl3:lit_fp32(str_get_fp32(tok->str)), meta);
+				return pl3:expr_lit(pl3:lit_fp32(e:get(str:get_fp32(tok->str))), meta);
 			else
-				return pl3:expr_lit(pl3:lit_flt(str_get_fp64(tok->str)), meta);
+				return pl3:expr_lit(pl3:lit_flt(e:get(str:get_fp64(tok->str))), meta);
 		} else {
 			return pl3:expr_lit(pl3:lit_int(e:get(m:int_parse(tok->str, 0))), meta);
 		}
@@ -2022,99 +2016,3 @@ def e:str[pt:st:lex:token](pt:st:lex:parse parse, pt:void arg) rule_prefix = {
 
 	return null;
 };
-
-
-def e:str[void]() build = {
-	var pt:st:pl3:top top;
-
-	top = pl3:top_new();
-	onerr pl3:top_delete(top);
-
-	//e:get(pl3:parse("test.el", pl3:top_unit(top)));
-	//e:get(pl3:parse("bar.el", pl3:top_unit(top)));
-	e:get(pl3:parse("foo.el", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/avl/avl.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/avl/test.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/io/accum.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/io/file.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/io/fmt.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/io/view.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/lex/ch.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/lex/parse.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/lex/rules.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/math/int.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/math/lim.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/mem/alloc.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/mem/buf.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/mem/std.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/os/linux/io.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/os/linux/linux.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/str/buf.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/str/fmt.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../rt/src/str/std.pl3", pl3:top_unit(top)));
-
-	e:get(pl3:parse("../self/src/meta.el", pl3:top_unit(top)));
-
-	e:get(pl3:parse("../self/src/enum.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/expr.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/list.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/stmt.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/top.el", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/type.pl3", pl3:top_unit(top)));
-
-	e:get(pl3:parse("../self/src/check.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/elf.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/dwarf.pl3", pl3:top_unit(top)));
-	e:get(pl3:parse("../self/src/llvm.pl3", pl3:top_unit(top)));
-
-	e:get(pl3:parse("../self/src/parse.pl3", pl3:top_unit(top)));
-
-	/*
-	 * self/src/parse.pl3
-	 */
-
-	//e:get(pl3:parse("baz.pl3", pl3:top_unit(top)));
-	//e:get(pl3:check_brief(top));
-	e:get(pl3:check2(top, 8));
-	e:get(pl3:llvm(top, "foo.ll"));
-
-	pl3:top_delete(top);
-};
-
-def[export] void() go = {
-	var pt:char err;
-
-	m:int:test();
-	mem:assert();
-
-	err = build().err;
-	if(err != null) {
-		print("%s\n", err);
-		mem:free(err);
-		mem:assert();
-		os:exit(1);
-	}
-
-	mem:assert();
- 	//os_write(1, "test\n", 5);
-	//io:file_open("testfile", io:WRITE);
-};
-
-
-
-//FIXME move this
-/**
- * Determine if a string has a specific prefix.
- *   @str: The string.
- *   @pre: The prefix.
- *   &returns: True if `pre` is a prefix on thes string `str.
- */
-def[export] bool(cpt:char str, cpt:char pre) str:prefix = {
-	while(*pre != '\0') {
-		if(*str++ != *pre++)
-			return false;
-	}
-
-	return true;
-};
-

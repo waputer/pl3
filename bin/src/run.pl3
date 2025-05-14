@@ -1,110 +1,372 @@
+/**
+ * Dump a module.
+ *   @mod: The module.
+ *   @desc: The descriptor.
+ */
+def[export] e:str[void](pt:st:miir:mod mod, i32 desc) miir:dump_mod = {
+	var pt:st:miir:func func;
 
+	io:fmt(desc, "@miir-1.0\n");
 
-
-tydef st:list {
-	cpt:char path;
-	pt:st:list next;
+	for(func = mod->func; func != null; func = func->next)
+		e:get(miir:dump_func(func, desc));
 };
 
-def void(pt:st:list list) list_clear = {
-	var pt:st:list tmp;
+/**
+ * Dump a function.
+ *   @func: The function.
+ *   @desc: The descriptor.
+ */
+def[export] e:str[void](pt:st:miir:func func, i32 desc) miir:dump_func = {
+	var pt:st:miir:blk blk;
 
-	while(list != null) {
-		list = (tmp = list)->next;
-		mem:free(tmp);
+	io:fmt(desc, "func {\n");
+
+	for(blk = func->blk; blk != null; blk = blk->next)
+		e:get(miir:dump_blk(blk, desc));
+
+	io:fmt(desc, "}\n");
+};
+
+/**
+ * Dump a block.
+ *   @blk: The block.
+ *   @desc: The descriptor.
+ */
+def[export] e:str[void](pt:st:miir:blk blk, i32 desc) miir:dump_blk = {
+	var pt:st:miir:inst inst;
+
+	io:fmt(desc, "block:\n");
+	for(inst = blk->inst; inst != null; inst = inst->next)
+		e:get(miir:dump_inst(inst, desc));
+
+	e:get(miir:dump_term(&blk->term, desc));
+};
+
+def[export] cpt:char(cpt:st:miir:reg reg) regname = {
+	return (reg->name != null) ? cpt:char{reg->name} : "_";
+};
+
+/**
+ * Dump an instruction.
+ *   @inst: The instruction.
+ *   @desc: The descriptor.
+ */
+def[export] e:str[void](pt:st:miir:inst inst, i32 desc) miir:dump_inst = {
+	switch(inst->tag) {
+	case ev:miir:inst:imm:
+		print("\timm\n");
+		break;
+
+	case ev:miir:inst:op2: {
+		var cpt:char code = "op2";
+		var pt:st:miir:op2 op2 = inst->data.op2;
+
+		switch(op2->tag) {
+		case ev:miir:op2:add: code = "add"; break;
+		case ev:miir:op2:sub: code = "sub"; break;
+		case ev:miir:op2:mul: code = "mul"; break;
+		case ev:miir:op2:idiv: code = "idiv"; break;
+		case ev:miir:op2:udiv: code = "udiv"; break;
+		case ev:miir:op2:irem: code = "irem"; break;
+		case ev:miir:op2:urem: code = "urem"; break;
+		}
+
+		io:fmt(desc, "\t%s %s %s %s\n", code, regname(op2->dst), regname(op2->lhs), regname(op2->rhs));
+	} break;
+	}
+};
+
+/**
+ * Dump a terminal.
+ *   @term: The terminal.
+ *   @desc: The descriptor.
+ */
+def[export] e:str[void](pt:st:miir:term term, i32 desc) miir:dump_term = {
+	switch(term->tag) {
+	case ev:miir:term:inv:
+		print("\tinv\n");
+		break;
+		
+	case ev:miir:term:ret:
+		if(term->data.ret->src != null)
+			print("\tret %s\n", regname(term->data.ret->src));
+		else
+			print("\tret\n");
+
+		break;
 	}
 };
 
 
-def[export] void(pt:pt:char args) run = {
-	var pt:st:pl3:top top;
-	var pt:st:list iter, list = null, imp = null;
-	var pt:pt:st:list ilist = &list, iimp = &imp;
+/**
+ * Build plan structure.
+ */
+tydef[export] st:miir:build {
+	pt:st:miir:in in; /// List of inputs
+	cpt:char out;     /// Output path
 
-	var u32 i;
-	var cpt:char out = null, exp = null;
-	var i64 mark;
-	var u32 rd, chk, gen;
+	pt:st:miir:list imp; /// Import list
+	pt:char exp;         /// Export
 
-	for(i = 1; args[i] != null; i++) {
-		if(str:equal(args[i], "--version")) {
-			print("pl3-1.0.0-dev3\n");
-			os:exit(0);
-		}
-		else if(str:equal(args[i], "-o")) {
-			i++;
-			if(args[i] == null)
-				fatal("Unexpected end of arguments.");
+	cpt:char target; /// Target format
+};
 
-			out = args[i];
-		}
-		else if(str:equal(args[i], "-e")) {
-			i++;
-			if(args[i] == null)
-				fatal("Unexpected end of arguments.");
+/**
+ * Input stucture.
+ */
+tydef[export] st:miir:in {
+	pt:char path;       /// File path
+	pt:st:miir:in next; /// Next input
+};
 
-			exp = args[i];
-		}
-		else if(str:equal(args[i], "-i")) {
-			i++;
-			if(args[i] == null)
-				fatal("Unexpected end of arguments.");
+/**
+ * Path stucture.
+ */
+tydef[export] st:miir:list {
+	pt:char path;         /// Path
+	pt:st:miir:list next; /// Next list item
+};
 
-			*iimp = mem:make(st:list{ args[i], null });
-			iimp = &(*iimp)->next;
-		}
-		else {
-			*ilist = mem:make(st:list{ args[i], null });
-			ilist = &(*ilist)->next;
-		}
+/**
+ * Create a new build plan.
+ *   &returns: The build plan.
+ */
+def[export] pt:st:miir:build() miir:build_new = {
+	return mem:make(st:miir:build{ null, null, null, null, null });
+};
+
+/**
+ * Delete a build plan.
+ *   @build: The build plan.
+ */
+def[export] void(pt:st:miir:build build) miir:build_delete = {
+	var pt:st:miir:in in;
+	var pt:st:miir:list list;
+
+	while(build->in != null) {
+		build->in = (in = build->in)->next;
+		mem:free(in->path);
+		mem:free(in);
 	}
 
-	if(out == null)
-		fatal("Require output file '-o'.");
-
-	top = pl3:top_new();
-	onerr pl3:top_delete(top);
-
-	for(iter = imp; iter != null; iter = iter->next)
-		e:req(pl3:top_load(top, iter->path));
-
-	{
-		mark = tm:usec();
-
-		for(iter = list; iter != null; iter = iter->next)
-			e:req(pl3:parse(iter->path, pl3:top_unit(top)));
-
-		rd = u32{tm:usec() - mark};
-		//print("parse %ums\n", rd / 1000);
+	while(build->imp != null) {
+		build->imp = (list = build->imp)->next;
+		mem:free(list->path);
+		mem:free(list);
 	}
 
-	{
-		mark = tm:usec();
+	mem:erase(build->exp);
+	mem:free(build);
+};
 
-		//e:req(pl3:check_brief(top));
-		e:req(pl3:check2(top, 8));
 
-		chk = u32{tm:usec() - mark};
-		//print("check %ums\n", chk / 1000);
-	}
+/**
+ * Add an input to a build plan.
+ *   @build: The build plan.
+ *   @path: The input path.
+ */
+def[export] void(pt:st:miir:build build, pt:char path) miir:build_input = {
+	var pt:pt:st:miir:in in;
 
-	{
-		mark = tm:usec();
+	in = &build->in;
+	while(*in != null)
+		in = &(*in)->next;
 
-		e:req(pl3:llvm(top, out));
+	*in = mem:make(st:miir:in{ path, null });
+};
 
-		gen = u32{tm:usec() - mark};
-		//print("gen   %ums\n", gen / 1000);
-	}
-
-	if(exp != null)
-		e:req(pl3:export(top, exp));
+/**
+ * Set the export for a build plan.
+ *   @build: The build plan.
+ *   @path: Consumed. The export path.
+ */
+def[export] e:str[void](pt:st:miir:build build, pt:char path) miir:build_export = {
+	if(build->exp != null)
+		e:fmt("Export path already given.");
 	
-	pl3:top_delete(top);
-	list_clear(list);
-	list_clear(imp);
+	build->exp = path;
+};
 
-	//print("tot   %ums\n", (rd + chk + gen) / 1000);
+/**
+ * Add an import to a build plan.
+ *   @build: The build plan.
+ *   @path: The import path.
+ */
+def[export] void(pt:st:miir:build build, pt:char path) miir:build_import = {
+	var pt:pt:st:miir:list list;
+
+	list = &build->imp;
+	while(*list != null)
+		list = &(*list)->next;
+
+	*list = mem:make(st:miir:list{ path, null });
+};
+
+
+def[export] void(cpt:cpt:char args) run = {
+	var u32 i;
+	var pt:st:miir:build build;
+
+	if((args[1] != null) && str:equal(args[1], "link")) {
+	/*
+		var pt:st:wasm:link link;
+
+		link = wasm:link_new();
+
+		i = 2;
+		while(args[i] != null) {
+			if(args[i][0] == '-') {
+				switch(args[i][1]) {
+				case 'o':
+					if(args[i][2] == '\0') {
+						i++;
+						if(args[i] == null)
+							fatal("miir: Missing parameter to output (-o).");
+
+						wasm:link_out(link, str:dup(args[i++]));
+					} else {
+						wasm:link_out(link, str:dup(args[i++] + 2));
+					}
+
+					break;
+
+				default:
+					fatal("miir: Unknown option (-%c).", args[i][1]);
+				}
+			} else {
+				wasm:link_in(link, str:dup(args[i++]));
+			}
+		}
+
+		e:req(wasm:link_exec(link));
+		wasm:link_delete(link);
+		*/
+	} else {
+		build = miir:build_new();
+		i = 1;
+
+		while(args[i] != null) {
+			if(args[i][0] == '-') {
+				switch(args[i][1]) {
+				case 'o':
+					if(args[i][2] == '\0') {
+						i++;
+						if(args[i] == null)
+							fatal("miir: Missing parameter to output (-o).");
+
+						build->out = args[i++];
+					} else {
+						build->out = args[i++] + 2;
+					}
+
+					break;
+
+				case 't':
+					if(args[i][2] == '\0') {
+						i++;
+						if(args[i] == null)
+							fatal("miir: Missing parameter to target (-t).");
+
+						build->target = args[i++];
+					} else {
+						build->target = args[i++] + 2;
+					}
+
+					break;
+
+				case 'e':
+					if(args[i][2] == '\0') {
+						i++;
+						if(args[i] == null)
+							fatal("miir: Missing parameter to export (-e).");
+
+						miir:build_export(build, str:dup(args[i++]));
+					} else {
+						miir:build_export(build, str:dup(args[i++] + 2));
+					}
+
+					break;
+
+				case 'i':
+					if(args[i][2] == '\0') {
+						i++;
+						if(args[i] == null)
+							fatal("miir: Missing parameter to import (-i).");
+
+						miir:build_import(build, str:dup(args[i++]));
+					} else {
+						miir:build_import(build, str:dup(args[i++] + 2));
+					}
+
+					break;
+
+				default:
+					fatal("miir: Unknown option (-%c).", args[i][1]);
+				}
+			} else {
+				miir:build_input(build, str:dup(args[i++]));
+			}
+		}
+
+		var pt:st:miir:in in;
+		var pt:st:miir:list list;
+		var pt:st:miir:mod mod;
+		var pt:st:pl3:top top;
+
+		top = pl3:top_new();
+		onerr pl3:top_delete(top);
+
+		for(list = build->imp; list != null; list = list->next)
+			e:req(pl3:top_load(top, list->path));
+
+		for(in = build->in; in != null; in = in->next)
+			e:req(pl3:parse(in->path, pl3:top_unit(top)));
+
+		if((build->target == null) || str:equal(build->target, "elf")) {
+			e:req(pl3:check2(top, 8));
+
+			if(build->exp != null)
+				e:req(pl3:export(top, build->exp));
+
+			mod = e:req(miir:gen(top, miir:type_i64(), miir:type_blob(16 * 8)));
+			e:req(miir:x64(build->out, mod));
+			miir:mod_delete(mod);
+		} else if(str:equal(build->target, "wasm")) {
+			e:req(pl3:check2(top, 4));
+
+			if(build->exp != null)
+				e:req(pl3:export(top, build->exp));
+
+			mod = e:req(miir:gen(top, miir:type_i32(), miir:type_i32()));
+			e:req(miir:wasm(build->out, mod));
+			miir:mod_delete(mod);
+		} else if(str:equal(build->target, "csrc")) {
+			e:req(pl3:check2(top, 8));
+
+			if(build->exp != null)
+				e:req(pl3:export(top, build->exp));
+
+			mod = e:req(miir:gen(top, miir:type_i64(), miir:type_i64()));
+			e:req(miir:csrc(build->out, mod));
+			miir:mod_delete(mod);
+		} else if(str:equal(build->target, "wapr")) {
+			e:req(pl3:check2(top, 4));
+
+			if(build->exp != null)
+				e:req(pl3:export(top, build->exp));
+
+			mod = e:req(miir:gen(top, miir:type_i32(), miir:type_i32()));
+			e:req(miir:wapr(build->out, mod));
+			miir:mod_delete(mod);
+		} else {
+			fatal("miir: Unknown target `%s`.", build->target);
+		}
+
+		pl3:top_delete(top);
+		miir:build_delete(build);
+	}
 
 	mem:assert();
+	return;
 };

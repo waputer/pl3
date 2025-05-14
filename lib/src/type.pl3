@@ -79,7 +79,7 @@ def[export] u32(pt:st:pl3:name name, u32 ptr) pl3:name_size = {
  *   &returns: The name.
  */
 def[export] e:str[pt:st:pl3:name](pt:st:pl3:rd rd) pl3:name_read = {
-	return pl3:name_new(e:get(io1:rd_str32(rd->file)), null);
+	return pl3:name_new(e:get(io:rd_str32(rd->file)), null);
 };
 
 /**
@@ -88,7 +88,7 @@ def[export] e:str[pt:st:pl3:name](pt:st:pl3:rd rd) pl3:name_read = {
  *   @wr: The writer.
  */
 def[export] e:str[void](pt:st:pl3:name name, pt:st:pl3:wr wr) pl3:name_write = {
-	e:get(io1:wr_str32(wr->file, name->id));
+	e:get(io:wr_str32(wr->file, name->id));
 };
 
 
@@ -760,7 +760,7 @@ def[export] st:pl3:type(st:pl3:type type) pl3:type_root = {
  *   @wr: The writer.
  */
 def[export] e:str[void](st:pl3:type type, pt:st:pl3:wr wr) pl3:type_write = {
-	e:get(io1:wr_u8(wr->file, u8{type.tag}));
+	e:get(io:wr_u8(wr->file, u8{type.tag}));
 
 	switch(type.tag) {
 	case ev:pl3:type:ptr: e:get(pl3:ptr_write(type.data.ptr, wr)); break;
@@ -772,21 +772,21 @@ def[export] e:str[void](st:pl3:type type, pt:st:pl3:wr wr) pl3:type_write = {
 		var pt:st:pl3:sig sig = type.data.sig;
 
 		e:get(pl3:type_write(sig->ret, wr));
-		e:get(io1:wr_u8(wr->file, u8{sig->vlist}));
+		e:get(io:wr_u8(wr->file, u8{sig->vlist}));
 
 		for(param = sig->param; param != null; param = param->next)  {
-			e:get(io1:wr_i8(wr->file, 1));
+			e:get(io:wr_i8(wr->file, 1));
 			e:get(pl3:type_write(param->type, wr));
 
 			if(param->id != null) {
-				e:get(io1:wr_i8(wr->file, 1));
-				e:get(io1:wr_str32(wr->file, param->id));
+				e:get(io:wr_i8(wr->file, 1));
+				e:get(io:wr_str32(wr->file, param->id));
 			}
 			else
-				e:get(io1:wr_i8(wr->file, 0));
+				e:get(io:wr_i8(wr->file, 0));
 		}
 
-		e:get(io1:wr_i8(wr->file, 0));
+		e:get(io:wr_i8(wr->file, 0));
 	} break;
 
 	case ev:pl3:type:err: {
@@ -850,7 +850,7 @@ def[export] e:str[pt:st:pl3:ptr](pt:st:pl3:rd rd) pl3:ptr_read = {
 	type = e:get(pl3:type_read(rd));
 	onerr pl3:type_delete(type);
 
-	mut = (e:get(io1:rd_u8(rd->file)) > 0);
+	mut = (e:get(io:rd_u8(rd->file)) > 0);
 
 	return pl3:ptr_new(type, mut);
 };
@@ -862,7 +862,7 @@ def[export] e:str[pt:st:pl3:ptr](pt:st:pl3:rd rd) pl3:ptr_read = {
  */
 def[export] e:str[void](pt:st:pl3:ptr ptr, pt:st:pl3:wr wr) pl3:ptr_write = {
 	e:get(pl3:type_write(ptr->type, wr));
-	e:get(io1:wr_u8(wr->file, ptr->mut ? 1 : 0));
+	e:get(io:wr_u8(wr->file, ptr->mut ? 1 : 0));
 };
 
 
@@ -1293,7 +1293,7 @@ def[export] e:str[pt:st:pl3:memb](pt:st:pl3:rd rd) pl3:memb_read = {
 	type = e:get(pl3:type_read(rd));
 	onerr pl3:type_delete(type);
 
-	while(e:get(io1:rd_u8(rd->file)) > 0) {
+	while(e:get(io:rd_u8(rd->file)) > 0) {
 		*ifield = e:get(pl3:field_read(rd));
 		ifield = &(*ifield)->next;
 	}
@@ -1312,11 +1312,11 @@ def[export] e:str[void](pt:st:pl3:memb memb, pt:st:pl3:wr wr) pl3:memb_write = {
 	e:get(pl3:type_write(memb->type, wr));
 
 	for(field = memb->field; field != null; field = field->next) {
-		e:get(io1:wr_u8(wr->file, 1));
+		e:get(io:wr_u8(wr->file, 1));
 		e:get(pl3:field_write(field, wr));
 	}
 
-	e:get(io1:wr_u8(wr->file, 0));
+	e:get(io:wr_u8(wr->file, 0));
 };
 
 
@@ -1409,7 +1409,7 @@ def[export] e:str[pt:st:pl3:arr](pt:st:pl3:rd rd) pl3:arr_read = {
 	var u32 len;
 	var st:pl3:type type;
 
-	len = e:get(io1:rd_u32(rd->file));
+	len = e:get(io:rd_u32(rd->file));
 	type = e:get(pl3:type_read(rd));
 
 	return pl3:arr_new(len, type);
@@ -1421,7 +1421,7 @@ def[export] e:str[pt:st:pl3:arr](pt:st:pl3:rd rd) pl3:arr_read = {
  *   @wr: The writer.
  */
 def[export] e:str[void](pt:st:pl3:arr arr, pt:st:pl3:wr wr) pl3:arr_write = {
-	e:get(io1:wr_u32(wr->file, arr->len));
+	e:get(io:wr_u32(wr->file, arr->len));
 	e:get(pl3:type_write(arr->type, wr));
 };
 
@@ -1432,7 +1432,7 @@ def[export] e:str[void](pt:st:pl3:arr arr, pt:st:pl3:wr wr) pl3:arr_write = {
  *   &returns: The type.
  */
 def[export] e:str[st:pl3:type](pt:st:pl3:rd rd) pl3:type_read = {
-	var en:pl3:type tag = en:pl3:type{e:get(io1:rd_u8(rd->file))};
+	var en:pl3:type tag = en:pl3:type{e:get(io:rd_u8(rd->file))};
 	switch(tag) {
 	case ev:pl3:type:unk: return pl3:type_unk;
 	case ev:pl3:type:void: return pl3:type_void;
@@ -1455,7 +1455,7 @@ def[export] e:str[st:pl3:type](pt:st:pl3:rd rd) pl3:type_read = {
 	case ev:pl3:type:err: return pl3:type_err(e:get(pl3:err_read(rd)));
 	}
 
-	fatal("hi %u", tag);
+	fatal("hi 123 %u", tag);
 
 	unreachable();
 };
@@ -1476,7 +1476,7 @@ def[export] e:str[pt:st:pl3:decl](pt:st:pl3:rd rd) pl3:decl_read = {
 
 	onerr pl3:bind_clear(bind);
 
-	flags = e:get(io1:rd_u32(rd->file));
+	flags = e:get(io:rd_u32(rd->file));
 
 	attr = e:get(pl3:attr_read(rd));
 	onerr pl3:attr_clear(attr);
@@ -1487,7 +1487,7 @@ def[export] e:str[pt:st:pl3:decl](pt:st:pl3:rd rd) pl3:decl_read = {
 	meta = e:get(pl3:meta_read(rd));
 	onerr pl3:meta_delete(meta);
 
-	while(e:get(io1:rd_u8(rd->file)) != 0) {
+	while(e:get(io:rd_u8(rd->file)) != 0) {
 		*ibind = e:get(pl3:bind_read(rd));
 		ibind = &(*ibind)->next;
 	}
@@ -1517,14 +1517,14 @@ def[export] e:str[pt:st:pl3:tydecl](pt:st:pl3:rd rd) pl3:tydecl_read = {
 	var pt:st:pl3:attr attr;
 	var st:pl3:meta meta;
 
-	id = e:get(io1:rd_str32(rd->file));
+	id = e:get(io:rd_str32(rd->file));
 	onerr mem:free(id);
 
-	flags = e:get(io1:rd_u32(rd->file));
+	flags = e:get(io:rd_u32(rd->file));
 	attr = e:get(pl3:attr_read(rd));
 	onerr pl3:attr_clear(attr);
 
-	tag = en:pl3:tydecl{e:get(io1:rd_u8(rd->file))};
+	tag = en:pl3:tydecl{e:get(io:rd_u8(rd->file))};
 
 	switch(tag) {
 	case ev:pl3:tydecl:alias: data.alias = e:get(pl3:alias_read(rd)); break;
@@ -1558,7 +1558,7 @@ def[export] e:str[pt:st:pl3:attr](pt:st:pl3:rd rd) pl3:attr_read = {
 def[export] e:str[pt:st:pl3:stmt](pt:st:pl3:rd rd) pl3:stmt_read = {
 	var i8 tag;
 
-	tag = e:get(io1:rd_i8(rd->file));
+	tag = e:get(io:rd_i8(rd->file));
 	if(tag < 0)
 		return null;
 

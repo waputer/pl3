@@ -325,7 +325,7 @@ def[export] e:str[pt:st:pl3:expr](pt:st:pl3:rd rd) pl3:expr_read = {
 	var st:pl3:type type;
 	var st:pl3:meta meta;
 
-	tag = en:pl3:expr{e:get(io1:rd_u8(rd->file))};
+	tag = en:pl3:expr{e:get(io:rd_u8(rd->file))};
 
 	switch(tag) {
 	case ev:pl3:expr:lit: data.lit = e:get(pl3:lit_read(rd)); break;
@@ -360,7 +360,7 @@ def[export] e:str[pt:st:pl3:expr](pt:st:pl3:rd rd) pl3:expr_read = {
  *   @wr: The writer.
  */
 def[export] e:str[void](pt:st:pl3:expr expr, pt:st:pl3:wr wr) pl3:expr_write = {
-	e:get(io1:wr_u8(wr->file, u8{expr->tag}));
+	e:get(io:wr_u8(wr->file, u8{expr->tag}));
 
 	switch(expr->tag) {
 	case ev:pl3:expr:lit: e:get(pl3:lit_write(expr->data.lit, wr)); break;
@@ -515,7 +515,7 @@ def[export] e:str[pt:st:pl3:op1](pt:st:pl3:rd rd) pl3:op1_read = {
 	var en:pl3:op1 tag;
 	var pt:st:pl3:expr in;
 
-	tag = en:pl3:op1{e:get(io1:rd_u8(rd->file))};
+	tag = en:pl3:op1{e:get(io:rd_u8(rd->file))};
 	in = e:get(pl3:expr_read(rd));
 
 	return pl3:op1_new(tag, in);
@@ -527,7 +527,7 @@ def[export] e:str[pt:st:pl3:op1](pt:st:pl3:rd rd) pl3:op1_read = {
  *   @wr: The writer.
  */
 def[export] e:str[void](pt:st:pl3:op1 op1, pt:st:pl3:wr wr) pl3:op1_write = {
-	e:get(io1:wr_u8(wr->file, u8{ op1->tag }));
+	e:get(io:wr_u8(wr->file, u8{ op1->tag }));
 	e:get(pl3:expr_write(op1->in, wr));
 };
 
@@ -633,7 +633,7 @@ def[export] e:str[pt:st:pl3:op2](pt:st:pl3:rd rd) pl3:op2_read = {
 	var en:pl3:op2 tag;
 	var pt:st:pl3:expr lhs, rhs;
 
-	tag = en:pl3:op2{e:get(io1:rd_u8(rd->file))};
+	tag = en:pl3:op2{e:get(io:rd_u8(rd->file))};
 	lhs = e:get(pl3:expr_read(rd));
 	rhs = e:get(pl3:expr_read(rd));
 
@@ -646,7 +646,7 @@ def[export] e:str[pt:st:pl3:op2](pt:st:pl3:rd rd) pl3:op2_read = {
  *   @wr: The writer.
  */
 def[export] e:str[void](pt:st:pl3:op2 op2, pt:st:pl3:wr wr) pl3:op2_write = {
-	e:get(io1:wr_u8(wr->file, u8{ op2->tag }));
+	e:get(io:wr_u8(wr->file, u8{ op2->tag }));
 	e:get(pl3:expr_write(op2->lhs, wr));
 	e:get(pl3:expr_write(op2->rhs, wr));
 };
